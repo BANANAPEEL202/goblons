@@ -1,0 +1,114 @@
+package game
+
+import (
+	"sync"
+	"time"
+
+	"github.com/gorilla/websocket"
+)
+
+// InputMsg represents player input from client
+type InputMsg struct {
+	Type  string `json:"type"`
+	Up    bool   `json:"up"`
+	Down  bool   `json:"down"`
+	Left  bool   `json:"left"`
+	Right bool   `json:"right"`
+	Mouse struct {
+		X float32 `json:"x"`
+		Y float32 `json:"y"`
+	} `json:"mouse"`
+}
+
+// Player represents a game player
+type Player struct {
+	ID        uint32  `json:"id"`
+	X         float32 `json:"x"`
+	Y         float32 `json:"y"`
+	VelX      float32 `json:"velX"`
+	VelY      float32 `json:"velY"`
+	Angle     float32 `json:"angle"` // Ship facing direction in radians
+	Size      float32 `json:"size"`
+	Score     int     `json:"score"`
+	State     int     `json:"state"`
+	Name      string  `json:"name"`
+	Color     string  `json:"color"`
+	Health    int     `json:"health"`
+	MaxHealth int     `json:"maxHealth"`
+}
+
+// GameItem represents collectible items in the game
+type GameItem struct {
+	ID    uint32  `json:"id"`
+	X     float32 `json:"x"`
+	Y     float32 `json:"y"`
+	Type  string  `json:"type"`
+	Value int     `json:"value"`
+}
+
+// Snapshot represents the current game state sent to clients
+type Snapshot struct {
+	Type    string     `json:"type"`
+	Players []Player   `json:"players"`
+	Items   []GameItem `json:"items"`
+	Time    int64      `json:"time"`
+}
+
+// Client represents a connected game client
+type Client struct {
+	ID       uint32
+	Conn     *websocket.Conn
+	Player   *Player
+	Input    InputMsg
+	Send     chan []byte
+	LastSeen time.Time
+	mu       sync.RWMutex
+}
+
+// World represents the game world and all its entities
+type World struct {
+	mu        sync.RWMutex
+	clients   map[uint32]*Client
+	players   map[uint32]*Player
+	items     map[uint32]*GameItem
+	mechanics *GameMechanics
+	nextID    uint32
+	itemID    uint32
+	running   bool
+}
+
+// NewClient creates a new client
+func NewClient(id uint32, conn *websocket.Conn) *Client {
+	return &Client{
+		ID:       id,
+		Conn:     conn,
+		Player:   NewPlayer(id),
+		Send:     make(chan []byte, 256),
+		LastSeen: time.Now(),
+	}
+}
+
+// NewPlayer creates a new player with default values
+func NewPlayer(id uint32) *Player {
+	return &Player{
+		ID:        id,
+		X:         WorldWidth / 2,
+		Y:         WorldHeight / 2,
+		Size:      PlayerSize,
+		State:     StateAlive,
+		Health:    100,
+		MaxHealth: 100,
+		Color:     generateRandomColor(),
+		Name:      generateRandomName(),
+	}
+}
+
+func generateRandomColor() string {
+	colors := []string{"#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7", "#DDA0DD", "#98D8C8", "#F7DC6F"}
+	return colors[int(time.Now().UnixNano())%len(colors)]
+}
+
+func generateRandomName() string {
+	names := []string{"Pirate", "Buccaneer", "Sailor", "Captain", "Admiral", "Navigator", "Corsair", "Raider"}
+	return names[int(time.Now().UnixNano())%len(names)]
+}

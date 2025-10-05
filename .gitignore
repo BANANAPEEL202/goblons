@@ -1,0 +1,22 @@
+# Backend
+backend/goblons
+backend/tmp/
+backend/static/
+backend/build-errors.log
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

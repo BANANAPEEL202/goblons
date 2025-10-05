@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Goblons.io - Multiplayer IO Game</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    html, body {
+      margin: 0;
+      overflow: hidden;
+      background: #0f0f23;
+      font-family: 'Arial', sans-serif;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    #gameContainer {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+    }
+    
+    canvas {
+      background: #1a1a2e;
+      display: block;
+      width: 100vw;
+      height: 100vh;
+    }
+    
+    #controls {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      color: #ffffff;
+      background: rgba(0, 0, 0, 0.8);
+      padding: 15px;
+      border-radius: 10px;
+      font-size: 14px;
+      z-index: 1000;
+      backdrop-filter: blur(5px);
+    }
+    
+    #controls h3 {
+      margin-bottom: 10px;
+      color: #4ECDC4;
+    }
+    
+    #controls p {
+      margin: 5px 0;
+    }
+    
+    #gameInfo {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      color: #ffffff;
+      background: rgba(0, 0, 0, 0.8);
+      padding: 15px;
+      border-radius: 10px;
+      text-align: right;
+      z-index: 1000;
+      backdrop-filter: blur(5px);
+    }
+    
+    .status-indicator {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      margin-right: 5px;
+    }
+    
+    .connected {
+      background-color: #4ECDC4;
+    }
+    
+    .disconnected {
+      background-color: #FF6B6B;
+    }
+    
+    @media (max-width: 850px) {
+      #controls, #gameInfo {
+        font-size: 12px;
+        padding: 10px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="gameContainer">
+    <!--
+    <div id="controls">
+      <h3>Controls</h3>
+      <p><strong>WASD</strong> or <strong>Arrow Keys</strong> - Move</p>
+      <p><strong>Mouse</strong> - Aim</p>
+      <p><strong>F11</strong> - Toggle Fullscreen</p>
+    </div>
+    
+    <div id="gameInfo">
+      <div id="connectionStatus">
+        <span class="status-indicator disconnected"></span>
+        <span>Connecting...</span>
+      </div>
+      <div id="serverInfo">
+        <p>Server: localhost:8080</p>
+      </div>
+    </div>
+    -->
+    
+    <canvas id="game"></canvas>
+  </div>
+  
+  <script src="client.js"></script>
+</body>
+</html>
