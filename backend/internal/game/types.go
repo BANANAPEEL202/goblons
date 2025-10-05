@@ -9,12 +9,14 @@ import (
 
 // InputMsg represents player input from client
 type InputMsg struct {
-	Type  string `json:"type"`
-	Up    bool   `json:"up"`
-	Down  bool   `json:"down"`
-	Left  bool   `json:"left"`
-	Right bool   `json:"right"`
-	Mouse struct {
+	Type       string `json:"type"`
+	Up         bool   `json:"up"`
+	Down       bool   `json:"down"`
+	Left       bool   `json:"left"`
+	Right      bool   `json:"right"`
+	ShootLeft  bool   `json:"shootLeft"`
+	ShootRight bool   `json:"shootRight"`
+	Mouse      struct {
 		X float32 `json:"x"`
 		Y float32 `json:"y"`
 	} `json:"mouse"`
@@ -22,19 +24,20 @@ type InputMsg struct {
 
 // Player represents a game player
 type Player struct {
-	ID        uint32  `json:"id"`
-	X         float32 `json:"x"`
-	Y         float32 `json:"y"`
-	VelX      float32 `json:"velX"`
-	VelY      float32 `json:"velY"`
-	Angle     float32 `json:"angle"` // Ship facing direction in radians
-	Size      float32 `json:"size"`
-	Score     int     `json:"score"`
-	State     int     `json:"state"`
-	Name      string  `json:"name"`
-	Color     string  `json:"color"`
-	Health    int     `json:"health"`
-	MaxHealth int     `json:"maxHealth"`
+	ID           uint32    `json:"id"`
+	X            float32   `json:"x"`
+	Y            float32   `json:"y"`
+	VelX         float32   `json:"velX"`
+	VelY         float32   `json:"velY"`
+	Angle        float32   `json:"angle"` // Ship facing direction in radians
+	Size         float32   `json:"size"`
+	Score        int       `json:"score"`
+	State        int       `json:"state"`
+	Name         string    `json:"name"`
+	Color        string    `json:"color"`
+	Health       int       `json:"health"`
+	MaxHealth    int       `json:"maxHealth"`
+	LastShotTime time.Time `json:"-"`
 }
 
 // GameItem represents collectible items in the game
@@ -46,11 +49,24 @@ type GameItem struct {
 	Value int     `json:"value"`
 }
 
+// Bullet represents a projectile fired from ship cannons
+type Bullet struct {
+	ID        uint32    `json:"id"`
+	X         float32   `json:"x"`
+	Y         float32   `json:"y"`
+	VelX      float32   `json:"velX"`
+	VelY      float32   `json:"velY"`
+	OwnerID   uint32    `json:"ownerId"`
+	CreatedAt time.Time `json:"-"`
+	Size      float32   `json:"size"`
+}
+
 // Snapshot represents the current game state sent to clients
 type Snapshot struct {
 	Type    string     `json:"type"`
 	Players []Player   `json:"players"`
 	Items   []GameItem `json:"items"`
+	Bullets []Bullet   `json:"bullets"`
 	Time    int64      `json:"time"`
 }
 
@@ -71,9 +87,11 @@ type World struct {
 	clients   map[uint32]*Client
 	players   map[uint32]*Player
 	items     map[uint32]*GameItem
+	bullets   map[uint32]*Bullet
 	mechanics *GameMechanics
 	nextID    uint32
 	itemID    uint32
+	bulletID  uint32
 	running   bool
 }
 

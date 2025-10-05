@@ -11,12 +11,14 @@ import (
 // NewWorld creates a new game world
 func NewWorld() *World {
 	world := &World{
-		clients: make(map[uint32]*Client),
-		players: make(map[uint32]*Player),
-		items:   make(map[uint32]*GameItem),
-		nextID:  1,
-		itemID:  1,
-		running: false,
+		clients:  make(map[uint32]*Client),
+		players:  make(map[uint32]*Player),
+		items:    make(map[uint32]*GameItem),
+		bullets:  make(map[uint32]*Bullet),
+		nextID:   1,
+		itemID:   1,
+		bulletID: 1,
+		running:  false,
 	}
 	world.mechanics = NewGameMechanics(world)
 	return world
@@ -106,6 +108,9 @@ func (w *World) update() {
 		}
 	}
 
+	// Update bullets
+	w.updateBullets()
+
 	// Check collisions
 	w.checkCollisions()
 
@@ -144,17 +149,27 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 	// Scale turn speed based on current speed
 	// Example: turn faster at low speed, slower at high speed
 	// The "+0.1" ensures some minimum turning ability even when stationary
-	turnFactor := 1.0 - (speed/ShipMaxSpeed)*0.5 // adjust factor to taste
+	turnFactor := speed / ShipMaxSpeed
 
 	scaledTurnSpeed := ShipTurnSpeed * turnFactor
 
 	// Handle turning (A/D keys)
 	if input.Left {
+
 		player.Angle -= scaledTurnSpeed
 	}
 	if input.Right {
 		player.Angle += scaledTurnSpeed
 	}
+
+	// Handle shooting (left and right cannons)
+	now := time.Now()
+	if (input.ShootLeft || input.ShootRight) && now.Sub(player.LastShotTime).Seconds() >= CannonCooldown {
+		w.fireCannon(player, true)  // Left cannon
+		w.fireCannon(player, false) // Right cannon
+		player.LastShotTime = now
+	}
+
 	// Apply drag/deceleration
 	player.VelX *= ShipDeceleration
 	player.VelY *= ShipDeceleration
@@ -269,6 +284,7 @@ func (w *World) broadcastSnapshot() {
 		Type:    MsgTypeSnapshot,
 		Players: make([]Player, 0, len(w.players)),
 		Items:   make([]GameItem, 0, len(w.items)),
+		Bullets: make([]Bullet, 0, len(w.bullets)),
 		Time:    time.Now().UnixMilli(),
 	}
 
@@ -280,6 +296,11 @@ func (w *World) broadcastSnapshot() {
 	// Add all items to snapshot
 	for _, item := range w.items {
 		snapshot.Items = append(snapshot.Items, *item)
+	}
+
+	// Add all bullets to snapshot
+	for _, bullet := range w.bullets {
+		snapshot.Bullets = append(snapshot.Bullets, *bullet)
 	}
 
 	data, err := json.Marshal(snapshot)
@@ -312,4 +333,62 @@ func (w *World) HandleInput(clientID uint32, input InputMsg) {
 func (w *World) keepPlayerInBounds(player *Player) {
 	player.X = float32(math.Max(float64(player.Size/2), math.Min(float64(WorldWidth-player.Size/2), float64(player.X))))
 	player.Y = float32(math.Max(float64(player.Size/2), math.Min(float64(WorldHeight-player.Size/2), float64(player.Y))))
+}
+
+// fireCannon creates a bullet from the specified cannon (left=true, right=false)
+func (w *World) fireCannon(player *Player, isLeftCannon bool) {
+	// Calculate cannon position on the side of the ship
+	// Cannons are positioned perpendicular to the ship's facing direction
+	sideAngle := player.Angle + float32(math.Pi/2) // 90 degrees to the left of ship's facing direction
+	if !isLeftCannon {
+		sideAngle = player.Angle - float32(math.Pi/2) // 90 degrees to the right of ship's facing direction
+	}
+
+	// Position cannon on the side of the ship
+	cannonX := player.X + float32(math.Cos(float64(sideAngle)))*CannonDistance
+	cannonY := player.Y + float32(math.Sin(float64(sideAngle)))*CannonDistance
+
+	// Bullet fires perpendicular to the ship (in the same direction as the cannon positioning)
+	bulletVelX := float32(math.Cos(float64(sideAngle))) * BulletSpeed
+	bulletVelY := float32(math.Sin(float64(sideAngle))) * BulletSpeed
+
+	// Create bullet
+	bullet := &Bullet{
+		ID:        w.bulletID,
+		X:         cannonX,
+		Y:         cannonY,
+		VelX:      bulletVelX,
+		VelY:      bulletVelY,
+		OwnerID:   player.ID,
+		CreatedAt: time.Now(),
+		Size:      BulletSize,
+	}
+
+	w.bullets[w.bulletID] = bullet
+	w.bulletID++
+}
+
+// updateBullets handles bullet movement and cleanup
+func (w *World) updateBullets() {
+	now := time.Now()
+
+	for id, bullet := range w.bullets {
+		// Check if bullet has expired
+		if now.Sub(bullet.CreatedAt).Seconds() >= BulletLifetime {
+			delete(w.bullets, id)
+			continue
+		}
+
+		// Update bullet position
+		bullet.X += bullet.VelX
+		bullet.Y += bullet.VelY
+
+		// Remove bullets that are out of bounds
+		if bullet.X < 0 || bullet.X > WorldWidth || bullet.Y < 0 || bullet.Y > WorldHeight {
+			delete(w.bullets, id)
+			continue
+		}
+
+		// TODO: Add collision detection with players here
+	}
 }

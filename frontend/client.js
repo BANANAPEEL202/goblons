@@ -11,6 +11,7 @@ class GameClient {
     this.gameState = {
       players: [],
       items: [],
+      bullets: [],
       myPlayer: null
     };
     this.input = { 
@@ -19,6 +20,8 @@ class GameClient {
       down: false, 
       left: false, 
       right: false,
+      shootLeft: false,
+      shootRight: false,
       mouse: { x: 0, y: 0 }
     };
     
@@ -149,6 +152,7 @@ class GameClient {
       case 'snapshot':
         this.gameState.players = data.players || [];
         this.gameState.items = data.items || [];
+        this.gameState.bullets = data.bullets || [];
         
         // Try to find our player by keeping track of the last known position
         if (!this.gameState.myPlayer && this.gameState.players.length > 0) {
@@ -283,6 +287,18 @@ class GameClient {
         inputChanged = true;
       }
     }
+    if (e.key === 'q' || e.key === 'Q') {
+      if (!this.input.shootLeft) {
+        this.input.shootLeft = true;
+        inputChanged = true;
+      }
+    }
+    if (e.key === 'e' || e.key === 'E') {
+      if (!this.input.shootRight) {
+        this.input.shootRight = true;
+        inputChanged = true;
+      }
+    }
     
     if (inputChanged) {
       this.sendInput();
@@ -313,6 +329,18 @@ class GameClient {
     if (e.key === 'd' || e.key === 'D' || e.key === 'ArrowRight') {
       if (this.input.right) {
         this.input.right = false;
+        inputChanged = true;
+      }
+    }
+    if (e.key === 'q' || e.key === 'Q') {
+      if (this.input.shootLeft) {
+        this.input.shootLeft = false;
+        inputChanged = true;
+      }
+    }
+    if (e.key === 'e' || e.key === 'E') {
+      if (this.input.shootRight) {
+        this.input.shootRight = false;
         inputChanged = true;
       }
     }
@@ -447,6 +475,11 @@ class GameClient {
       this.drawItem(item);
     });
     
+    // Draw bullets
+    this.gameState.bullets.forEach(bullet => {
+      this.drawBullet(bullet);
+    });
+    
     // Draw players
     this.gameState.players.forEach(player => {
       this.drawPlayer(player);
@@ -522,6 +555,17 @@ class GameClient {
     this.ctx.lineTo(-shipLength/2, shipWidth/2);
     this.ctx.closePath();
     this.ctx.fill();
+    
+    // Draw cannons on each side
+    this.ctx.fillStyle = '#333333';
+    const cannonLength = shipLength * 0.4;
+    const cannonWidth = 3;
+    const cannonDistance = shipWidth * 0.6;
+    
+    // Left cannon
+    this.ctx.fillRect(cannonLength/2, -cannonDistance - cannonWidth/2, cannonLength, cannonWidth);
+    // Right cannon  
+    this.ctx.fillRect(cannonLength/2, cannonDistance - cannonWidth/2, cannonLength, cannonWidth);
     
     // Draw thruster effect if moving forward (only for own player)
     if (isMyPlayer && this.input.up) {
@@ -644,6 +688,33 @@ class GameClient {
     this.ctx.stroke();
   }
 
+  drawBullet(bullet) {
+    const screenX = bullet.x - this.camera.x;
+    const screenY = bullet.y - this.camera.y;
+    
+    // Only draw if bullet is on screen
+    if (screenX < -50 || screenX > this.screenWidth + 50 || 
+        screenY < -50 || screenY > this.screenHeight + 50) {
+      return;
+    }
+    
+    this.ctx.save();
+    this.ctx.translate(screenX, screenY);
+    
+    // Draw bullet as a bright orange/yellow circle
+    this.ctx.beginPath();
+    this.ctx.arc(0, 0, bullet.size, 0, Math.PI * 2);
+    this.ctx.fillStyle = '#FFD700'; // Gold color for bullets
+    this.ctx.fill();
+    
+    // Add a bright outline
+    this.ctx.strokeStyle = '#FFA500'; // Orange outline
+    this.ctx.lineWidth = 1;
+    this.ctx.stroke();
+    
+    this.ctx.restore();
+  }
+
   drawUI() {
     // Semi-transparent background for UI elements
     this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
@@ -662,6 +733,9 @@ class GameClient {
     
     // Mini leaderboard in top right
     this.drawLeaderboard();
+    
+    // Draw controls help
+    this.drawControls();
     
     // Draw minimap
     this.drawMinimap();
@@ -704,6 +778,30 @@ class GameClient {
       this.ctx.fillText(`${score}`, x + leaderboardWidth - 10, y + 45 + index * 25);
       this.ctx.textAlign = 'left';
     });
+  }
+
+  drawControls() {
+    const controlsWidth = 180;
+    const controlsHeight = 120;
+    const x = 10;
+    const y = this.screenHeight - controlsHeight - 10;
+    
+    // Background
+    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    this.ctx.fillRect(x, y, controlsWidth, controlsHeight);
+    
+    // Controls text
+    this.ctx.fillStyle = '#ffffff';
+    this.ctx.font = '14px Arial';
+    this.ctx.textAlign = 'left';
+    
+    this.ctx.fillText('CONTROLS:', x + 10, y + 20);
+    this.ctx.font = '12px Arial';
+    this.ctx.fillText('WASD: Move', x + 10, y + 40);
+    this.ctx.fillText('Q: Fire Left Cannon', x + 10, y + 55);
+    this.ctx.fillText('E: Fire Right Cannon', x + 10, y + 70);
+    this.ctx.fillText('Ships turn faster', x + 10, y + 90);
+    this.ctx.fillText('when moving!', x + 10, y + 105);
   }
 
   drawMinimap() {
