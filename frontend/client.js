@@ -511,8 +511,7 @@ class GameClient {
       this.ctx.stroke();
     }
   }
-
-  drawPlayer(player) {
+drawPlayer(player) {
   const ctx = this.ctx;
   const screenX = player.x - this.camera.x;
   const screenY = player.y - this.camera.y;
@@ -521,17 +520,27 @@ class GameClient {
   const color = player.color || '#d9534f';
   const angle = player.angle || 0;
 
-  // === Dimensions ===
+  // --- Base ship dimensions ---
   const bowLength = size * 0.4;
-  const bowWidth = size * 0.6;
-  const shaftLength = size * 0.5;
-  const shaftWidth = size * 0.6;
+  const baseShaftLength = size * 0.5;
   const rearLength = size * 0.3;
-  const rearFrontWidth = shaftWidth;
-  const rearBackWidth = shaftWidth * 0.5;
+  const shaftWidth = size * 0.6;
 
+  // --- Guns settings ---
+  const gunCount = 4//player.guns || 2; // Total guns
   const gunLength = size * 0.35;
   const gunWidth = size * 0.2;
+
+  // --- Determine number of guns per side ---
+  const leftGunCount = Math.floor(gunCount / 2);
+  const rightGunCount = gunCount - leftGunCount;
+
+  // --- Ship length adjustment ---
+  // Add extra shaft length if more than 1 gun per side
+  const spacing = gunLength * 1.5;
+  const extraShaftLength = Math.max(leftGunCount, rightGunCount) > 1 ? spacing * (Math.max(leftGunCount, rightGunCount) - 1) : 0;
+  const shaftLength = baseShaftLength + extraShaftLength;
+  const totalRearLength = rearLength;
 
   ctx.save();
   ctx.translate(screenX, screenY);
@@ -541,24 +550,24 @@ class GameClient {
   ctx.strokeStyle = '#444';
   ctx.lineWidth = 3;
 
-  // --- Ship shape (single path) ---
+  // --- Draw main hull ---
   ctx.beginPath();
-  ctx.moveTo(shaftLength / 2 + bowLength, 0); // tip
+  ctx.moveTo(shaftLength / 2 + bowLength, 0); // bow tip
 
   ctx.quadraticCurveTo(
     shaftLength / 2 + bowLength * 0.3,
-    bowWidth / 2,
+    shaftWidth / 2,
     shaftLength / 2,
-    bowWidth / 2
+    shaftWidth / 2
   );
-  ctx.lineTo(-shaftLength / 2, bowWidth / 2);
-  ctx.lineTo(-shaftLength / 2 - rearLength, rearBackWidth / 2);
-  ctx.lineTo(-shaftLength / 2 - rearLength, -rearBackWidth / 2);
-  ctx.lineTo(-shaftLength / 2, -bowWidth / 2);
-  ctx.lineTo(shaftLength / 2, -bowWidth / 2);
+  ctx.lineTo(-shaftLength / 2, shaftWidth / 2);
+  ctx.lineTo(-shaftLength / 2 - totalRearLength, shaftWidth / 2 * 0.5);
+  ctx.lineTo(-shaftLength / 2 - totalRearLength, -shaftWidth / 2 * 0.5);
+  ctx.lineTo(-shaftLength / 2, -shaftWidth / 2);
+  ctx.lineTo(shaftLength / 2, -shaftWidth / 2);
   ctx.quadraticCurveTo(
     shaftLength / 2 + bowLength * 0.3,
-    -bowWidth / 2,
+    -shaftWidth / 2,
     shaftLength / 2 + bowLength,
     0
   );
@@ -574,27 +583,26 @@ class GameClient {
   ctx.strokeStyle = '#444';
   ctx.stroke();
 
-  // --- Guns sticking out perpendicular ---
+  // --- Draw guns evenly spaced along ship ---
   ctx.fillStyle = '#444';
 
-// Left gun (negative Y side)
-ctx.fillRect(
-  -gunLength / 2,       // center the gun along X
-  -shaftWidth / 2 - gunWidth, // stick out from side
-  gunLength,            // gun length along X
-  gunWidth              // gun thickness along Y
-);
+  const leftGunSpacing = shaftLength / (leftGunCount + 1);
+  const rightGunSpacing = shaftLength / (rightGunCount + 1);
 
-// Right gun (positive Y side)
-ctx.fillRect(
-  -gunLength / 2,       // center the gun along X
-  shaftWidth / 2,       // stick out from opposite side
-  gunLength,
-  gunWidth
-);
+  for (let i = 0; i < leftGunCount; i++) {
+    const x = -shaftLength / 2 + (i + 1) * leftGunSpacing - gunLength / 2;
+    const y = -shaftWidth / 2 - gunWidth; // left side (negative Y)
+    ctx.fillRect(x, y, gunLength, gunWidth);
+  }
+
+  for (let i = 0; i < rightGunCount; i++) {
+    const x = -shaftLength / 2 + (i + 1) * rightGunSpacing - gunLength / 2;
+    const y = shaftWidth / 2; // right side (positive Y)
+    ctx.fillRect(x, y, gunLength, gunWidth);
+  }
+
   ctx.restore();
 }
-
 
   drawItem(item) {
     const screenX = item.x - this.camera.x;
