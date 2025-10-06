@@ -20,7 +20,7 @@ const (
 
 // Cannon and bullet constants
 const (
-	BulletSpeed    = 2.0  // Bullet travel speed (slower for easier tracking)
+	BulletSpeed    = 2.5  // Bullet travel speed (slower for easier tracking)
 	BulletLifetime = 3.0  // Seconds before bullet disappears (longer for easier spotting)
 	BulletSize     = 8.0  // Bullet radius (much larger for visibility)
 	CannonCooldown = 0.3  // Seconds between shots (faster for testing)

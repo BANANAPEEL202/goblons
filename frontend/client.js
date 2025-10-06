@@ -453,7 +453,7 @@ class GameClient {
 
   render() {
     // Clear canvas
-    this.ctx.fillStyle = '#1a1a2e';
+    this.ctx.fillStyle = '#adb5db';
     this.ctx.fillRect(0, 0, this.screenWidth, this.screenHeight);
     
     if (!this.isConnected) {
@@ -490,8 +490,8 @@ class GameClient {
   }
 
   drawGrid() {
-    const gridSize = 50;
-    this.ctx.strokeStyle = '#2a2a3e';
+    const gridSize = 30;
+    this.ctx.strokeStyle = '#9393a3ff';
     this.ctx.lineWidth = 1;
     
     const startX = Math.floor(this.camera.x / gridSize) * gridSize;
@@ -513,97 +513,79 @@ class GameClient {
   }
 
   drawPlayer(player) {
-    const isMyPlayer = player.id === this.myPlayerId;
-    
-    // For now, use server position for all players to avoid jitter
-    // const pos = isMyPlayer ? this.predictedPlayerPos : { x: player.x, y: player.y };
-    const pos = { x: player.x, y: player.y };
-    const screenX = pos.x - this.camera.x;
-    const screenY = pos.y - this.camera.y;
-    
-    // Skip if player is off screen
-    if (screenX < -player.size || screenX > this.screenWidth + player.size ||
-        screenY < -player.size || screenY > this.screenHeight + player.size) {
-      return;
-    }
-    
-    // Save canvas state
-    this.ctx.save();
-    this.ctx.translate(screenX, screenY);
-    
-    // Rotate for ship direction
-    const angle = isMyPlayer ? this.shipPhysics.angle : (player.angle || 0);
-    this.ctx.rotate(angle);
-    
-    // Add glow effect for own player
-    if (isMyPlayer) {
-      this.ctx.shadowBlur = 15;
-      this.ctx.shadowColor = player.color || '#4ECDC4';
-    }
-    
-    this.ctx.fillStyle = player.color || '#4ECDC4';
-    
-    // Draw ship triangle
-    this.ctx.beginPath();
-    const shipLength = player.size * 0.6;
-    const shipWidth = player.size * 0.4;
-    
-    // Ship hull (triangle pointing forward)
-    this.ctx.moveTo(shipLength, 0);
-    this.ctx.lineTo(-shipLength/2, -shipWidth/2);
-    this.ctx.lineTo(-shipLength/3, 0);
-    this.ctx.lineTo(-shipLength/2, shipWidth/2);
-    this.ctx.closePath();
-    this.ctx.fill();
-    
-    // Draw cannons on each side
-    this.ctx.fillStyle = '#333333';
-    const cannonLength = shipLength * 0.4;
-    const cannonWidth = 3;
-    const cannonDistance = shipWidth * 0.6;
-    
-    // Left cannon
-    this.ctx.fillRect(cannonLength/2, -cannonDistance - cannonWidth/2, cannonLength, cannonWidth);
-    // Right cannon  
-    this.ctx.fillRect(cannonLength/2, cannonDistance - cannonWidth/2, cannonLength, cannonWidth);
-    
-    // Draw thruster effect if moving forward (only for own player)
-    if (isMyPlayer && this.input.up) {
-      this.ctx.fillStyle = '#FF6B6B';
-      this.ctx.beginPath();
-      this.ctx.moveTo(-shipLength/2, -shipWidth/4);
-      this.ctx.lineTo(-shipLength * 0.8, 0);
-      this.ctx.lineTo(-shipLength/2, shipWidth/4);
-      this.ctx.closePath();
-      this.ctx.fill();
-    }
-        
-    // Restore canvas state
-    this.ctx.restore();
-    
-    // Draw player name
-    this.ctx.fillStyle = '#ffffff';
-    this.ctx.font = '14px Arial';
-    this.ctx.textAlign = 'center';
-    this.ctx.fillText(player.name || `Player ${player.id}`, screenX, screenY - player.size / 2 - 10);
-    
-    // Draw health bar if not full
-    if (player.health < player.maxHealth) {
-      const barWidth = player.size;
-      const barHeight = 6;
-      const barX = screenX - barWidth / 2;
-      const barY = screenY + player.size / 2 + 5;
-      
-      // Background
-      this.ctx.fillStyle = '#444';
-      this.ctx.fillRect(barX, barY, barWidth, barHeight);
-      
-      // Health
-      this.ctx.fillStyle = '#4ECDC4';
-      const healthWidth = (player.health / player.maxHealth) * barWidth;
-      this.ctx.fillRect(barX, barY, healthWidth, barHeight);
-    }
-  }
+  const ctx = this.ctx;
+  const screenX = player.x - this.camera.x;
+  const screenY = player.y - this.camera.y;
+
+  const size = player.size || 20;
+  const color = player.color || '#d9534f';
+  const angle = player.angle || 0;
+
+  // === Dimensions ===
+  const bowLength = size * 0.4;        // curved triangle
+  const bowWidth = size * 0.6;
+  const shaftLength = size * 0.4;      // rectangle
+  const shaftWidth = size * 0.6;
+  const rearLength = size * 0.3;       // trapezoid
+  const rearFrontWidth = shaftWidth;
+  const rearBackWidth = shaftWidth * 0.5;
+
+  ctx.save();
+  ctx.translate(screenX, screenY);
+  ctx.rotate(angle);
+
+  ctx.fillStyle = color;
+  ctx.strokeStyle = '#000';
+  ctx.lineWidth = 2;
+
+  ctx.beginPath();
+
+  // --- Start at bow tip ---
+  ctx.moveTo(shaftLength / 2 + bowLength, 0); // tip of bow
+
+  // --- Bow bottom curve ---
+  ctx.quadraticCurveTo(
+    shaftLength / 2 + bowLength * 0.3,
+    bowWidth / 2,
+    shaftLength / 2,
+    bowWidth / 2
+  );
+
+  // --- Shaft bottom ---
+  ctx.lineTo(-shaftLength / 2, bowWidth / 2);
+
+  // --- Rear trapezoid bottom ---
+  ctx.lineTo(-shaftLength / 2 - rearLength, rearBackWidth / 2);
+
+  // --- Rear trapezoid top ---
+  ctx.lineTo(-shaftLength / 2 - rearLength, -rearBackWidth / 2);
+
+  // --- Shaft top ---
+  ctx.lineTo(-shaftLength / 2, -bowWidth / 2);
+
+  // --- Bow top curve back to tip ---
+  ctx.lineTo(shaftLength / 2, -bowWidth / 2);
+  ctx.quadraticCurveTo(
+    shaftLength / 2 + bowLength * 0.3,
+    -bowWidth / 2,
+    shaftLength / 2 + bowLength,
+    0
+  );
+
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // --- Gray circle at rectangle center ---
+  ctx.beginPath();
+  ctx.arc(0, 0, shaftWidth * 0.3, 0, Math.PI * 2);
+  ctx.fillStyle = '#777';
+  ctx.fill();
+  ctx.strokeStyle = '#000';
+  ctx.stroke();
+
+  ctx.restore();
+}
 
   drawItem(item) {
     const screenX = item.x - this.camera.x;
@@ -704,11 +686,11 @@ class GameClient {
     // Draw bullet as a bright orange/yellow circle
     this.ctx.beginPath();
     this.ctx.arc(0, 0, bullet.size, 0, Math.PI * 2);
-    this.ctx.fillStyle = '#FFD700'; // Gold color for bullets
+    this.ctx.fillStyle = '#484848ff'; // Gold color for bullets
     this.ctx.fill();
     
     // Add a bright outline
-    this.ctx.strokeStyle = '#FFA500'; // Orange outline
+    this.ctx.strokeStyle = '#2a2a2aff'; // Orange outline
     this.ctx.lineWidth = 1;
     this.ctx.stroke();
     
