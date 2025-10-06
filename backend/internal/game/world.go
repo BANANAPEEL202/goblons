@@ -73,6 +73,9 @@ func (w *World) AddClient(client *Client) {
 	// Spawn player at random safe location
 	w.spawnPlayer(client.Player)
 
+	// Send welcome message to the new client with their player ID
+	w.sendWelcomeMessage(client)
+
 	log.Printf("Player %d (%s) joined the game", client.ID, client.Player.Name)
 }
 
@@ -108,6 +111,9 @@ func (w *World) update() {
 			w.updatePlayer(player, &client.Input)
 		}
 	}
+
+	// Handle respawning
+	w.handleRespawns()
 
 	// Update bullets
 	w.updateBullets()
@@ -154,7 +160,7 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 
 	// Calculate length factor - longer ships turn slower
 	// Base length for comparison (1 cannon = standard ship)
-	baseShipLength := float32(PlayerSize * 1.2) // 1 cannon ship has no length multiplier
+	baseShipLength := float32(PlayerSize * 1.2)        // 1 cannon ship has no length multiplier
 	lengthFactor := baseShipLength / player.ShipLength // Longer ships get smaller factor
 
 	scaledTurnSpeed := ShipTurnSpeed * turnFactor * lengthFactor
@@ -238,6 +244,20 @@ func (w *World) spawnPlayer(player *Player) {
 	player.X = float32(rand.Intn(int(WorldWidth-100)) + 50)
 	player.Y = float32(rand.Intn(int(WorldHeight-100)) + 50)
 	player.State = StateAlive
+}
+
+// handleRespawns checks for dead players that need to respawn
+func (w *World) handleRespawns() {
+	now := time.Now()
+	for _, player := range w.players {
+		if player.State == StateDead && now.After(player.RespawnTime) {
+			// Respawn the player
+			player.Health = player.MaxHealth
+			player.State = StateAlive
+			w.spawnPlayer(player)
+			log.Printf("Player %d (%s) respawned", player.ID, player.Name)
+		}
+	}
 }
 
 // spawnItems continuously spawns items in the world
@@ -330,6 +350,27 @@ func (w *World) broadcastSnapshot() {
 		default:
 			// Channel full, skip this client
 		}
+	}
+}
+
+// sendWelcomeMessage sends a welcome message to a specific client with their player ID
+func (w *World) sendWelcomeMessage(client *Client) {
+	welcomeMsg := WelcomeMsg{
+		Type:     MsgTypeWelcome,
+		PlayerId: client.ID,
+	}
+
+	data, err := json.Marshal(welcomeMsg)
+	if err != nil {
+		log.Printf("Error marshaling welcome message: %v", err)
+		return
+	}
+
+	select {
+	case client.Send <- data:
+	default:
+		// Channel full, skip
+		log.Printf("Could not send welcome message to client %d", client.ID)
 	}
 }
 
@@ -468,7 +509,40 @@ func (w *World) updateBullets() {
 			continue
 		}
 
-		// TODO: Add collision detection with players here
+		// Check collision with players
+		for playerID, player := range w.players {
+			// Skip if bullet owner or player is dead
+			if bullet.OwnerID == playerID || player.State != StateAlive {
+				continue
+			}
+
+			// Calculate distance between bullet and player
+			distance := float32(math.Sqrt(float64((bullet.X-player.X)*(bullet.X-player.X) + (bullet.Y-player.Y)*(bullet.Y-player.Y))))
+
+			// Check if bullet hits player (bullet size + collision radius)
+			if distance < BulletSize+player.CollisionRadius {
+				// Apply damage
+				player.Health -= BulletDamage
+
+				// Remove the bullet
+				delete(w.bullets, id)
+
+				// Check if player died
+				if player.Health <= 0 {
+					player.Health = 0
+					player.State = StateDead
+					player.RespawnTime = now.Add(time.Duration(RespawnDelay) * time.Second)
+					log.Printf("Player %d (%s) was killed by Player %d", playerID, player.Name, bullet.OwnerID)
+
+					// Award score to shooter
+					if shooter, exists := w.players[bullet.OwnerID]; exists {
+						shooter.Score += 100
+					}
+				}
+
+				break // Bullet hit something, stop checking other players
+			}
+		}
 	}
 }
 

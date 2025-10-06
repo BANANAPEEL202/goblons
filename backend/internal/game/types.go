@@ -40,6 +40,7 @@ type Player struct {
 	Health          int       `json:"health"`
 	MaxHealth       int       `json:"maxHealth"`
 	LastShotTime    time.Time `json:"-"`
+	RespawnTime     time.Time `json:"-"`               // When the player can respawn
 	CannonCount     int       `json:"cannonCount"`     // Number of cannons per side
 	ShipLength      float32   `json:"shipLength"`      // Length of the ship
 	ShipWidth       float32   `json:"shipWidth"`       // Width of the ship
@@ -74,6 +75,12 @@ type Snapshot struct {
 	Items   []GameItem `json:"items"`
 	Bullets []Bullet   `json:"bullets"`
 	Time    int64      `json:"time"`
+}
+
+// WelcomeMsg represents a welcome message sent to a new client
+type WelcomeMsg struct {
+	Type     string `json:"type"`
+	PlayerId uint32 `json:"playerId"`
 }
 
 // Client represents a connected game client

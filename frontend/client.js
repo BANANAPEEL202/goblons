@@ -151,58 +151,66 @@ class GameClient {
 
   handleMessage(data) {
     switch (data.type) {
+      case 'welcome':
+        // Server tells us our player ID
+        console.log('Received welcome message, our player ID is:', data.playerId);
+        this.myPlayerId = data.playerId;
+        break;
+        
       case 'snapshot':
         this.gameState.players = data.players || [];
         this.gameState.items = data.items || [];
         this.gameState.bullets = data.bullets || [];
         
-        // Try to find our player by keeping track of the last known position
-        if (!this.gameState.myPlayer && this.gameState.players.length > 0) {
-          // For now, assume the first player is ours when we first connect
-          this.gameState.myPlayer = this.gameState.players[0];
-          this.myPlayerId = this.gameState.myPlayer.id;
-          
-          // Initialize predicted position and ship physics with server data
-          this.predictedPlayerPos.x = this.gameState.myPlayer.x;
-          this.predictedPlayerPos.y = this.gameState.myPlayer.y;
-          
-          if (this.gameState.myPlayer.angle !== undefined) {
-            this.shipPhysics.angle = this.gameState.myPlayer.angle;
-          }
-          
-          // Initialize velocity from server
-          this.shipPhysics.velocity.x = this.gameState.myPlayer.velX || 0;
-          this.shipPhysics.velocity.y = this.gameState.myPlayer.velY || 0;
-        } else if (this.myPlayerId) {
-          // Find our player by ID
+        // Find our player by the ID we received in the welcome message
+        if (this.myPlayerId) {
           const serverPlayer = this.gameState.players.find(p => p.id === this.myPlayerId);
           if (serverPlayer) {
-            this.gameState.myPlayer = serverPlayer;
-            
-            // Sync angle with server
-            if (serverPlayer.angle !== undefined) {
-              this.shipPhysics.angle = serverPlayer.angle;
-            }
-            
-            // Reconcile predicted position with server position
-            const serverPos = { x: serverPlayer.x, y: serverPlayer.y };
-            const distance = Math.sqrt(
-              Math.pow(this.predictedPlayerPos.x - serverPos.x, 2) + 
-              Math.pow(this.predictedPlayerPos.y - serverPos.y, 2)
-            );
-            
-            // If prediction is too far off, snap to server position
-            if (distance > 25) {
-              this.predictedPlayerPos.x = serverPos.x;
-              this.predictedPlayerPos.y = serverPos.y;
-              // Also sync velocity to prevent further drift
+            // Initialize our player if this is the first time we found them
+            if (!this.gameState.myPlayer) {
+              console.log('Found our player:', serverPlayer);
+              this.gameState.myPlayer = serverPlayer;
+              
+              // Initialize predicted position and ship physics with server data
+              this.predictedPlayerPos.x = serverPlayer.x;
+              this.predictedPlayerPos.y = serverPlayer.y;
+              
+              if (serverPlayer.angle !== undefined) {
+                this.shipPhysics.angle = serverPlayer.angle;
+              }
+              
+              // Initialize velocity from server
               this.shipPhysics.velocity.x = serverPlayer.velX || 0;
               this.shipPhysics.velocity.y = serverPlayer.velY || 0;
-            } else if (distance > 5) {
-              // Gradually correct prediction towards server position
-              const correctionFactor = 0.15;
-              this.predictedPlayerPos.x += (serverPos.x - this.predictedPlayerPos.x) * correctionFactor;
-              this.predictedPlayerPos.y += (serverPos.y - this.predictedPlayerPos.y) * correctionFactor;
+            } else {
+              // Update our player with server data
+              this.gameState.myPlayer = serverPlayer;
+              
+              // Sync angle with server
+              if (serverPlayer.angle !== undefined) {
+                this.shipPhysics.angle = serverPlayer.angle;
+              }
+              
+              // Reconcile predicted position with server position
+              const serverPos = { x: serverPlayer.x, y: serverPlayer.y };
+              const distance = Math.sqrt(
+                Math.pow(this.predictedPlayerPos.x - serverPos.x, 2) + 
+                Math.pow(this.predictedPlayerPos.y - serverPos.y, 2)
+              );
+              
+              // If prediction is too far off, snap to server position
+              if (distance > 25) {
+                this.predictedPlayerPos.x = serverPos.x;
+                this.predictedPlayerPos.y = serverPos.y;
+                // Also sync velocity to prevent further drift
+                this.shipPhysics.velocity.x = serverPlayer.velX || 0;
+                this.shipPhysics.velocity.y = serverPlayer.velY || 0;
+              } else if (distance > 5) {
+                // Gradually correct prediction towards server position
+                const correctionFactor = 0.15;
+                this.predictedPlayerPos.x += (serverPos.x - this.predictedPlayerPos.x) * correctionFactor;
+                this.predictedPlayerPos.y += (serverPos.y - this.predictedPlayerPos.y) * correctionFactor;
+              }
             }
           }
         }
@@ -675,7 +683,53 @@ drawPlayer(player) {
   }
 
   ctx.restore();
+  
+  // Draw health bar above the ship
+  this.drawHealthBar(player, screenX, screenY);
 }
+
+  drawHealthBar(player, screenX, screenY) {
+    const ctx = this.ctx;
+    const maxHealth = player.maxHealth || 100;
+    const currentHealth = player.health || maxHealth;
+    const healthPercentage = currentHealth / maxHealth;
+    
+    // Health bar dimensions
+    const barWidth = 60;
+    const barHeight = 8;
+    const barOffsetY = -40; // Position above the ship
+    
+    // Skip drawing if player is dead
+    if (currentHealth <= 0) {
+      return;
+    }
+    
+    ctx.save();
+    
+    // Health bar background (red)
+    ctx.fillStyle = '#cc0000';
+    ctx.fillRect(screenX - barWidth/2, screenY + barOffsetY, barWidth, barHeight);
+    
+    // Health bar foreground (green to red gradient based on health)
+    const healthColor = healthPercentage > 0.6 ? '#00cc00' : 
+                       healthPercentage > 0.3 ? '#cccc00' : '#cc0000';
+    
+    ctx.fillStyle = healthColor;
+    ctx.fillRect(screenX - barWidth/2, screenY + barOffsetY, barWidth * healthPercentage, barHeight);
+    
+    // Health bar border
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(screenX - barWidth/2, screenY + barOffsetY, barWidth, barHeight);
+    
+    // Health text (optional)
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '12px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText(`${currentHealth}/${maxHealth}`, screenX, screenY + barOffsetY - 2);
+    
+    ctx.restore();
+  }
 
   drawItem(item) {
     const screenX = item.x - this.camera.x;
