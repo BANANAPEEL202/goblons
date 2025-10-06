@@ -147,12 +147,17 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 
 	speed := min(float32(math.Sqrt(float64(player.VelX*player.VelX+player.VelY*player.VelY))), ShipMaxSpeed)
 
-	// Scale turn speed based on current speed
+	// Scale turn speed based on current speed and ship length
 	// Example: turn faster at low speed, slower at high speed
-	// The "+0.1" ensures some minimum turning ability even when stationary
+	// Longer ships turn slower (more realistic naval physics)
 	turnFactor := speed / ShipMaxSpeed
 
-	scaledTurnSpeed := ShipTurnSpeed * turnFactor
+	// Calculate length factor - longer ships turn slower
+	// Base length for comparison (1 cannon = standard ship)
+	baseShipLength := float32(PlayerSize * 1.2) // 1 cannon ship has no length multiplier
+	lengthFactor := baseShipLength / player.ShipLength // Longer ships get smaller factor
+
+	scaledTurnSpeed := ShipTurnSpeed * turnFactor * lengthFactor
 
 	// Handle turning (A/D keys)
 	if input.Left {
@@ -182,9 +187,17 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 	// Handle shooting (left and right cannons)
 	now := time.Now()
 	if (input.ShootLeft || input.ShootRight) && now.Sub(player.LastShotTime).Seconds() >= CannonCooldown {
-		w.fireCannon(player, true)  // Left cannon
-		w.fireCannon(player, false) // Right cannon
+		w.fireAllCannons(player, true)  // Left side cannons
+		w.fireAllCannons(player, false) // Right side cannons
 		player.LastShotTime = now
+	}
+
+	// Handle ship upgrades
+	if input.UpgradeCannons {
+		w.UpgradePlayerCannons(player.ID)
+	}
+	if input.DowngradeCannons {
+		w.DowngradePlayerCannons(player.ID)
 	}
 
 	// Keep player within world boundaries
@@ -201,7 +214,7 @@ func (w *World) checkCollisions() {
 		// Check item collisions
 		for itemID, item := range w.items {
 			distance := float32(math.Sqrt(float64((player.X-item.X)*(player.X-item.X) + (player.Y-item.Y)*(player.Y-item.Y))))
-			if distance < player.Size/2+10 { // Item pickup radius
+			if distance < player.CollisionRadius+10 { // Item pickup radius using dynamic collision radius
 				w.collectItem(playerID, itemID)
 			}
 		}
@@ -336,38 +349,102 @@ func (w *World) keepPlayerInBounds(player *Player) {
 	player.Y = float32(math.Max(float64(player.Size/2), math.Min(float64(WorldHeight-player.Size/2), float64(player.Y))))
 }
 
-// fireCannon creates a bullet from the specified cannon (left=true, right=false)
-func (w *World) fireCannon(player *Player, isLeftCannon bool) {
-	// Calculate cannon position on the side of the ship
-	// Cannons are positioned perpendicular to the ship's facing direction
+// fireAllCannons fires all cannons on the specified side of the ship
+func (w *World) fireAllCannons(player *Player, isLeftSide bool) {
+	// Calculate the side angle (perpendicular to ship's facing direction)
 	sideAngle := player.Angle + float32(math.Pi/2) // 90 degrees to the left of ship's facing direction
-	if !isLeftCannon {
+	if !isLeftSide {
 		sideAngle = player.Angle - float32(math.Pi/2) // 90 degrees to the right of ship's facing direction
 	}
 
-	// Position cannon on the side of the ship
-	cannonX := player.X + float32(math.Cos(float64(sideAngle)))*CannonDistance
-	cannonY := player.Y + float32(math.Sin(float64(sideAngle)))*CannonDistance
+	// Calculate cannon positions along the ship's length
+	cannonPositions := w.calculateCannonPositions(player, isLeftSide)
 
-	// Bullet fires perpendicular to the ship (in the same direction as the cannon positioning)
-	// includes player velocity for more realistic shooting
-	bulletVelX := float32(math.Cos(float64(sideAngle)))*BulletSpeed + player.VelX*0.7
-	bulletVelY := float32(math.Sin(float64(sideAngle)))*BulletSpeed + player.VelY*0.7
+	// Fire each cannon
+	for _, cannonPos := range cannonPositions {
+		// Bullet fires perpendicular to the ship (in the same direction as the cannon positioning)
+		// includes player velocity for more realistic shooting
+		bulletVelX := float32(math.Cos(float64(sideAngle)))*BulletSpeed + player.VelX*0.7
+		bulletVelY := float32(math.Sin(float64(sideAngle)))*BulletSpeed + player.VelY*0.7
 
-	// Create bullet
-	bullet := &Bullet{
-		ID:        w.bulletID,
-		X:         cannonX,
-		Y:         cannonY,
-		VelX:      bulletVelX,
-		VelY:      bulletVelY,
-		OwnerID:   player.ID,
-		CreatedAt: time.Now(),
-		Size:      BulletSize,
+		// Create bullet
+		bullet := &Bullet{
+			ID:        w.bulletID,
+			X:         cannonPos.X,
+			Y:         cannonPos.Y,
+			VelX:      bulletVelX,
+			VelY:      bulletVelY,
+			OwnerID:   player.ID,
+			CreatedAt: time.Now(),
+			Size:      BulletSize,
+		}
+
+		w.bullets[w.bulletID] = bullet
+		w.bulletID++
+	}
+}
+
+// CannonPosition represents a cannon's position
+type CannonPosition struct {
+	X, Y float32
+}
+
+// calculateCannonPositions calculates positions for all cannons on one side of the ship
+func (w *World) calculateCannonPositions(player *Player, isLeftSide bool) []CannonPosition {
+	positions := make([]CannonPosition, 0, player.CannonCount)
+
+	// Match frontend cannon positioning exactly
+	// Calculate shaftLength the same way as frontend
+	baseShaftLength := player.ShipLength * 0.5
+	var extraShaftLength float32
+	if player.CannonCount > 1 {
+		gunLength := player.Size * 0.35
+		spacing := gunLength * 1.5
+		extraShaftLength = spacing * float32(player.CannonCount-1)
+	}
+	shaftLength := baseShaftLength + extraShaftLength
+
+	gunSpacing := shaftLength / float32(player.CannonCount+1)
+	gunLength := player.Size * 0.35
+	gunWidth := player.Size * 0.2
+	shaftWidth := player.ShipWidth
+
+	for i := 0; i < player.CannonCount; i++ {
+		// Calculate horizontal cannon center position (matching frontend exactly)
+		// Frontend: x = -shaftLength / 2 + (i + 1) * gunSpacing - gunLength / 2
+		// This gives the LEFT edge of the cannon rectangle (fillRect x parameter)
+		// To get the center, we need to add gunLength / 2
+		cannonLeftEdge := -shaftLength/2 + float32(i+1)*gunSpacing - gunLength/2
+		relativeX := cannonLeftEdge + gunLength/2 // Move to horizontal center of cannon
+
+		// Calculate cannon center Y position
+		// Frontend draws rectangles with fillRect(x, y, gunLength, gunWidth)
+		// where y is the TOP edge of the rectangle, so center is y + gunWidth/2
+		var relativeY float32
+		if isLeftSide {
+			// Try swapping: Q key should fire bottom cannons (positive Y)
+			// Frontend "right side": y = shaftWidth / 2 (top of rectangle)
+			// Center = y + gunWidth/2 = shaftWidth/2 + gunWidth/2
+			relativeY = shaftWidth/2 + gunWidth/2
+		} else {
+			// Try swapping: E key should fire top cannons (negative Y)
+			// Frontend "left side": y = -shaftWidth / 2 - gunWidth (top of rectangle)
+			// Center = y + gunWidth/2 = -shaftWidth/2 - gunWidth + gunWidth/2 = -shaftWidth/2 - gunWidth/2
+			relativeY = -shaftWidth/2 - gunWidth + gunWidth/2
+		}
+
+		// Transform relative position to world coordinates using ship's rotation
+		cos := float32(math.Cos(float64(player.Angle)))
+		sin := float32(math.Sin(float64(player.Angle)))
+
+		// Rotate the relative position by the ship's angle
+		cannonX := player.X + (relativeX*cos - relativeY*sin)
+		cannonY := player.Y + (relativeX*sin + relativeY*cos)
+
+		positions = append(positions, CannonPosition{X: cannonX, Y: cannonY})
 	}
 
-	w.bullets[w.bulletID] = bullet
-	w.bulletID++
+	return positions
 }
 
 // updateBullets handles bullet movement and cleanup
@@ -393,4 +470,72 @@ func (w *World) updateBullets() {
 
 		// TODO: Add collision detection with players here
 	}
+}
+
+// UpgradePlayerCannons increases the number of cannons on a player's ship
+func (w *World) UpgradePlayerCannons(playerID uint32) bool {
+
+	player, exists := w.players[playerID]
+	if !exists {
+		return false
+	}
+
+	if player.CannonCount >= MaxCannonsPerSide {
+		return false // Already at maximum
+	}
+
+	player.CannonCount++
+	w.updateShipDimensions(player)
+	return true
+}
+
+// DowngradePlayerCannons decreases the number of cannons on a player's ship
+func (w *World) DowngradePlayerCannons(playerID uint32) bool {
+	fmt.Println("Downgrading cannons for player", playerID)
+	player, exists := w.players[playerID]
+	if !exists {
+		return false
+	}
+
+	if player.CannonCount <= MinCannonsPerSide {
+		return false // Already at minimum
+	}
+
+	player.CannonCount--
+	w.updateShipDimensions(player)
+	return true
+}
+
+// updateShipDimensions updates ship dimensions based on cannon count
+func (w *World) updateShipDimensions(player *Player) {
+	// Base dimensions - keep overall size constant
+	baseLength := float32(PlayerSize * 1.2)
+	baseWidth := float32(PlayerSize * 0.8)
+
+	// More cannons = longer ship (only length changes)
+	lengthMultiplier := 1.0 + float32(player.CannonCount-1)*0.2
+
+	player.ShipLength = baseLength * lengthMultiplier
+	player.ShipWidth = baseWidth      // Width stays constant
+	player.Size = float32(PlayerSize) // Overall size stays constant for rendering
+	player.CollisionRadius = calculateCollisionRadius(player.ShipLength, player.ShipWidth)
+}
+
+// SetPlayerCannonCount sets the exact number of cannons for a player (for testing/admin)
+func (w *World) SetPlayerCannonCount(playerID uint32, cannonCount int) bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	player, exists := w.players[playerID]
+	if !exists {
+		return false
+	}
+
+	if cannonCount < MinCannonsPerSide || cannonCount > MaxCannonsPerSide {
+		return false
+	}
+
+	player.CannonCount = cannonCount
+	w.updateShipDimensions(player)
+	return true
 }

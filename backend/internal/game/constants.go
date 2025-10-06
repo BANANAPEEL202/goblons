@@ -20,11 +20,15 @@ const (
 
 // Cannon and bullet constants
 const (
-	BulletSpeed    = 2.5  // Bullet travel speed (slower for easier tracking)
-	BulletLifetime = 3.0  // Seconds before bullet disappears (longer for easier spotting)
-	BulletSize     = 8.0  // Bullet radius (much larger for visibility)
-	CannonCooldown = 0.3  // Seconds between shots (faster for testing)
-	CannonDistance = 20.0 // Distance from ship center to cannon
+	BulletSpeed         = 2.5  // Bullet travel speed (slower for easier tracking)
+	BulletLifetime      = 3.0  // Seconds before bullet disappears (longer for easier spotting)
+	BulletSize          = 8.0  // Bullet radius (much larger for visibility)
+	CannonCooldown      = 1    // Seconds between shots (faster for testing)
+	CannonDistance      = 20.0 // Distance from ship center to cannon
+	MaxCannonsPerSide   = 100  // Maximum cannons per side
+	MinCannonsPerSide   = 1    // Minimum cannons per side
+	CannonSpacingFactor = 0.7  // Factor for spacing cannons along ship length
+	ShipScaleFactor     = 1.0  // Base scale factor for ship size
 )
 
 // Message types for client-server communication

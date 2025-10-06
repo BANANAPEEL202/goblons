@@ -22,6 +22,8 @@ class GameClient {
       right: false,
       shootLeft: false,
       shootRight: false,
+      upgradeCannons: false,
+      downgradeCannons: false,
       mouse: { x: 0, y: 0 }
     };
     
@@ -299,6 +301,18 @@ class GameClient {
         inputChanged = true;
       }
     }
+    if (e.key === '=' || e.key === '+') {
+      if (!this.input.upgradeCannons) {
+        this.input.upgradeCannons = true;
+        inputChanged = true;
+      }
+    }
+    if (e.key === '-' || e.key === '_') {
+      if (!this.input.downgradeCannons) {
+        this.input.downgradeCannons = true;
+        inputChanged = true;
+      }
+    }
     
     if (inputChanged) {
       this.sendInput();
@@ -341,6 +355,18 @@ class GameClient {
     if (e.key === 'e' || e.key === 'E') {
       if (this.input.shootRight) {
         this.input.shootRight = false;
+        inputChanged = true;
+      }
+    }
+    if (e.key === '=' || e.key === '+') {
+      if (this.input.upgradeCannons) {
+        this.input.upgradeCannons = false;
+        inputChanged = true;
+      }
+    }
+    if (e.key === '-' || e.key === '_') {
+      if (this.input.downgradeCannons) {
+        this.input.downgradeCannons = false;
         inputChanged = true;
       }
     }
@@ -470,6 +496,9 @@ class GameClient {
     // Draw world grid
     this.drawGrid();
     
+    // Draw map border
+    this.drawMapBorder();
+    
     // Draw items
     this.gameState.items.forEach(item => {
       this.drawItem(item);
@@ -490,7 +519,7 @@ class GameClient {
   }
 
   drawGrid() {
-    const gridSize = 30;
+    const gridSize = 25;
     this.ctx.strokeStyle = '#9393a3ff';
     this.ctx.lineWidth = 1;
     
@@ -511,6 +540,50 @@ class GameClient {
       this.ctx.stroke();
     }
   }
+
+  drawMapBorder() {
+    const worldWidth = 2000;
+    const worldHeight = 2000;
+    
+    // Convert world coordinates to screen coordinates
+    const borderLeft = 0 - this.camera.x;
+    const borderTop = 0 - this.camera.y;
+    const borderRight = worldWidth - this.camera.x;
+    const borderBottom = worldHeight - this.camera.y;
+    
+    // Only draw border segments that are visible on screen
+    this.ctx.strokeStyle = '#333'; 
+    this.ctx.lineWidth = 4;
+    
+    this.ctx.beginPath();
+    
+    // Top border
+    if (borderTop >= -4 && borderTop <= this.screenHeight + 4) {
+      this.ctx.moveTo(Math.max(0, borderLeft), borderTop);
+      this.ctx.lineTo(Math.min(this.screenWidth, borderRight), borderTop);
+    }
+    
+    // Bottom border
+    if (borderBottom >= -4 && borderBottom <= this.screenHeight + 4) {
+      this.ctx.moveTo(Math.max(0, borderLeft), borderBottom);
+      this.ctx.lineTo(Math.min(this.screenWidth, borderRight), borderBottom);
+    }
+    
+    // Left border
+    if (borderLeft >= -4 && borderLeft <= this.screenWidth + 4) {
+      this.ctx.moveTo(borderLeft, Math.max(0, borderTop));
+      this.ctx.lineTo(borderLeft, Math.min(this.screenHeight, borderBottom));
+    }
+    
+    // Right border
+    if (borderRight >= -4 && borderRight <= this.screenWidth + 4) {
+      this.ctx.moveTo(borderRight, Math.max(0, borderTop));
+      this.ctx.lineTo(borderRight, Math.min(this.screenHeight, borderBottom));
+    }
+    
+    this.ctx.stroke();
+  }
+
 drawPlayer(player) {
   const ctx = this.ctx;
   const screenX = player.x - this.camera.x;
@@ -522,18 +595,18 @@ drawPlayer(player) {
 
   // --- Base ship dimensions ---
   const bowLength = size * 0.4;
-  const baseShaftLength = size * 0.5;
+  const baseShaftLength = (player.shipLength || size * 1.2) * 0.5;
   const rearLength = size * 0.3;
-  const shaftWidth = size * 0.6;
+  const shaftWidth = player.shipWidth || size * 0.6;
 
   // --- Guns settings ---
-  const gunCount = 4//player.guns || 2; // Total guns
+  const gunCount = player.cannonCount || 2; // Total guns per side from server
   const gunLength = size * 0.35;
   const gunWidth = size * 0.2;
 
   // --- Determine number of guns per side ---
-  const leftGunCount = Math.floor(gunCount / 2);
-  const rightGunCount = gunCount - leftGunCount;
+  const leftGunCount = gunCount;  // Server sends cannons per side
+  const rightGunCount = gunCount; // Same number on both sides
 
   // --- Ship length adjustment ---
   // Add extra shaft length if more than 1 gun per side
@@ -726,7 +799,7 @@ drawPlayer(player) {
       this.ctx.textAlign = 'left';
       this.ctx.fillText(`${this.gameState.myPlayer.name}`, 20, 35);
       this.ctx.fillText(`Score: ${this.gameState.myPlayer.score || 0}`, 20, 55);
-      this.ctx.fillText(`Size: ${Math.round(this.gameState.myPlayer.size)}`, 20, 75);
+      this.ctx.fillText(`Cannons: ${this.gameState.myPlayer.cannonCount || 2}/side`, 20, 75);
       this.ctx.fillText(`Players: ${this.gameState.players.length}`, 20, 95);
     }
     
@@ -780,8 +853,8 @@ drawPlayer(player) {
   }
 
   drawControls() {
-    const controlsWidth = 180;
-    const controlsHeight = 120;
+    const controlsWidth = 200;
+    const controlsHeight = 150;
     const x = 10;
     const y = this.screenHeight - controlsHeight - 10;
     
@@ -797,10 +870,12 @@ drawPlayer(player) {
     this.ctx.fillText('CONTROLS:', x + 10, y + 20);
     this.ctx.font = '12px Arial';
     this.ctx.fillText('WASD: Move', x + 10, y + 40);
-    this.ctx.fillText('Q: Fire Left Cannon', x + 10, y + 55);
-    this.ctx.fillText('E: Fire Right Cannon', x + 10, y + 70);
-    this.ctx.fillText('Ships turn faster', x + 10, y + 90);
-    this.ctx.fillText('when moving!', x + 10, y + 105);
+    this.ctx.fillText('Q: Fire Left Cannons', x + 10, y + 55);
+    this.ctx.fillText('E: Fire Right Cannons', x + 10, y + 70);
+    this.ctx.fillText('+: Add Cannons', x + 10, y + 85);
+    this.ctx.fillText('-: Remove Cannons', x + 10, y + 100);
+    this.ctx.fillText('Ships turn faster', x + 10, y + 120);
+    this.ctx.fillText('when moving!', x + 10, y + 135);
   }
 
   drawMinimap() {
