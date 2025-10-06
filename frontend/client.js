@@ -522,48 +522,39 @@ class GameClient {
   const angle = player.angle || 0;
 
   // === Dimensions ===
-  const bowLength = size * 0.4;        // curved triangle
+  const bowLength = size * 0.4;
   const bowWidth = size * 0.6;
-  const shaftLength = size * 0.4;      // rectangle
+  const shaftLength = size * 0.5;
   const shaftWidth = size * 0.6;
-  const rearLength = size * 0.3;       // trapezoid
+  const rearLength = size * 0.3;
   const rearFrontWidth = shaftWidth;
   const rearBackWidth = shaftWidth * 0.5;
+
+  const gunLength = size * 0.35;
+  const gunWidth = size * 0.2;
 
   ctx.save();
   ctx.translate(screenX, screenY);
   ctx.rotate(angle);
 
   ctx.fillStyle = color;
-  ctx.strokeStyle = '#000';
-  ctx.lineWidth = 2;
+  ctx.strokeStyle = '#444';
+  ctx.lineWidth = 3;
 
+  // --- Ship shape (single path) ---
   ctx.beginPath();
+  ctx.moveTo(shaftLength / 2 + bowLength, 0); // tip
 
-  // --- Start at bow tip ---
-  ctx.moveTo(shaftLength / 2 + bowLength, 0); // tip of bow
-
-  // --- Bow bottom curve ---
   ctx.quadraticCurveTo(
     shaftLength / 2 + bowLength * 0.3,
     bowWidth / 2,
     shaftLength / 2,
     bowWidth / 2
   );
-
-  // --- Shaft bottom ---
   ctx.lineTo(-shaftLength / 2, bowWidth / 2);
-
-  // --- Rear trapezoid bottom ---
   ctx.lineTo(-shaftLength / 2 - rearLength, rearBackWidth / 2);
-
-  // --- Rear trapezoid top ---
   ctx.lineTo(-shaftLength / 2 - rearLength, -rearBackWidth / 2);
-
-  // --- Shaft top ---
   ctx.lineTo(-shaftLength / 2, -bowWidth / 2);
-
-  // --- Bow top curve back to tip ---
   ctx.lineTo(shaftLength / 2, -bowWidth / 2);
   ctx.quadraticCurveTo(
     shaftLength / 2 + bowLength * 0.3,
@@ -571,21 +562,39 @@ class GameClient {
     shaftLength / 2 + bowLength,
     0
   );
-
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
 
-  // --- Gray circle at rectangle center ---
+  // --- Center circle ---
   ctx.beginPath();
-  ctx.arc(0, 0, shaftWidth * 0.3, 0, Math.PI * 2);
-  ctx.fillStyle = '#777';
+  ctx.arc(0, 0, shaftWidth * 0.2, 0, Math.PI * 2);
+  ctx.fillStyle = '#444';
   ctx.fill();
-  ctx.strokeStyle = '#000';
+  ctx.strokeStyle = '#444';
   ctx.stroke();
 
+  // --- Guns sticking out perpendicular ---
+  ctx.fillStyle = '#444';
+
+// Left gun (negative Y side)
+ctx.fillRect(
+  -gunLength / 2,       // center the gun along X
+  -shaftWidth / 2 - gunWidth, // stick out from side
+  gunLength,            // gun length along X
+  gunWidth              // gun thickness along Y
+);
+
+// Right gun (positive Y side)
+ctx.fillRect(
+  -gunLength / 2,       // center the gun along X
+  shaftWidth / 2,       // stick out from opposite side
+  gunLength,
+  gunWidth
+);
   ctx.restore();
 }
+
 
   drawItem(item) {
     const screenX = item.x - this.camera.x;

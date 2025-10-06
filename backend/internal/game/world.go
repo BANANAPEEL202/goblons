@@ -2,6 +2,7 @@ package game
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"math"
 	"math/rand"
@@ -162,14 +163,6 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 		player.Angle += scaledTurnSpeed
 	}
 
-	// Handle shooting (left and right cannons)
-	now := time.Now()
-	if (input.ShootLeft || input.ShootRight) && now.Sub(player.LastShotTime).Seconds() >= CannonCooldown {
-		w.fireCannon(player, true)  // Left cannon
-		w.fireCannon(player, false) // Right cannon
-		player.LastShotTime = now
-	}
-
 	// Apply drag/deceleration
 	player.VelX *= ShipDeceleration
 	player.VelY *= ShipDeceleration
@@ -185,6 +178,14 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 	// Update position
 	player.X += player.VelX
 	player.Y += player.VelY
+
+	// Handle shooting (left and right cannons)
+	now := time.Now()
+	if (input.ShootLeft || input.ShootRight) && now.Sub(player.LastShotTime).Seconds() >= CannonCooldown {
+		w.fireCannon(player, true)  // Left cannon
+		w.fireCannon(player, false) // Right cannon
+		player.LastShotTime = now
+	}
 
 	// Keep player within world boundaries
 	w.keepPlayerInBounds(player)
@@ -349,8 +350,9 @@ func (w *World) fireCannon(player *Player, isLeftCannon bool) {
 	cannonY := player.Y + float32(math.Sin(float64(sideAngle)))*CannonDistance
 
 	// Bullet fires perpendicular to the ship (in the same direction as the cannon positioning)
-	bulletVelX := float32(math.Cos(float64(sideAngle))) * BulletSpeed
-	bulletVelY := float32(math.Sin(float64(sideAngle))) * BulletSpeed
+	// includes player velocity for more realistic shooting
+	bulletVelX := float32(math.Cos(float64(sideAngle)))*BulletSpeed + player.VelX*0.7
+	bulletVelY := float32(math.Sin(float64(sideAngle)))*BulletSpeed + player.VelY*0.7
 
 	// Create bullet
 	bullet := &Bullet{
