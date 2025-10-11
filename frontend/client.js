@@ -24,6 +24,8 @@ class GameClient {
       shootRight: false,
       upgradeCannons: false,
       downgradeCannons: false,
+      upgradeTurrets: false,
+      downgradeTurrets: false,
       mouse: { x: 0, y: 0 }
     };
     
@@ -95,8 +97,20 @@ class GameClient {
     // Mouse input
     this.canvas.addEventListener('mousemove', (e) => {
       const rect = this.canvas.getBoundingClientRect();
-      this.input.mouse.x = e.clientX - rect.left;
-      this.input.mouse.y = e.clientY - rect.top;
+      const screenX = e.clientX - rect.left;
+      const screenY = e.clientY - rect.top;
+      
+      // Convert screen coordinates to world coordinates
+      this.input.mouse.x = screenX + this.camera.x - this.screenWidth / 2;
+      this.input.mouse.y = screenY + this.camera.y - this.screenHeight / 2;
+      
+      // Debug: Log mouse coordinates occasionally
+      
+      console.log(`Mouse - Screen: (${screenX}, ${screenY}), World: (${this.input.mouse.x}, ${this.input.mouse.y}), Camera: (${this.camera.x}, ${this.camera.y})`);
+      
+      
+      // Send input whenever mouse moves (for turret aiming)
+      this.sendInput();
     });
 
     // Handle window resize
@@ -247,29 +261,6 @@ class GameClient {
     }
   }
 
-  setupEventListeners() {
-    // Keyboard input
-    document.addEventListener('keydown', (e) => {
-      this.handleKeyDown(e);
-    });
-    
-    document.addEventListener('keyup', (e) => {
-      this.handleKeyUp(e);
-    });
-    
-    // Mouse input
-    this.canvas.addEventListener('mousemove', (e) => {
-      const rect = this.canvas.getBoundingClientRect();
-      this.input.mouse.x = e.clientX - rect.left;
-      this.input.mouse.y = e.clientY - rect.top;
-    });
-    
-    // Prevent context menu on right click
-    this.canvas.addEventListener('contextmenu', (e) => {
-      e.preventDefault();
-    });
-  }
-
   handleKeyDown(e) {
     let inputChanged = false;
     
@@ -318,6 +309,18 @@ class GameClient {
     if (e.key === '-' || e.key === '_') {
       if (!this.input.downgradeCannons) {
         this.input.downgradeCannons = true;
+        inputChanged = true;
+      }
+    }
+    if (e.key === ']' || e.key === '}') {
+      if (!this.input.upgradeTurrets) {
+        this.input.upgradeTurrets = true;
+        inputChanged = true;
+      }
+    }
+    if (e.key === '[' || e.key === '{') {
+      if (!this.input.downgradeTurrets) {
+        this.input.downgradeTurrets = true;
         inputChanged = true;
       }
     }
@@ -375,6 +378,18 @@ class GameClient {
     if (e.key === '-' || e.key === '_') {
       if (this.input.downgradeCannons) {
         this.input.downgradeCannons = false;
+        inputChanged = true;
+      }
+    }
+    if (e.key === ']' || e.key === '}') {
+      if (this.input.upgradeTurrets) {
+        this.input.upgradeTurrets = false;
+        inputChanged = true;
+      }
+    }
+    if (e.key === '[' || e.key === '{') {
+      if (this.input.downgradeTurrets) {
+        this.input.downgradeTurrets = false;
         inputChanged = true;
       }
     }
@@ -676,6 +691,38 @@ drawPlayer(player) {
     }
   }
 
+  // --- Draw turrets using positions from backend ---
+  if (player.turrets && player.turrets.length > 0) {
+    for (const turret of player.turrets) {
+      // Draw turret base (circular mount)
+      const turretSize = size * 0.5;
+      const barrelLength = size * 0.5;
+      const barrelWidth = size * 0.2;
+      
+      ctx.save();
+      ctx.translate(turret.x, turret.y);
+
+      // Draw turret barrel (rotated to turret.angle)
+      // Since the canvas is already rotated to the ship's angle, we need to counter-rotate
+      // the turret angle to get the correct world orientation
+      ctx.rotate(turret.angle - angle);
+      ctx.fillStyle = '#444';
+      ctx.fillRect(0, -barrelWidth / 2, barrelLength, barrelWidth);
+      ctx.strokeRect(0, -barrelWidth / 2, barrelLength, barrelWidth);
+      
+      // Draw turret base
+      ctx.fillStyle = '#555';
+      ctx.beginPath();
+      ctx.arc(0, 0, turretSize / 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      
+
+      
+      ctx.restore();
+    }
+  }
+
   ctx.restore();
   
   // Draw health bar above the ship
@@ -901,8 +948,8 @@ drawPlayer(player) {
   }
 
   drawControls() {
-    const controlsWidth = 200;
-    const controlsHeight = 150;
+    const controlsWidth = 220;
+    const controlsHeight = 190;
     const x = 10;
     const y = this.screenHeight - controlsHeight - 10;
     
@@ -920,10 +967,13 @@ drawPlayer(player) {
     this.ctx.fillText('WASD: Move', x + 10, y + 40);
     this.ctx.fillText('Q: Fire Left Cannons', x + 10, y + 55);
     this.ctx.fillText('E: Fire Right Cannons', x + 10, y + 70);
-    this.ctx.fillText('+: Add Cannons', x + 10, y + 85);
-    this.ctx.fillText('-: Remove Cannons', x + 10, y + 100);
-    this.ctx.fillText('Ships turn faster', x + 10, y + 120);
-    this.ctx.fillText('when moving!', x + 10, y + 135);
+    this.ctx.fillText('Mouse: Aim Turrets', x + 10, y + 85);
+    this.ctx.fillText('+/-: Add/Remove Cannons', x + 10, y + 100);
+    this.ctx.fillText('[/]: Add/Remove Turrets', x + 10, y + 115);
+    this.ctx.fillText('Turrets auto-fire at', x + 10, y + 135);
+    this.ctx.fillText('mouse position!', x + 10, y + 150);
+    this.ctx.fillText('Ships turn slower', x + 10, y + 165);
+    this.ctx.fillText('when longer!', x + 10, y + 180);
   }
 
   drawMinimap() {

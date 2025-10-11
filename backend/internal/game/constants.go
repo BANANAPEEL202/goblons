@@ -32,6 +32,16 @@ const (
 	ShipScaleFactor     = 1.0  // Base scale factor for ship size
 )
 
+// Turret constants
+const (
+	TurretCooldown      = 0.5  // Seconds between turret shots (faster than cannons)
+	TurretRange         = 400  // Maximum turret firing range
+	MaxTurrets          = 20   // Maximum number of turrets
+	MinTurrets          = 0    // Minimum number of turrets
+	TurretSpacingFactor = 1.2  // Factor for spacing turrets along ship center line
+	TurretMargin        = 15.0 // Constant margin from ship edges in units
+)
+
 // Message types for client-server communication
 const (
 	MsgTypeInput    = "input"

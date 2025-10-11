@@ -18,6 +18,8 @@ type InputMsg struct {
 	ShootRight       bool   `json:"shootRight"`
 	UpgradeCannons   bool   `json:"upgradeCannons"`
 	DowngradeCannons bool   `json:"downgradeCannons"`
+	UpgradeTurrets   bool   `json:"upgradeTurrets"`
+	DowngradeTurrets bool   `json:"downgradeTurrets"`
 	Mouse            struct {
 		X float32 `json:"x"`
 		Y float32 `json:"y"`
@@ -28,6 +30,22 @@ type InputMsg struct {
 type CannonPosition struct {
 	X float32 `json:"x"` // Relative X position from ship center
 	Y float32 `json:"y"` // Relative Y position from ship center
+}
+
+// TurretType represents different types of turrets
+type TurretType int
+
+const (
+	TurretTypeSingle TurretType = iota // Single rotatable gun
+)
+
+// Turret represents a center-mounted rotatable gun
+type Turret struct {
+	X        float32    `json:"x"`     // Relative X position from ship center
+	Y        float32    `json:"y"`     // Relative Y position from ship center
+	Angle    float32    `json:"angle"` // Turret rotation angle in radians
+	Type     TurretType `json:"type"`  // Type of turret
+	LastShot time.Time  `json:"-"`     // Last shot time for cooldown
 }
 
 // Player represents a game player
@@ -53,6 +71,8 @@ type Player struct {
 	CollisionRadius float32          `json:"collisionRadius"` // Dynamic collision radius
 	LeftCannons     []CannonPosition `json:"leftCannons"`     // Relative positions of left side cannons
 	RightCannons    []CannonPosition `json:"rightCannons"`    // Relative positions of right side cannons
+	TurretCount     int              `json:"turretCount"`     // Number of turrets
+	Turrets         []Turret         `json:"turrets"`         // Center-mounted turret positions
 }
 
 // GameItem represents collectible items in the game
@@ -130,6 +150,7 @@ func NewClient(id uint32, conn *websocket.Conn) *Client {
 // NewPlayer creates a new player with default values
 func NewPlayer(id uint32) *Player {
 	cannonCount := 1 // Default number of cannons per side
+	turretCount := 1 // Default number of turrets
 	// Calculate initial shaft length (same logic as updateShipDimensions)
 	shipLength := float32(PlayerSize*1.2) * 0.5 // Base shaft length for 1 cannon
 	shipWidth := float32(PlayerSize * 0.8)
@@ -145,6 +166,7 @@ func NewPlayer(id uint32) *Player {
 		Color:           generateRandomColor(),
 		Name:            generateRandomName(),
 		CannonCount:     cannonCount,
+		TurretCount:     turretCount,
 		ShipLength:      shipLength,
 		ShipWidth:       shipWidth,
 		CollisionRadius: calculateCollisionRadius(shipLength, shipWidth),
