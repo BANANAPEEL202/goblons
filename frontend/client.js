@@ -101,13 +101,13 @@ class GameClient {
       const screenY = e.clientY - rect.top;
       
       // Convert screen coordinates to world coordinates
-      this.input.mouse.x = screenX + this.camera.x - this.screenWidth / 2;
-      this.input.mouse.y = screenY + this.camera.y - this.screenHeight / 2;
+      // Account for camera position: camera.x/y represents the top-left corner of the view
+      this.input.mouse.x = screenX + this.camera.x;
+      this.input.mouse.y = screenY + this.camera.y;
       
       // Debug: Log mouse coordinates occasionally
       
       console.log(`Mouse - Screen: (${screenX}, ${screenY}), World: (${this.input.mouse.x}, ${this.input.mouse.y}), Camera: (${this.camera.x}, ${this.camera.y})`);
-      
       
       // Send input whenever mouse moves (for turret aiming)
       this.sendInput();

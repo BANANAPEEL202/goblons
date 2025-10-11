@@ -719,8 +719,6 @@ func (w *World) DowngradePlayerTurrets(playerID uint32) bool {
 // updateTurretAiming updates turret angles to aim at mouse position
 func (w *World) updateTurretAiming(player *Player, input *InputMsg) {
 	// Convert mouse coordinates from screen space to world space
-	// Note: This is a simplified conversion - in a real implementation,
-	// the frontend should convert mouse to world coordinates before sending
 	mouseWorldX := input.Mouse.X
 	mouseWorldY := input.Mouse.Y
 
@@ -741,13 +739,13 @@ func (w *World) fireTurrets(player *Player, input *InputMsg, now time.Time) {
 	mouseWorldX := input.Mouse.X
 	mouseWorldY := input.Mouse.Y
 
+	// Check shared turret cooldown first
+	if now.Sub(player.LastTurretShotTime).Seconds() < TurretCooldown {
+		return
+	}
+
 	for i := range player.Turrets {
 		turret := &player.Turrets[i]
-
-		// Check cooldown for this turret
-		if now.Sub(turret.LastShot).Seconds() < TurretCooldown {
-			continue
-		}
 
 		// Calculate turret world position
 		cos := float32(math.Cos(float64(player.Angle)))
@@ -762,8 +760,8 @@ func (w *World) fireTurrets(player *Player, input *InputMsg, now time.Time) {
 
 		if distance <= TurretRange && distance > 10 { // Minimum distance to avoid self-targeting
 			// Fire bullet from turret in the direction it's aiming
-			bulletVelX := float32(math.Cos(float64(turret.Angle))) * BulletSpeed
-			bulletVelY := float32(math.Sin(float64(turret.Angle))) * BulletSpeed
+			bulletVelX := float32(math.Cos(float64(turret.Angle)))*BulletSpeed + player.VelX*1
+			bulletVelY := float32(math.Sin(float64(turret.Angle)))*BulletSpeed + player.VelY*1
 
 			// Create bullet at turret world coordinates
 			bullet := &Bullet{
@@ -779,7 +777,9 @@ func (w *World) fireTurrets(player *Player, input *InputMsg, now time.Time) {
 
 			w.bullets[w.bulletID] = bullet
 			w.bulletID++
-			turret.LastShot = now
+
+			// Set shared turret cooldown and return after firing the first turret
+			player.LastTurretShotTime = now
 		}
 	}
 }

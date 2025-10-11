@@ -41,38 +41,38 @@ const (
 
 // Turret represents a center-mounted rotatable gun
 type Turret struct {
-	X        float32    `json:"x"`     // Relative X position from ship center
-	Y        float32    `json:"y"`     // Relative Y position from ship center
-	Angle    float32    `json:"angle"` // Turret rotation angle in radians
-	Type     TurretType `json:"type"`  // Type of turret
-	LastShot time.Time  `json:"-"`     // Last shot time for cooldown
+	X     float32    `json:"x"`     // Relative X position from ship center
+	Y     float32    `json:"y"`     // Relative Y position from ship center
+	Angle float32    `json:"angle"` // Turret rotation angle in radians
+	Type  TurretType `json:"type"`  // Type of turret
 }
 
 // Player represents a game player
 type Player struct {
-	ID              uint32           `json:"id"`
-	X               float32          `json:"x"`
-	Y               float32          `json:"y"`
-	VelX            float32          `json:"velX"`
-	VelY            float32          `json:"velY"`
-	Angle           float32          `json:"angle"` // Ship facing direction in radians
-	Size            float32          `json:"size"`
-	Score           int              `json:"score"`
-	State           int              `json:"state"`
-	Name            string           `json:"name"`
-	Color           string           `json:"color"`
-	Health          int              `json:"health"`
-	MaxHealth       int              `json:"maxHealth"`
-	LastShotTime    time.Time        `json:"-"`
-	RespawnTime     time.Time        `json:"-"`               // When the player can respawn
-	CannonCount     int              `json:"cannonCount"`     // Number of cannons per side
-	ShipLength      float32          `json:"shipLength"`      // Length of the ship
-	ShipWidth       float32          `json:"shipWidth"`       // Width of the ship
-	CollisionRadius float32          `json:"collisionRadius"` // Dynamic collision radius
-	LeftCannons     []CannonPosition `json:"leftCannons"`     // Relative positions of left side cannons
-	RightCannons    []CannonPosition `json:"rightCannons"`    // Relative positions of right side cannons
-	TurretCount     int              `json:"turretCount"`     // Number of turrets
-	Turrets         []Turret         `json:"turrets"`         // Center-mounted turret positions
+	ID                 uint32           `json:"id"`
+	X                  float32          `json:"x"`
+	Y                  float32          `json:"y"`
+	VelX               float32          `json:"velX"`
+	VelY               float32          `json:"velY"`
+	Angle              float32          `json:"angle"` // Ship facing direction in radians
+	Size               float32          `json:"size"`
+	Score              int              `json:"score"`
+	State              int              `json:"state"`
+	Name               string           `json:"name"`
+	Color              string           `json:"color"`
+	Health             int              `json:"health"`
+	MaxHealth          int              `json:"maxHealth"`
+	LastShotTime       time.Time        `json:"-"`
+	LastTurretShotTime time.Time        `json:"-"`               // When turrets last fired (shared cooldown)
+	RespawnTime        time.Time        `json:"-"`               // When the player can respawn
+	CannonCount        int              `json:"cannonCount"`     // Number of cannons per side
+	ShipLength         float32          `json:"shipLength"`      // Length of the ship
+	ShipWidth          float32          `json:"shipWidth"`       // Width of the ship
+	CollisionRadius    float32          `json:"collisionRadius"` // Dynamic collision radius
+	LeftCannons        []CannonPosition `json:"leftCannons"`     // Relative positions of left side cannons
+	RightCannons       []CannonPosition `json:"rightCannons"`    // Relative positions of right side cannons
+	TurretCount        int              `json:"turretCount"`     // Number of turrets
+	Turrets            []Turret         `json:"turrets"`         // Center-mounted turret positions
 }
 
 // GameItem represents collectible items in the game
