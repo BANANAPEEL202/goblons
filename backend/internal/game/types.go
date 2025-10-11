@@ -24,27 +24,35 @@ type InputMsg struct {
 	} `json:"mouse"`
 }
 
+// CannonPosition represents the relative position of a single cannon from ship center
+type CannonPosition struct {
+	X float32 `json:"x"` // Relative X position from ship center
+	Y float32 `json:"y"` // Relative Y position from ship center
+}
+
 // Player represents a game player
 type Player struct {
-	ID              uint32    `json:"id"`
-	X               float32   `json:"x"`
-	Y               float32   `json:"y"`
-	VelX            float32   `json:"velX"`
-	VelY            float32   `json:"velY"`
-	Angle           float32   `json:"angle"` // Ship facing direction in radians
-	Size            float32   `json:"size"`
-	Score           int       `json:"score"`
-	State           int       `json:"state"`
-	Name            string    `json:"name"`
-	Color           string    `json:"color"`
-	Health          int       `json:"health"`
-	MaxHealth       int       `json:"maxHealth"`
-	LastShotTime    time.Time `json:"-"`
-	RespawnTime     time.Time `json:"-"`               // When the player can respawn
-	CannonCount     int       `json:"cannonCount"`     // Number of cannons per side
-	ShipLength      float32   `json:"shipLength"`      // Length of the ship
-	ShipWidth       float32   `json:"shipWidth"`       // Width of the ship
-	CollisionRadius float32   `json:"collisionRadius"` // Dynamic collision radius
+	ID              uint32           `json:"id"`
+	X               float32          `json:"x"`
+	Y               float32          `json:"y"`
+	VelX            float32          `json:"velX"`
+	VelY            float32          `json:"velY"`
+	Angle           float32          `json:"angle"` // Ship facing direction in radians
+	Size            float32          `json:"size"`
+	Score           int              `json:"score"`
+	State           int              `json:"state"`
+	Name            string           `json:"name"`
+	Color           string           `json:"color"`
+	Health          int              `json:"health"`
+	MaxHealth       int              `json:"maxHealth"`
+	LastShotTime    time.Time        `json:"-"`
+	RespawnTime     time.Time        `json:"-"`               // When the player can respawn
+	CannonCount     int              `json:"cannonCount"`     // Number of cannons per side
+	ShipLength      float32          `json:"shipLength"`      // Length of the ship
+	ShipWidth       float32          `json:"shipWidth"`       // Width of the ship
+	CollisionRadius float32          `json:"collisionRadius"` // Dynamic collision radius
+	LeftCannons     []CannonPosition `json:"leftCannons"`     // Relative positions of left side cannons
+	RightCannons    []CannonPosition `json:"rightCannons"`    // Relative positions of right side cannons
 }
 
 // GameItem represents collectible items in the game
@@ -122,7 +130,8 @@ func NewClient(id uint32, conn *websocket.Conn) *Client {
 // NewPlayer creates a new player with default values
 func NewPlayer(id uint32) *Player {
 	cannonCount := 1 // Default number of cannons per side
-	shipLength := float32(PlayerSize * 1.2)
+	// Calculate initial shaft length (same logic as updateShipDimensions)
+	shipLength := float32(PlayerSize*1.2) * 0.5 // Base shaft length for 1 cannon
 	shipWidth := float32(PlayerSize * 0.8)
 
 	return &Player{

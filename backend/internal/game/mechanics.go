@@ -15,7 +15,7 @@ func NewGameMechanics(world *World) *GameMechanics {
 	return &GameMechanics{world: world}
 }
 
-// HandlePlayerCollisions checks and handles collisions between players
+// HandlePlayerCollisions checks and handles collisions between players using rectangular bounding boxes
 func (gm *GameMechanics) HandlePlayerCollisions() {
 	players := make([]*Player, 0, len(gm.world.players))
 	for _, player := range gm.world.players {
@@ -24,80 +24,161 @@ func (gm *GameMechanics) HandlePlayerCollisions() {
 		}
 	}
 
-	// Check player vs player collisions
+	// Check player vs player collisions using rectangular bounding boxes
 	for i := 0; i < len(players); i++ {
 		for j := i + 1; j < len(players); j++ {
 			player1 := players[i]
 			player2 := players[j]
 
-			distance := gm.calculateDistance(player1.X, player1.Y, player2.X, player2.Y)
-			minDistance := (player1.Size + player2.Size) / 2
-
-			if distance < minDistance {
+			if gm.checkRectangularCollision(player1, player2) {
 				gm.handlePlayerCollision(player1, player2)
 			}
 		}
 	}
 }
 
-// handlePlayerCollision handles what happens when two players collide
-func (gm *GameMechanics) handlePlayerCollision(player1, player2 *Player) {
-	// In doblons.io style, larger players can absorb smaller ones
-	sizeDifference := math.Abs(float64(player1.Size - player2.Size))
+// checkRectangularCollision checks if two ships' rectangular bounding boxes collide
+func (gm *GameMechanics) checkRectangularCollision(player1, player2 *Player) bool {
+	bbox1 := gm.getShipBoundingBox(player1)
+	bbox2 := gm.getShipBoundingBox(player2)
 
-	if sizeDifference > 5 { // Minimum size difference for absorption
-		var winner, loser *Player
-		if player1.Size > player2.Size {
-			winner, loser = player1, player2
-		} else {
-			winner, loser = player2, player1
-		}
-
-		// Transfer some size and score
-		sizeGain := loser.Size * 0.3                 // Winner gets 30% of loser's size
-		scoreGain := int(float32(loser.Score) * 0.5) // Winner gets 50% of loser's score
-
-		winner.Size += sizeGain
-		winner.Score += scoreGain
-
-		// Respawn the loser
-		gm.respawnPlayer(loser)
-
-	} else {
-		// Players are similar size, just push them apart
-		gm.separatePlayers(player1, player2)
-	}
+	// Check if bounding boxes overlap
+	return bbox1.MinX < bbox2.MaxX && bbox1.MaxX > bbox2.MinX &&
+		bbox1.MinY < bbox2.MaxY && bbox1.MaxY > bbox2.MinY
 }
 
-// separatePlayers pushes two overlapping players apart
-func (gm *GameMechanics) separatePlayers(player1, player2 *Player) {
-	dx := player1.X - player2.X
-	dy := player1.Y - player2.Y
-	distance := float32(math.Sqrt(float64(dx*dx + dy*dy)))
+// BoundingBox represents a rectangular bounding box
+type BoundingBox struct {
+	MinX, MinY, MaxX, MaxY float32
+}
 
-	if distance == 0 {
-		// Players are at exact same position, separate randomly
-		angle := rand.Float64() * 2 * math.Pi
-		dx = float32(math.Cos(angle))
-		dy = float32(math.Sin(angle))
-		distance = 1
+// getShipBoundingBox calculates the axis-aligned bounding box for a rotated ship
+func (gm *GameMechanics) getShipBoundingBox(player *Player) BoundingBox {
+	// Calculate the four corners of the rotated ship rectangle
+	halfLength := player.ShipLength / 2
+	halfWidth := player.ShipWidth / 2
+
+	cos := float32(math.Cos(float64(player.Angle)))
+	sin := float32(math.Sin(float64(player.Angle)))
+
+	// Local corners (relative to ship center)
+	corners := []struct{ x, y float32 }{
+		{-halfLength, -halfWidth}, // Back-left
+		{halfLength, -halfWidth},  // Front-left
+		{halfLength, halfWidth},   // Front-right
+		{-halfLength, halfWidth},  // Back-right
 	}
 
-	// Normalize and separate
-	dx /= distance
-	dy /= distance
+	// Transform corners to world coordinates and find bounding box
+	minX, minY := float32(math.Inf(1)), float32(math.Inf(1))
+	maxX, maxY := float32(math.Inf(-1)), float32(math.Inf(-1))
 
-	separation := (player1.Size+player2.Size)/2 - distance + 1
-	moveDistance := separation / 2
+	for _, corner := range corners {
+		// Rotate corner and translate to world position
+		worldX := player.X + (corner.x*cos - corner.y*sin)
+		worldY := player.Y + (corner.x*sin + corner.y*cos)
 
-	player1.X += dx * moveDistance
-	player1.Y += dy * moveDistance
-	player2.X -= dx * moveDistance
-	player2.Y -= dy * moveDistance
+		if worldX < minX {
+			minX = worldX
+		}
+		if worldX > maxX {
+			maxX = worldX
+		}
+		if worldY < minY {
+			minY = worldY
+		}
+		if worldY > maxY {
+			maxY = worldY
+		}
+	}
 
-	// Keep players within bounds
-	gm.world.keepPlayerInBounds(player1)
-	gm.world.keepPlayerInBounds(player2)
+	return BoundingBox{MinX: minX, MinY: minY, MaxX: maxX, MaxY: maxY}
+}
+
+// handlePlayerCollision handles what happens when two players collide
+func (gm *GameMechanics) handlePlayerCollision(player1, player2 *Player) {
+	// Ships push against each other when they collide
+	gm.pushShipsApart(player1, player2)
+}
+
+// pushShipsApart pushes two colliding ships apart based on their bounding boxes
+func (gm *GameMechanics) pushShipsApart(p1, p2 *Player) {
+	bbox1 := gm.getShipBoundingBox(p1)
+	bbox2 := gm.getShipBoundingBox(p2)
+
+	// Calculate overlap in both axes
+	overlapX := float32(math.Min(float64(bbox1.MaxX), float64(bbox2.MaxX))) - float32(math.Max(float64(bbox1.MinX), float64(bbox2.MinX)))
+	overlapY := float32(math.Min(float64(bbox1.MaxY), float64(bbox2.MaxY))) - float32(math.Max(float64(bbox1.MinY), float64(bbox2.MinY)))
+
+	// Only push if there's actual overlap
+	if overlapX > 0 && overlapY > 0 {
+		// Calculate center-to-center distance for push direction
+		dx := p1.X - p2.X
+		dy := p1.Y - p2.Y
+		distance := float32(math.Sqrt(float64(dx*dx + dy*dy)))
+
+		// Handle case where ships are at same position
+		if distance == 0 {
+			angle := rand.Float64() * 2 * math.Pi
+			dx = float32(math.Cos(angle))
+			dy = float32(math.Sin(angle))
+			distance = 1
+		}
+
+		// Normalize direction vector
+		dx /= distance
+		dy /= distance
+
+		// Choose the axis with smaller overlap for more natural separation
+		if overlapX < overlapY {
+			// Push apart along X axis
+			push := overlapX / 2
+			if dx > 0 {
+				p1.X += push
+				p2.X -= push
+			} else {
+				p1.X -= push
+				p2.X += push
+			}
+
+			// Apply velocity transfer
+			restitution := float32(0.5)
+			relVel := p1.VelX - p2.VelX
+			if (dx > 0 && relVel < 0) || (dx < 0 && relVel > 0) {
+				impulse := -relVel * (1 + restitution) / 2
+				p1.VelX += impulse
+				p2.VelX -= impulse
+			}
+		} else {
+			// Push apart along Y axis
+			push := overlapY / 2
+			if dy > 0 {
+				p1.Y += push
+				p2.Y -= push
+			} else {
+				p1.Y -= push
+				p2.Y += push
+			}
+
+			// Apply velocity transfer
+			restitution := float32(0.5)
+			relVel := p1.VelY - p2.VelY
+			if (dy > 0 && relVel < 0) || (dy < 0 && relVel > 0) {
+				impulse := -relVel * (1 + restitution) / 2
+				p1.VelY += impulse
+				p2.VelY -= impulse
+			}
+		}
+	}
+
+	gm.world.keepPlayerInBounds(p1)
+	gm.world.keepPlayerInBounds(p2)
+}
+
+// separatePlayers pushes two overlapping players apart (legacy function for backward compatibility)
+func (gm *GameMechanics) separatePlayers(player1, player2 *Player) {
+	// Redirect to the new push function
+	gm.pushShipsApart(player1, player2)
 }
 
 // respawnPlayer resets a player's state and position
@@ -124,17 +205,33 @@ func (gm *GameMechanics) respawnPlayer(player *Player) {
 
 // isLocationSafe checks if a location is safe for spawning (no other players nearby)
 func (gm *GameMechanics) isLocationSafe(x, y, size float32) bool {
-	safeDistance := size * 3 // Safe distance is 3 times the player size
+	// Create a temporary player to check collision area
+	tempPlayer := &Player{
+		X:          x,
+		Y:          y,
+		Size:       size,
+		ShipLength: size * 1.2,
+		ShipWidth:  size * 0.8,
+		Angle:      0, // Default angle for spawning
+	}
 
+	// Check against all existing players
 	for _, otherPlayer := range gm.world.players {
 		if otherPlayer.State != StateAlive {
 			continue
 		}
 
-		distance := gm.calculateDistance(x, y, otherPlayer.X, otherPlayer.Y)
-		if distance < safeDistance {
+		// Use a larger safety margin by scaling up the temp player
+		tempPlayer.ShipLength *= 2 // Double the size for safety margin
+		tempPlayer.ShipWidth *= 2
+
+		if gm.checkRectangularCollision(tempPlayer, otherPlayer) {
 			return false
 		}
+
+		// Restore original size for next check
+		tempPlayer.ShipLength /= 2
+		tempPlayer.ShipWidth /= 2
 	}
 
 	return true

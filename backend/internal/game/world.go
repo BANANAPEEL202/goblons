@@ -73,6 +73,10 @@ func (w *World) AddClient(client *Client) {
 	// Spawn player at random safe location
 	w.spawnPlayer(client.Player)
 
+	// Initialize ship dimensions and cannon positions
+	w.updateShipDimensions(client.Player)
+	w.updatePlayerCannonPositions(client.Player)
+
 	// Send welcome message to the new client with their player ID
 	w.sendWelcomeMessage(client)
 
@@ -398,21 +402,33 @@ func (w *World) fireAllCannons(player *Player, isLeftSide bool) {
 		sideAngle = player.Angle - float32(math.Pi/2) // 90 degrees to the right of ship's facing direction
 	}
 
-	// Calculate cannon positions along the ship's length
-	cannonPositions := w.calculateCannonPositions(player, isLeftSide)
+	// Use pre-calculated cannon positions from player struct
+	var cannonPositions []CannonPosition
+	if isLeftSide {
+		cannonPositions = player.LeftCannons
+	} else {
+		cannonPositions = player.RightCannons
+	}
 
-	// Fire each cannon
+	// Transform relative positions to world coordinates and fire each cannon
+	cos := float32(math.Cos(float64(player.Angle)))
+	sin := float32(math.Sin(float64(player.Angle)))
+
 	for _, cannonPos := range cannonPositions {
+		// Transform relative position to world coordinates using ship's rotation
+		worldX := player.X + (cannonPos.X*cos - cannonPos.Y*sin)
+		worldY := player.Y + (cannonPos.X*sin + cannonPos.Y*cos)
+
 		// Bullet fires perpendicular to the ship (in the same direction as the cannon positioning)
 		// includes player velocity for more realistic shooting
 		bulletVelX := float32(math.Cos(float64(sideAngle)))*BulletSpeed + player.VelX*0.7
 		bulletVelY := float32(math.Sin(float64(sideAngle)))*BulletSpeed + player.VelY*0.7
 
-		// Create bullet
+		// Create bullet at world coordinates
 		bullet := &Bullet{
 			ID:        w.bulletID,
-			X:         cannonPos.X,
-			Y:         cannonPos.Y,
+			X:         worldX,
+			Y:         worldY,
 			VelX:      bulletVelX,
 			VelY:      bulletVelY,
 			OwnerID:   player.ID,
@@ -425,25 +441,12 @@ func (w *World) fireAllCannons(player *Player, isLeftSide bool) {
 	}
 }
 
-// CannonPosition represents a cannon's position
-type CannonPosition struct {
-	X, Y float32
-}
-
-// calculateCannonPositions calculates positions for all cannons on one side of the ship
+// calculateCannonPositions calculates relative positions for all cannons on one side of the ship
 func (w *World) calculateCannonPositions(player *Player, isLeftSide bool) []CannonPosition {
 	positions := make([]CannonPosition, 0, player.CannonCount)
 
-	// Match frontend cannon positioning exactly
-	// Calculate shaftLength the same way as frontend
-	baseShaftLength := player.ShipLength * 0.5
-	var extraShaftLength float32
-	if player.CannonCount > 1 {
-		gunLength := player.Size * 0.35
-		spacing := gunLength * 1.5
-		extraShaftLength = spacing * float32(player.CannonCount-1)
-	}
-	shaftLength := baseShaftLength + extraShaftLength
+	// Use the shaft length directly from player (already calculated in updateShipDimensions)
+	shaftLength := player.ShipLength
 
 	gunSpacing := shaftLength / float32(player.CannonCount+1)
 	gunLength := player.Size * 0.35
@@ -474,15 +477,8 @@ func (w *World) calculateCannonPositions(player *Player, isLeftSide bool) []Cann
 			relativeY = -shaftWidth/2 - gunWidth + gunWidth/2
 		}
 
-		// Transform relative position to world coordinates using ship's rotation
-		cos := float32(math.Cos(float64(player.Angle)))
-		sin := float32(math.Sin(float64(player.Angle)))
-
-		// Rotate the relative position by the ship's angle
-		cannonX := player.X + (relativeX*cos - relativeY*sin)
-		cannonY := player.Y + (relativeX*sin + relativeY*cos)
-
-		positions = append(positions, CannonPosition{X: cannonX, Y: cannonY})
+		// Store relative positions (no transformation to world coordinates)
+		positions = append(positions, CannonPosition{X: relativeX, Y: relativeY})
 	}
 
 	return positions
@@ -560,6 +556,7 @@ func (w *World) UpgradePlayerCannons(playerID uint32) bool {
 
 	player.CannonCount++
 	w.updateShipDimensions(player)
+	w.updatePlayerCannonPositions(player) // Update cannon positions after changing count
 	return true
 }
 
@@ -577,22 +574,35 @@ func (w *World) DowngradePlayerCannons(playerID uint32) bool {
 
 	player.CannonCount--
 	w.updateShipDimensions(player)
+	w.updatePlayerCannonPositions(player) // Update cannon positions after changing count
 	return true
 }
 
 // updateShipDimensions updates ship dimensions based on cannon count
 func (w *World) updateShipDimensions(player *Player) {
-	// Base dimensions - keep overall size constant
-	baseLength := float32(PlayerSize * 1.2)
+	// Base dimensions
+	baseShaftLength := float32(PlayerSize*1.2) * 0.5 // Base shaft length (what frontend uses)
 	baseWidth := float32(PlayerSize * 0.8)
 
-	// More cannons = longer ship (only length changes)
-	lengthMultiplier := 1.0 + float32(player.CannonCount-1)*0.2
+	// Calculate extra length for additional cannons (same logic as frontend used to have)
+	var extraShaftLength float32
+	if player.CannonCount > 1 {
+		gunLength := player.Size * 0.35
+		spacing := gunLength * 1.5
+		extraShaftLength = spacing * float32(player.CannonCount-1)
+	}
 
-	player.ShipLength = baseLength * lengthMultiplier
+	// ShipLength now represents the shaft length that frontend expects
+	player.ShipLength = baseShaftLength + extraShaftLength
 	player.ShipWidth = baseWidth      // Width stays constant
 	player.Size = float32(PlayerSize) // Overall size stays constant for rendering
 	player.CollisionRadius = calculateCollisionRadius(player.ShipLength, player.ShipWidth)
+}
+
+// updatePlayerCannonPositions calculates and stores cannon positions for a player
+func (w *World) updatePlayerCannonPositions(player *Player) {
+	player.LeftCannons = w.calculateCannonPositions(player, true)
+	player.RightCannons = w.calculateCannonPositions(player, false)
 }
 
 // SetPlayerCannonCount sets the exact number of cannons for a player (for testing/admin)
@@ -611,5 +621,6 @@ func (w *World) SetPlayerCannonCount(playerID uint32, cannonCount int) bool {
 
 	player.CannonCount = cannonCount
 	w.updateShipDimensions(player)
+	w.updatePlayerCannonPositions(player) // Update cannon positions after setting count
 	return true
 }

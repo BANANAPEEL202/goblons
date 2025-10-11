@@ -487,7 +487,7 @@ class GameClient {
 
   render() {
     // Clear canvas
-    this.ctx.fillStyle = '#adb5db';
+    this.ctx.fillStyle = '#9bbfeaff';
     this.ctx.fillRect(0, 0, this.screenWidth, this.screenHeight);
     
     if (!this.isConnected) {
@@ -601,27 +601,16 @@ drawPlayer(player) {
   const color = player.color || '#d9534f';
   const angle = player.angle || 0;
 
-  // --- Base ship dimensions ---
+  // --- Ship dimensions from backend ---
   const bowLength = size * 0.4;
-  const baseShaftLength = (player.shipLength || size * 1.2) * 0.5;
+  const shaftLength = player.shipLength || size * 1.2; // Backend provides the shaft length directly
   const rearLength = size * 0.3;
   const shaftWidth = player.shipWidth || size * 0.6;
+  const totalRearLength = rearLength;
 
-  // --- Guns settings ---
-  const gunCount = player.cannonCount || 2; // Total guns per side from server
+  // --- Cannon rendering dimensions ---
   const gunLength = size * 0.35;
   const gunWidth = size * 0.2;
-
-  // --- Determine number of guns per side ---
-  const leftGunCount = gunCount;  // Server sends cannons per side
-  const rightGunCount = gunCount; // Same number on both sides
-
-  // --- Ship length adjustment ---
-  // Add extra shaft length if more than 1 gun per side
-  const spacing = gunLength * 1.5;
-  const extraShaftLength = Math.max(leftGunCount, rightGunCount) > 1 ? spacing * (Math.max(leftGunCount, rightGunCount) - 1) : 0;
-  const shaftLength = baseShaftLength + extraShaftLength;
-  const totalRearLength = rearLength;
 
   ctx.save();
   ctx.translate(screenX, screenY);
@@ -664,22 +653,27 @@ drawPlayer(player) {
   ctx.strokeStyle = '#444';
   ctx.stroke();
 
-  // --- Draw guns evenly spaced along ship ---
+  // --- Draw cannons using positions from backend ---
   ctx.fillStyle = '#444';
 
-  const leftGunSpacing = shaftLength / (leftGunCount + 1);
-  const rightGunSpacing = shaftLength / (rightGunCount + 1);
-
-  for (let i = 0; i < leftGunCount; i++) {
-    const x = -shaftLength / 2 + (i + 1) * leftGunSpacing - gunLength / 2;
-    const y = -shaftWidth / 2 - gunWidth; // left side (negative Y)
-    ctx.fillRect(x, y, gunLength, gunWidth);
+  // Draw left side cannons using backend-provided positions
+  if (player.leftCannons && player.leftCannons.length > 0) {
+    for (const cannon of player.leftCannons) {
+      // Backend provides relative positions, draw cannon rectangle centered on that position
+      const x = cannon.x - gunLength / 2; // Convert center to top-left for fillRect
+      const y = cannon.y - gunWidth / 2;  // Convert center to top-left for fillRect
+      ctx.fillRect(x, y, gunLength, gunWidth);
+    }
   }
 
-  for (let i = 0; i < rightGunCount; i++) {
-    const x = -shaftLength / 2 + (i + 1) * rightGunSpacing - gunLength / 2;
-    const y = shaftWidth / 2; // right side (positive Y)
-    ctx.fillRect(x, y, gunLength, gunWidth);
+  // Draw right side cannons using backend-provided positions
+  if (player.rightCannons && player.rightCannons.length > 0) {
+    for (const cannon of player.rightCannons) {
+      // Backend provides relative positions, draw cannon rectangle centered on that position
+      const x = cannon.x - gunLength / 2; // Convert center to top-left for fillRect
+      const y = cannon.y - gunWidth / 2;  // Convert center to top-left for fillRect
+      ctx.fillRect(x, y, gunLength, gunWidth);
+    }
   }
 
   ctx.restore();
