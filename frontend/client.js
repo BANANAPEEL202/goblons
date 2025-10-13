@@ -846,22 +846,43 @@ drawPlayer(player) {
       const centerY = cannon.position.y;
       
       if (cannon.type === 'scatter') {
-        // Draw scatter cannon as a trapezoid (wider at the muzzle)
-        const baseWidth = gunWidth * 0.7;   // Narrower base
-        const muzzleWidth = gunWidth * 1.3;  // Wider muzzle
+        // Draw scatter cannon as a trapezoid with wider base facing away from ship
+        const baseWidth = gunWidth * 2;   // Narrower base (along ship side)
+        const muzzleWidth = gunWidth * 3;  // Wider muzzle (facing outward)
+        
+        // Determine if this is a left or right side cannon based on Y position
+        const isRightSide = centerY > 0;
         
         ctx.beginPath();
-        // Start from back-left corner
-        ctx.moveTo(centerX - gunLength/2, centerY - baseWidth/2);
-        // Line to front-left corner (wider)
-        ctx.lineTo(centerX + gunLength/2, centerY - muzzleWidth/2);
-        // Line to front-right corner (wider)
-        ctx.lineTo(centerX + gunLength/2, centerY + muzzleWidth/2);
-        // Line to back-right corner
-        ctx.lineTo(centerX - gunLength/2, centerY + baseWidth/2);
+        if (isRightSide) {
+          // Right side cannon - trapezoid with muzzle facing away from ship (positive Y)
+          // Back-inner corner (narrow end, closer to ship center)
+          ctx.moveTo(centerX - baseWidth/2, centerY - gunWidth/2);
+          // Front-inner corner (narrow end)
+          ctx.lineTo(centerX + baseWidth/2, centerY - gunWidth/2);
+          // Front-outer corner (wide end, muzzle)
+          ctx.lineTo(centerX + muzzleWidth/2, centerY + gunWidth/2);
+          // Back-outer corner (wide end)
+          ctx.lineTo(centerX - muzzleWidth/2, centerY + gunWidth/2);
+        } else {
+          // Left side cannon - trapezoid with muzzle facing away from ship (negative Y)
+          // Back-inner corner (narrow end, closer to ship center)
+          ctx.moveTo(centerX - baseWidth/2, centerY + gunWidth/2);
+          // Front-inner corner (narrow end)
+          ctx.lineTo(centerX + baseWidth/2, centerY + gunWidth/2);
+          // Front-outer corner (wide end, muzzle)
+          ctx.lineTo(centerX + muzzleWidth/2, centerY - gunWidth/2);
+          // Back-outer corner (wide end)
+          ctx.lineTo(centerX - muzzleWidth/2, centerY - gunWidth/2);
+        }
         // Close the shape
         ctx.closePath();
         ctx.fill();
+        
+        // Add stroke for better visibility
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 1;
+        ctx.stroke();
       } else {
         // Draw regular cannon as rectangle
         const x = centerX - gunLength / 2; // Convert center to top-left for fillRect
