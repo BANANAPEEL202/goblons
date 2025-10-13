@@ -55,6 +55,7 @@ type Player struct {
 	VelX               float32          `json:"velX"`
 	VelY               float32          `json:"velY"`
 	Angle              float32          `json:"angle"` // Ship facing direction in radians
+	AngularVelocity    float32          `json:"-"`     // Current angular velocity (radians per update)
 	Size               float32          `json:"size"`
 	Score              int              `json:"score"`
 	State              int              `json:"state"`

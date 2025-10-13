@@ -45,6 +45,10 @@ class GameClient {
     this.screenWidth = window.innerWidth;
     this.screenHeight = window.innerHeight;
     
+    // Track last mouse screen position for camera movement updates
+    this.lastMouseScreen = { x: 0, y: 0 };
+    this.lastCameraPos = { x: 0, y: 0 };
+    
     // Client-side prediction
     this.predictedPlayerPos = { x: 0, y: 0 };
     this.lastPredictionUpdate = Date.now();
@@ -100,14 +104,13 @@ class GameClient {
       const screenX = e.clientX - rect.left;
       const screenY = e.clientY - rect.top;
       
+      // Store screen coordinates for camera movement updates
+      this.lastMouseScreen.x = screenX;
+      this.lastMouseScreen.y = screenY;
+      
       // Convert screen coordinates to world coordinates
       // Account for camera position: camera.x/y represents the top-left corner of the view
-      this.input.mouse.x = screenX + this.camera.x;
-      this.input.mouse.y = screenY + this.camera.y;
-      
-      // Debug: Log mouse coordinates occasionally
-      
-      console.log(`Mouse - Screen: (${screenX}, ${screenY}), World: (${this.input.mouse.x}, ${this.input.mouse.y}), Camera: (${this.camera.x}, ${this.camera.y})`);
+      this.updateMouseWorldCoords();
       
       // Send input whenever mouse moves (for turret aiming)
       this.sendInput();
@@ -399,6 +402,13 @@ class GameClient {
     }
   }
 
+  updateMouseWorldCoords() {
+    // Convert screen coordinates to world coordinates
+    // Account for camera position: camera.x/y represents the top-left corner of the view
+    this.input.mouse.x = this.lastMouseScreen.x + this.camera.x;
+    this.input.mouse.y = this.lastMouseScreen.y + this.camera.y;
+  }
+
   sendInput() {
     if (this.socket && this.socket.readyState === WebSocket.OPEN) {
       this.socket.send(JSON.stringify(this.input));
@@ -487,6 +497,10 @@ class GameClient {
 
   updateCamera() {
     if (this.gameState.myPlayer) {
+      // Store previous camera position to detect changes
+      const prevCameraX = this.camera.x;
+      const prevCameraY = this.camera.y;
+      
       // Use server position for camera to avoid jitter
       // this.camera.targetX = this.predictedPlayerPos.x - this.screenWidth / 2;
       // this.camera.targetY = this.predictedPlayerPos.y - this.screenHeight / 2;
@@ -497,6 +511,13 @@ class GameClient {
       const cameraLerpFactor = 1;
       this.camera.x += (this.camera.targetX - this.camera.x) * cameraLerpFactor;
       this.camera.y += (this.camera.targetY - this.camera.y) * cameraLerpFactor;
+      
+      // Check if camera position changed and update mouse world coordinates
+      if (prevCameraX !== this.camera.x || prevCameraY !== this.camera.y) {
+        this.updateMouseWorldCoords();
+        // Send updated input with new mouse world position
+        this.sendInput();
+      }
     }
   }
 

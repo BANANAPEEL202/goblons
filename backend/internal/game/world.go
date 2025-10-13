@@ -170,14 +170,19 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 
 	scaledTurnSpeed := ShipTurnSpeed * turnFactor * lengthFactor
 
-	// Handle turning (A/D keys)
+	// Handle turning (A/D keys) and track angular velocity
+	var angularChange float32 = 0
 	if input.Left {
-
+		angularChange = -scaledTurnSpeed
 		player.Angle -= scaledTurnSpeed
 	}
 	if input.Right {
+		angularChange = scaledTurnSpeed
 		player.Angle += scaledTurnSpeed
 	}
+
+	// Store current angular velocity for physics calculations
+	player.AngularVelocity = angularChange
 
 	// Apply drag/deceleration
 	player.VelX *= ShipDeceleration
@@ -432,10 +437,24 @@ func (w *World) fireAllCannons(player *Player, isLeftSide bool) {
 		worldX := player.X + (cannonPos.X*cos - cannonPos.Y*sin)
 		worldY := player.Y + (cannonPos.X*sin + cannonPos.Y*cos)
 
-		// Bullet fires perpendicular to the ship (in the same direction as the cannon positioning)
-		// includes player velocity for more realistic shooting
-		bulletVelX := float32(math.Cos(float64(sideAngle)))*BulletSpeed + player.VelX*0.7
-		bulletVelY := float32(math.Sin(float64(sideAngle)))*BulletSpeed + player.VelY*0.7
+		// Base bullet velocity in cannon direction (perpendicular to ship)
+		bulletVelX := float32(math.Cos(float64(sideAngle))) * BulletSpeed
+		bulletVelY := float32(math.Sin(float64(sideAngle))) * BulletSpeed
+
+		// Add ship's linear velocity
+		bulletVelX += player.VelX * 0.7
+		bulletVelY += player.VelY * 0.7
+
+		// Add tangential velocity from ship rotation
+		// For cannon at relative position (cannonPos.X, cannonPos.Y):
+		// tangentialVelX = -angularVelocity * cannonPos.Y
+		// tangentialVelY = angularVelocity * cannonPos.X
+		if player.AngularVelocity != 0 {
+			tangentialVelX := -player.AngularVelocity * cannonPos.Y
+			tangentialVelY := player.AngularVelocity * cannonPos.X
+			bulletVelX += tangentialVelX
+			bulletVelY += tangentialVelY
+		}
 
 		// Create bullet at world coordinates
 		bullet := &Bullet{
@@ -736,9 +755,6 @@ func (w *World) updateTurretAiming(player *Player, input *InputMsg) {
 
 // fireTurrets handles automatic turret firing when mouse is in range
 func (w *World) fireTurrets(player *Player, input *InputMsg, now time.Time) {
-	mouseWorldX := input.Mouse.X
-	mouseWorldY := input.Mouse.Y
-
 	// Check shared turret cooldown first
 	if now.Sub(player.LastTurretShotTime).Seconds() < TurretCooldown {
 		return
@@ -753,33 +769,36 @@ func (w *World) fireTurrets(player *Player, input *InputMsg, now time.Time) {
 		turretWorldX := player.X + (turret.X*cos - turret.Y*sin)
 		turretWorldY := player.Y + (turret.X*sin + turret.Y*cos)
 
-		// Check if mouse is within turret range
-		dx := mouseWorldX - turretWorldX
-		dy := mouseWorldY - turretWorldY
-		distance := float32(math.Sqrt(float64(dx*dx + dy*dy)))
+		// Base bullet velocity in turret direction
+		bulletVelX := float32(math.Cos(float64(turret.Angle))) * BulletSpeed
+		bulletVelY := float32(math.Sin(float64(turret.Angle))) * BulletSpeed
 
-		if distance <= TurretRange && distance > 10 { // Minimum distance to avoid self-targeting
-			// Fire bullet from turret in the direction it's aiming
-			bulletVelX := float32(math.Cos(float64(turret.Angle)))*BulletSpeed + player.VelX*1
-			bulletVelY := float32(math.Sin(float64(turret.Angle)))*BulletSpeed + player.VelY*1
+		// Add ship's linear velocity
+		bulletVelX += player.VelX
+		bulletVelY += player.VelY
 
-			// Create bullet at turret world coordinates
-			bullet := &Bullet{
-				ID:        w.bulletID,
-				X:         turretWorldX,
-				Y:         turretWorldY,
-				VelX:      bulletVelX,
-				VelY:      bulletVelY,
-				OwnerID:   player.ID,
-				CreatedAt: now,
-				Size:      BulletSize,
-			}
+		// Add tangential velocity from ship rotation
+		// For turret at relative position (turret.X, turret.Y):
+		// tangentialVelX = -angularVelocity * turret.Y
+		// tangentialVelY = angularVelocity * turret.X
 
-			w.bullets[w.bulletID] = bullet
-			w.bulletID++
-
-			// Set shared turret cooldown and return after firing the first turret
-			player.LastTurretShotTime = now
+		// Create bullet at turret world coordinates
+		bullet := &Bullet{
+			ID:        w.bulletID,
+			X:         turretWorldX,
+			Y:         turretWorldY,
+			VelX:      bulletVelX,
+			VelY:      bulletVelY,
+			OwnerID:   player.ID,
+			CreatedAt: now,
+			Size:      BulletSize,
 		}
+
+		w.bullets[w.bulletID] = bullet
+		w.bulletID++
+
+		// Set shared turret cooldown and return after firing the first turret
+
 	}
+	player.LastTurretShotTime = now
 }
