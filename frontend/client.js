@@ -24,8 +24,13 @@ class GameClient {
       shootRight: false,
       upgradeCannons: false,
       downgradeCannons: false,
+      upgradeScatter: false,
+      downgradeScatter: false,
       upgradeTurrets: false,
       downgradeTurrets: false,
+      debugLevelUp: false,
+      selectUpgrade: '',
+      upgradeChoice: '',
       mouse: { x: 0, y: 0 }
     };
     
@@ -44,6 +49,14 @@ class GameClient {
     this.isConnected = false;
     this.screenWidth = window.innerWidth;
     this.screenHeight = window.innerHeight;
+    
+    // UI state for upgrade system
+    this.upgradeUI = {
+      showUpgradeButtons: false,
+      selectedUpgradeType: null, // 'side', 'top', 'front', 'rear'
+      availableUpgrades: {},     // stores available upgrades for each type
+      pendingUpgrade: false,     // prevents sending multiple upgrade selections
+    };
     
     // Track last mouse screen position for camera movement updates
     this.lastMouseScreen = { x: 0, y: 0 };
@@ -115,6 +128,15 @@ class GameClient {
       // Send input whenever mouse moves (for turret aiming)
       this.sendInput();
     });
+    
+    // Mouse click handling for upgrade UI
+    this.canvas.addEventListener('click', (e) => {
+      const rect = this.canvas.getBoundingClientRect();
+      const screenX = e.clientX - rect.left;
+      const screenY = e.clientY - rect.top;
+      
+      this.handleUpgradeUIClick(screenX, screenY);
+    });
 
     // Handle window resize
     window.addEventListener('resize', () => {
@@ -172,6 +194,13 @@ class GameClient {
         // Server tells us our player ID
         console.log('Received welcome message, our player ID is:', data.playerId);
         this.myPlayerId = data.playerId;
+        break;
+        
+      case 'availableUpgrades':
+        // Server sends us available upgrades
+        this.upgradeUI.availableUpgrades = data.upgrades || {};
+        // Reset pending upgrade flag since server has processed our request
+        this.upgradeUI.pendingUpgrade = false;
         break;
         
       case 'snapshot':
@@ -315,6 +344,18 @@ class GameClient {
         inputChanged = true;
       }
     }
+    if (e.key === 'p' || e.key === 'P') {
+      if (!this.input.upgradeScatter) {
+        this.input.upgradeScatter = true;
+        inputChanged = true;
+      }
+    }
+    if (e.key === 'o' || e.key === 'O') {
+      if (!this.input.downgradeScatter) {
+        this.input.downgradeScatter = true;
+        inputChanged = true;
+      }
+    }
     if (e.key === ']' || e.key === '}') {
       if (!this.input.upgradeTurrets) {
         this.input.upgradeTurrets = true;
@@ -325,6 +366,20 @@ class GameClient {
       if (!this.input.downgradeTurrets) {
         this.input.downgradeTurrets = true;
         inputChanged = true;
+      }
+    }
+    if (e.key === 'l' || e.key === 'L') {
+      if (!this.input.debugLevelUp) {
+        this.input.debugLevelUp = true;
+        inputChanged = true;
+      }
+    }
+    
+    // Handle upgrade UI toggle
+    if (e.key === 'u' || e.key === 'U') {
+      if (this.gameState.myPlayer && this.gameState.myPlayer.availableUpgrades > 0) {
+        this.upgradeUI.showUpgradeButtons = !this.upgradeUI.showUpgradeButtons;
+        this.upgradeUI.selectedUpgradeType = null;
       }
     }
     
@@ -384,6 +439,18 @@ class GameClient {
         inputChanged = true;
       }
     }
+    if (e.key === 'p' || e.key === 'P') {
+      if (this.input.upgradeScatter) {
+        this.input.upgradeScatter = false;
+        inputChanged = true;
+      }
+    }
+    if (e.key === 'o' || e.key === 'O') {
+      if (this.input.downgradeScatter) {
+        this.input.downgradeScatter = false;
+        inputChanged = true;
+      }
+    }
     if (e.key === ']' || e.key === '}') {
       if (this.input.upgradeTurrets) {
         this.input.upgradeTurrets = false;
@@ -393,6 +460,12 @@ class GameClient {
     if (e.key === '[' || e.key === '{') {
       if (this.input.downgradeTurrets) {
         this.input.downgradeTurrets = false;
+        inputChanged = true;
+      }
+    }
+    if (e.key === 'l' || e.key === 'L') {
+      if (this.input.debugLevelUp) {
+        this.input.debugLevelUp = false;
         inputChanged = true;
       }
     }
@@ -407,6 +480,85 @@ class GameClient {
     // Account for camera position: camera.x/y represents the top-left corner of the view
     this.input.mouse.x = this.lastMouseScreen.x + this.camera.x;
     this.input.mouse.y = this.lastMouseScreen.y + this.camera.y;
+  }
+
+  handleUpgradeUIClick(screenX, screenY) {
+    if (!this.gameState.myPlayer || !this.upgradeUI.showUpgradeButtons || this.upgradeUI.pendingUpgrade) return;
+    
+    // Check upgrade type button clicks
+    const buttonWidth = 100;
+    const buttonHeight = 40;
+    const spacing = 20;
+    const totalWidth = (buttonWidth * 4) + (spacing * 3);
+    const startX = (this.screenWidth - totalWidth) / 2;
+    const buttonY = this.screenHeight - 150;
+    
+    const upgradeTypes = ['side', 'top', 'front', 'rear'];
+    
+    for (let i = 0; i < upgradeTypes.length; i++) {
+      const type = upgradeTypes[i];
+      const x = startX + (buttonWidth + spacing) * i;
+      
+      if (!this.hasAvailableUpgrades(type)) continue;
+      
+      if (screenX >= x && screenX <= x + buttonWidth && 
+          screenY >= buttonY && screenY <= buttonY + buttonHeight) {
+        this.upgradeUI.selectedUpgradeType = type;
+        return;
+      }
+    }
+    
+    // Check upgrade option clicks
+    if (this.upgradeUI.selectedUpgradeType) {
+      const options = this.getAvailableUpgrades(this.upgradeUI.selectedUpgradeType);
+      if (options && options.length > 0) {
+        const optionHeight = 50;
+        const optionWidth = 200;
+        const spacingOpt = 10;
+        const totalHeight = (optionHeight * options.length) + (spacingOpt * (options.length - 1));
+        const startY = this.screenHeight - 250 - totalHeight;
+        const x = (this.screenWidth - optionWidth) / 2;
+        
+        for (let i = 0; i < options.length; i++) {
+          const y = startY + (optionHeight + spacingOpt) * i;
+          
+          if (screenX >= x && screenX <= x + optionWidth && 
+              screenY >= y && screenY <= y + optionHeight) {
+            // Select upgrade
+            this.selectUpgrade(this.upgradeUI.selectedUpgradeType, options[i].name);
+            return;
+          }
+        }
+      }
+    }
+  }
+  
+  selectUpgrade(upgradeType, upgradeId) {
+    // Prevent multiple upgrade selections
+    if (this.upgradeUI.pendingUpgrade) {
+      return;
+    }
+    
+    // Mark as pending to prevent duplicate selections
+    this.upgradeUI.pendingUpgrade = true;
+    
+    // Send upgrade selection to server
+    this.input.selectUpgrade = upgradeType;
+    this.input.upgradeChoice = upgradeId;
+    this.sendInput();
+    
+    // Reset upgrade selection inputs immediately to prevent repeated sending
+    this.input.selectUpgrade = '';
+    this.input.upgradeChoice = '';
+    
+    // Close upgrade UI
+    this.upgradeUI.showUpgradeButtons = false;
+    this.upgradeUI.selectedUpgradeType = null;
+    
+    // Reset pending flag after a delay (or when server confirms upgrade)
+    setTimeout(() => {
+      this.upgradeUI.pendingUpgrade = false;
+    }, 1000);
   }
 
   sendInput() {
@@ -695,10 +847,33 @@ drawPlayer(player) {
   // Draw side cannons from modular system
   if (player.shipConfig && player.shipConfig.sideUpgrade && player.shipConfig.sideUpgrade.cannons) {
     for (const cannon of player.shipConfig.sideUpgrade.cannons) {
-      // Backend provides relative positions, draw cannon rectangle centered on that position
-      const x = cannon.position.x - gunLength / 2; // Convert center to top-left for fillRect
-      const y = cannon.position.y - gunWidth / 2;  // Convert center to top-left for fillRect
-      ctx.fillRect(x, y, gunLength, gunWidth);
+      // Backend provides relative positions, draw cannon centered on that position
+      const centerX = cannon.position.x;
+      const centerY = cannon.position.y;
+      
+      if (cannon.type === 'scatter') {
+        // Draw scatter cannon as a trapezoid (wider at the muzzle)
+        const baseWidth = gunWidth * 0.7;   // Narrower base
+        const muzzleWidth = gunWidth * 1.3;  // Wider muzzle
+        
+        ctx.beginPath();
+        // Start from back-left corner
+        ctx.moveTo(centerX - gunLength/2, centerY - baseWidth/2);
+        // Line to front-left corner (wider)
+        ctx.lineTo(centerX + gunLength/2, centerY - muzzleWidth/2);
+        // Line to front-right corner (wider)
+        ctx.lineTo(centerX + gunLength/2, centerY + muzzleWidth/2);
+        // Line to back-right corner
+        ctx.lineTo(centerX - gunLength/2, centerY + baseWidth/2);
+        // Close the shape
+        ctx.closePath();
+        ctx.fill();
+      } else {
+        // Draw regular cannon as rectangle
+        const x = centerX - gunLength / 2; // Convert center to top-left for fillRect
+        const y = centerY - gunWidth / 2;  // Convert center to top-left for fillRect
+        ctx.fillRect(x, y, gunLength, gunWidth);
+      }
     }
   }
 
@@ -905,7 +1080,7 @@ drawPlayer(player) {
       this.ctx.textAlign = 'left';
       this.ctx.fillText(`${this.gameState.myPlayer.name}`, 20, 35);
       this.ctx.fillText(`Score: ${this.gameState.myPlayer.score || 0}`, 20, 55);
-      this.ctx.fillText(`Cannons: ${this.gameState.myPlayer.cannonCount || 2}/side`, 20, 75);
+      this.ctx.fillText(`Level: ${this.gameState.myPlayer.level || 1}`, 20, 75);
       this.ctx.fillText(`Players: ${this.gameState.players.length}`, 20, 95);
     }
     
@@ -917,6 +1092,12 @@ drawPlayer(player) {
     
     // Draw minimap
     this.drawMinimap();
+    
+    // Draw level progress bar
+    this.drawLevelProgressBar();
+    
+    // Draw upgrade UI
+    this.drawUpgradeUI();
   }
 
   drawLeaderboard() {
@@ -979,12 +1160,11 @@ drawPlayer(player) {
     this.ctx.fillText('Q: Fire Left Cannons', x + 10, y + 55);
     this.ctx.fillText('E: Fire Right Cannons', x + 10, y + 70);
     this.ctx.fillText('Mouse: Aim Turrets', x + 10, y + 85);
-    this.ctx.fillText('+/-: Add/Remove Cannons', x + 10, y + 100);
-    this.ctx.fillText('[/]: Add/Remove Turrets', x + 10, y + 115);
-    this.ctx.fillText('Turrets auto-fire at', x + 10, y + 135);
-    this.ctx.fillText('mouse position!', x + 10, y + 150);
-    this.ctx.fillText('Ships turn slower', x + 10, y + 165);
-    this.ctx.fillText('when longer!', x + 10, y + 180);
+    this.ctx.fillText('L: Debug Level Up', x + 10, y + 100);
+    this.ctx.fillText('U: Upgrade Menu', x + 10, y + 115);
+    this.ctx.fillText('+/-: Add/Remove Cannons', x + 10, y + 130);
+    this.ctx.fillText('P/O: Add/Remove Scatter', x + 10, y + 145);
+    this.ctx.fillText('[/]: Add/Remove Turrets', x + 10, y + 160);
   }
 
   drawMinimap() {
@@ -1027,6 +1207,155 @@ drawPlayer(player) {
       this.ctx.arc(dotX, dotY, 1, 0, Math.PI * 2);
       this.ctx.fill();
     });
+  }
+
+  drawLevelProgressBar() {
+    if (!this.gameState.myPlayer) return;
+    
+    const player = this.gameState.myPlayer;
+    const barWidth = 400;
+    const barHeight = 30;
+    const barX = (this.screenWidth - barWidth) / 2;
+    const barY = this.screenHeight - 60;
+    
+    // Background
+    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+    this.ctx.fillRect(barX - 10, barY - 10, barWidth + 20, barHeight + 20);
+    
+    // Progress bar background
+    this.ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+    this.ctx.fillRect(barX, barY, barWidth, barHeight);
+    
+    // Progress bar fill
+    const progress = this.getExperienceProgress(player);
+    this.ctx.fillStyle = '#4ECDC4';
+    this.ctx.fillRect(barX, barY, barWidth * progress, barHeight);
+    
+    // Text
+    this.ctx.fillStyle = '#ffffff';
+    this.ctx.font = 'bold 16px Arial';
+    this.ctx.textAlign = 'center';
+    this.ctx.fillText(`Level ${player.level || 1}`, this.screenWidth / 2, barY - 15);
+    
+    // Experience text
+    const currentLevelExp = this.getExperienceForLevel(player.level || 1);
+    const nextLevelExp = this.getExperienceForLevel((player.level || 1) + 1);
+    const currentExp = player.experience || 0;
+    this.ctx.font = '14px Arial';
+    this.ctx.fillText(`${currentExp - currentLevelExp}/${nextLevelExp - currentLevelExp} XP`, this.screenWidth / 2, barY + 20);
+    
+    // Available upgrades indicator
+    if (player.availableUpgrades > 0) {
+      this.ctx.fillStyle = '#FFD700';
+      this.ctx.font = 'bold 18px Arial';
+      this.ctx.fillText(`${player.availableUpgrades} Upgrade${player.availableUpgrades > 1 ? 's' : ''} Available! Press U`, this.screenWidth / 2, barY - 40);
+    }
+  }
+  
+  drawUpgradeUI() {
+    if (!this.gameState.myPlayer || !this.upgradeUI.showUpgradeButtons) return;
+    
+    const player = this.gameState.myPlayer;
+    if (player.availableUpgrades <= 0) {
+      this.upgradeUI.showUpgradeButtons = false;
+      return;
+    }
+    
+    // Draw upgrade type buttons (side, top, front, rear)
+    const buttonWidth = 100;
+    const buttonHeight = 40;
+    const spacing = 20;
+    const totalWidth = (buttonWidth * 4) + (spacing * 3);
+    const startX = (this.screenWidth - totalWidth) / 2;
+    const buttonY = this.screenHeight - 150;
+    
+    const upgradeTypes = ['side', 'top', 'front', 'rear'];
+    
+    for (let i = 0; i < upgradeTypes.length; i++) {
+      const type = upgradeTypes[i];
+      const x = startX + (buttonWidth + spacing) * i;
+      
+      // Check if upgrades are available for this type
+      const hasUpgrades = this.hasAvailableUpgrades(type);
+      
+      if (!hasUpgrades) continue; // Skip if no upgrades available
+      
+      // Button background
+      this.ctx.fillStyle = this.upgradeUI.selectedUpgradeType === type ? '#4ECDC4' : 'rgba(0, 0, 0, 0.8)';
+      this.ctx.fillRect(x, buttonY, buttonWidth, buttonHeight);
+      
+      // Button border
+      this.ctx.strokeStyle = '#ffffff';
+      this.ctx.lineWidth = 2;
+      this.ctx.strokeRect(x, buttonY, buttonWidth, buttonHeight);
+      
+      // Button text
+      this.ctx.fillStyle = '#ffffff';
+      this.ctx.font = 'bold 16px Arial';
+      this.ctx.textAlign = 'center';
+      this.ctx.fillText(type.toUpperCase(), x + buttonWidth / 2, buttonY + buttonHeight / 2 + 6);
+    }
+    
+    // Draw specific upgrade options if a type is selected
+    if (this.upgradeUI.selectedUpgradeType) {
+      this.drawUpgradeOptions(this.upgradeUI.selectedUpgradeType);
+    }
+  }
+  
+  drawUpgradeOptions(upgradeType) {
+    const options = this.getAvailableUpgrades(upgradeType);
+    if (!options || options.length === 0) return;
+    
+    const optionHeight = 50;
+    const optionWidth = 200;
+    const spacing = 10;
+    const totalHeight = (optionHeight * options.length) + (spacing * (options.length - 1));
+    const startY = this.screenHeight - 250 - totalHeight;
+    const x = (this.screenWidth - optionWidth) / 2;
+    
+    for (let i = 0; i < options.length; i++) {
+      const option = options[i];
+      const y = startY + (optionHeight + spacing) * i;
+      
+      // Option background
+      this.ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+      this.ctx.fillRect(x, y, optionWidth, optionHeight);
+      
+      // Option border
+      this.ctx.strokeStyle = '#4ECDC4';
+      this.ctx.lineWidth = 2;
+      this.ctx.strokeRect(x, y, optionWidth, optionHeight);
+      
+      // Option text
+      this.ctx.fillStyle = '#ffffff';
+      this.ctx.font = 'bold 16px Arial';
+      this.ctx.textAlign = 'center';
+      this.ctx.fillText(option.name, x + optionWidth / 2, y + optionHeight / 2 + 6);
+    }
+  }
+  
+  // Helper functions
+  getExperienceForLevel(level) {
+    return (level - 1) * 100;
+  }
+  
+  getExperienceProgress(player) {
+    const currentLevel = player.level || 1;
+    const currentLevelExp = this.getExperienceForLevel(currentLevel);
+    const nextLevelExp = this.getExperienceForLevel(currentLevel + 1);
+    const currentExp = player.experience || 0;
+    
+    const progress = (currentExp - currentLevelExp) / (nextLevelExp - currentLevelExp);
+    return Math.max(0, Math.min(1, progress));
+  }
+  
+  hasAvailableUpgrades(upgradeType) {
+    const upgrades = this.upgradeUI.availableUpgrades[upgradeType];
+    return upgrades && upgrades.length > 0;
+  }
+  
+  getAvailableUpgrades(upgradeType) {
+    return this.upgradeUI.availableUpgrades[upgradeType] || [];
   }
 
   updateConnectionStatus(connected) {

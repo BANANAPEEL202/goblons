@@ -32,6 +32,8 @@ type ShipUpgrade struct {
 	Cannons []Cannon      `json:"cannons"` // Weapons (if applicable)
 	Turrets []Turret      `json:"turrets"` // Turret weapons (if applicable)
 
+	NextUpgrades []*ShipUpgrade `json:"nextUpgrades,omitempty"` // Possible next upgrades
+
 	ShipWidthModifier  float32 `json:"shipWidthModifier"`  // Width modification (1.0 = no change)
 	ShipLengthModifier float32 `json:"shipLengthModifier"` // Length modification (1.0 = no change)
 }
@@ -210,6 +212,45 @@ func NewBasicSideCannons(cannonCount int) *ShipUpgrade {
 	}
 }
 
+func NewScatterSideCannons(cannonCount int) *ShipUpgrade {
+	cannonCount = int(math.Max(1, float64(cannonCount))) // Ensure at least 1 cannon per side
+	// Create scatter cannons for both sides (cannonCount per side)
+	cannons := make([]Cannon, cannonCount*2)
+
+	// Left side scatter cannons
+	for i := 0; i < cannonCount; i++ {
+		cannons[i] = Cannon{
+			ID:    uint32(i + 1),
+			Angle: 0, // Relative angle - actual angle calculated during firing
+			Stats: NewScatterCannon(),
+			Type:  WeaponTypeScatter,
+		}
+	}
+
+	// Right side scatter cannons
+	for i := 0; i < cannonCount; i++ {
+		cannons[cannonCount+i] = Cannon{
+			ID:    uint32(cannonCount + i + 1),
+			Angle: 0, // Relative angle - actual angle calculated during firing
+			Stats: NewScatterCannon(),
+			Type:  WeaponTypeScatter,
+		}
+	}
+
+	return &ShipUpgrade{
+		Type:    UpgradeTypeSide,
+		Name:    "Scatter Cannons",
+		Count:   cannonCount,
+		Cannons: cannons,
+		Effect: UpgradeEffect{
+			SpeedMultiplier:    0.92, // Slower due to heavier scatter cannons
+			TurnRateMultiplier: 0.88, // Slower turning due to weight and length
+			HealthBonus:        10,   // Slightly more armored
+			ArmorBonus:         0.05, // 5% damage reduction
+		},
+	}
+}
+
 func NewBasicTurrets(turretCount int) *ShipUpgrade {
 	turretCount = int(math.Max(0, float64(turretCount))) // Ensure non-negative
 	turretCannon := Cannon{
@@ -242,4 +283,120 @@ func NewBasicTurrets(turretCount int) *ShipUpgrade {
 			ArmorBonus:         0,
 		},
 	}
+}
+
+func NewTopUpgradeTree() *ShipUpgrade {
+	root := &ShipUpgrade{
+		Type: UpgradeTypeTop,
+		Name: "No Top Upgrades",
+	}
+
+	// Build the basic turret upgrade path: 1 -> 2 -> 3 -> 4
+	turret1 := NewBasicTurrets(1)
+	turret2 := NewBasicTurrets(2)
+	turret3 := NewBasicTurrets(3)
+	turret4 := NewBasicTurrets(4)
+
+	// Link the chain
+	root.NextUpgrades = []*ShipUpgrade{turret1}
+	turret1.NextUpgrades = []*ShipUpgrade{turret2}
+	turret2.NextUpgrades = []*ShipUpgrade{turret3}
+	turret3.NextUpgrades = []*ShipUpgrade{turret4}
+
+	return root
+}
+
+func NewSideUpgradeTree() *ShipUpgrade {
+	// Build the basic cannon upgrade path: 1 -> 2 -> 3 -> 4
+	basic2 := NewBasicSideCannons(2)
+	basic3 := NewBasicSideCannons(3)
+	basic4 := NewBasicSideCannons(4)
+
+	// Build the scatter cannon branch: 1 (from root)
+	scatter1 := NewScatterSideCannons(1)
+
+	// Link the basic cannon chain
+	basic2.NextUpgrades = []*ShipUpgrade{basic3}
+	basic3.NextUpgrades = []*ShipUpgrade{basic4}
+
+	// Root has two paths: upgrade to 2 basic cannons OR switch to scatter cannons
+	root := NewBasicSideCannons(1)
+	root.NextUpgrades = []*ShipUpgrade{basic2, scatter1}
+
+	return root
+}
+
+// GetAvailableUpgrades returns the next available upgrades for a given upgrade type
+func (sc *ShipConfiguration) GetAvailableUpgrades(upgradeType UpgradeType) []*ShipUpgrade {
+	var availableUpgrades []*ShipUpgrade
+
+	switch upgradeType {
+	case UpgradeTypeSide:
+		if sc.SideUpgrade == nil {
+			// Start with the root of the side upgrade tree
+			root := NewSideUpgradeTree()
+			return []*ShipUpgrade{root}
+		}
+		return sc.SideUpgrade.NextUpgrades
+
+	case UpgradeTypeTop:
+		if sc.TopUpgrade == nil || sc.TopUpgrade.Name == "No Top Upgrades" {
+			// Start with the root of the top upgrade tree
+			root := NewTopUpgradeTree()
+			return root.NextUpgrades
+		}
+		return sc.TopUpgrade.NextUpgrades
+
+	case UpgradeTypeFront:
+		if sc.FrontUpgrade == nil {
+			// TODO: Implement front upgrade tree when available
+			return []*ShipUpgrade{}
+		}
+		return sc.FrontUpgrade.NextUpgrades
+
+	case UpgradeTypeRear:
+		if sc.RearUpgrade == nil {
+			// TODO: Implement rear upgrade tree when available
+			return []*ShipUpgrade{}
+		}
+		return sc.RearUpgrade.NextUpgrades
+	}
+
+	return availableUpgrades
+}
+
+// ApplyUpgrade applies a selected upgrade to the ship configuration
+func (sc *ShipConfiguration) ApplyUpgrade(upgradeType UpgradeType, upgradeID string) bool {
+	availableUpgrades := sc.GetAvailableUpgrades(upgradeType)
+
+	// Find the selected upgrade
+	var selectedUpgrade *ShipUpgrade
+	for _, upgrade := range availableUpgrades {
+		if upgrade.Name == upgradeID {
+			selectedUpgrade = upgrade
+			break
+		}
+	}
+
+	if selectedUpgrade == nil {
+		return false // Upgrade not found
+	}
+
+	// Apply the upgrade
+	switch upgradeType {
+	case UpgradeTypeSide:
+		sc.SideUpgrade = selectedUpgrade
+	case UpgradeTypeTop:
+		sc.TopUpgrade = selectedUpgrade
+	case UpgradeTypeFront:
+		sc.FrontUpgrade = selectedUpgrade
+	case UpgradeTypeRear:
+		sc.RearUpgrade = selectedUpgrade
+	}
+
+	// Recalculate ship dimensions and update positions
+	sc.CalculateShipDimensions()
+	sc.UpdateUpgradePositions()
+
+	return true
 }
