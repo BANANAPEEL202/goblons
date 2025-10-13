@@ -24,6 +24,8 @@ class GameClient {
       shootRight: false,
       upgradeCannons: false,
       downgradeCannons: false,
+      upgradeTurrets: false,
+      downgradeTurrets: false,
       mouse: { x: 0, y: 0 }
     };
     
@@ -42,6 +44,10 @@ class GameClient {
     this.isConnected = false;
     this.screenWidth = window.innerWidth;
     this.screenHeight = window.innerHeight;
+    
+    // Track last mouse screen position for camera movement updates
+    this.lastMouseScreen = { x: 0, y: 0 };
+    this.lastCameraPos = { x: 0, y: 0 };
     
     // Client-side prediction
     this.predictedPlayerPos = { x: 0, y: 0 };
@@ -95,8 +101,19 @@ class GameClient {
     // Mouse input
     this.canvas.addEventListener('mousemove', (e) => {
       const rect = this.canvas.getBoundingClientRect();
-      this.input.mouse.x = e.clientX - rect.left;
-      this.input.mouse.y = e.clientY - rect.top;
+      const screenX = e.clientX - rect.left;
+      const screenY = e.clientY - rect.top;
+      
+      // Store screen coordinates for camera movement updates
+      this.lastMouseScreen.x = screenX;
+      this.lastMouseScreen.y = screenY;
+      
+      // Convert screen coordinates to world coordinates
+      // Account for camera position: camera.x/y represents the top-left corner of the view
+      this.updateMouseWorldCoords();
+      
+      // Send input whenever mouse moves (for turret aiming)
+      this.sendInput();
     });
 
     // Handle window resize
@@ -247,29 +264,6 @@ class GameClient {
     }
   }
 
-  setupEventListeners() {
-    // Keyboard input
-    document.addEventListener('keydown', (e) => {
-      this.handleKeyDown(e);
-    });
-    
-    document.addEventListener('keyup', (e) => {
-      this.handleKeyUp(e);
-    });
-    
-    // Mouse input
-    this.canvas.addEventListener('mousemove', (e) => {
-      const rect = this.canvas.getBoundingClientRect();
-      this.input.mouse.x = e.clientX - rect.left;
-      this.input.mouse.y = e.clientY - rect.top;
-    });
-    
-    // Prevent context menu on right click
-    this.canvas.addEventListener('contextmenu', (e) => {
-      e.preventDefault();
-    });
-  }
-
   handleKeyDown(e) {
     let inputChanged = false;
     
@@ -318,6 +312,18 @@ class GameClient {
     if (e.key === '-' || e.key === '_') {
       if (!this.input.downgradeCannons) {
         this.input.downgradeCannons = true;
+        inputChanged = true;
+      }
+    }
+    if (e.key === ']' || e.key === '}') {
+      if (!this.input.upgradeTurrets) {
+        this.input.upgradeTurrets = true;
+        inputChanged = true;
+      }
+    }
+    if (e.key === '[' || e.key === '{') {
+      if (!this.input.downgradeTurrets) {
+        this.input.downgradeTurrets = true;
         inputChanged = true;
       }
     }
@@ -378,10 +384,29 @@ class GameClient {
         inputChanged = true;
       }
     }
+    if (e.key === ']' || e.key === '}') {
+      if (this.input.upgradeTurrets) {
+        this.input.upgradeTurrets = false;
+        inputChanged = true;
+      }
+    }
+    if (e.key === '[' || e.key === '{') {
+      if (this.input.downgradeTurrets) {
+        this.input.downgradeTurrets = false;
+        inputChanged = true;
+      }
+    }
     
     if (inputChanged) {
       this.sendInput();
     }
+  }
+
+  updateMouseWorldCoords() {
+    // Convert screen coordinates to world coordinates
+    // Account for camera position: camera.x/y represents the top-left corner of the view
+    this.input.mouse.x = this.lastMouseScreen.x + this.camera.x;
+    this.input.mouse.y = this.lastMouseScreen.y + this.camera.y;
   }
 
   sendInput() {
@@ -472,6 +497,10 @@ class GameClient {
 
   updateCamera() {
     if (this.gameState.myPlayer) {
+      // Store previous camera position to detect changes
+      const prevCameraX = this.camera.x;
+      const prevCameraY = this.camera.y;
+      
       // Use server position for camera to avoid jitter
       // this.camera.targetX = this.predictedPlayerPos.x - this.screenWidth / 2;
       // this.camera.targetY = this.predictedPlayerPos.y - this.screenHeight / 2;
@@ -482,6 +511,13 @@ class GameClient {
       const cameraLerpFactor = 1;
       this.camera.x += (this.camera.targetX - this.camera.x) * cameraLerpFactor;
       this.camera.y += (this.camera.targetY - this.camera.y) * cameraLerpFactor;
+      
+      // Check if camera position changed and update mouse world coordinates
+      if (prevCameraX !== this.camera.x || prevCameraY !== this.camera.y) {
+        this.updateMouseWorldCoords();
+        // Send updated input with new mouse world position
+        this.sendInput();
+      }
     }
   }
 
@@ -673,6 +709,38 @@ drawPlayer(player) {
       const x = cannon.x - gunLength / 2; // Convert center to top-left for fillRect
       const y = cannon.y - gunWidth / 2;  // Convert center to top-left for fillRect
       ctx.fillRect(x, y, gunLength, gunWidth);
+    }
+  }
+
+  // --- Draw turrets using positions from backend ---
+  if (player.turrets && player.turrets.length > 0) {
+    for (const turret of player.turrets) {
+      // Draw turret base (circular mount)
+      const turretSize = size * 0.5;
+      const barrelLength = size * 0.5;
+      const barrelWidth = size * 0.2;
+      
+      ctx.save();
+      ctx.translate(turret.x, turret.y);
+
+      // Draw turret barrel (rotated to turret.angle)
+      // Since the canvas is already rotated to the ship's angle, we need to counter-rotate
+      // the turret angle to get the correct world orientation
+      ctx.rotate(turret.angle - angle);
+      ctx.fillStyle = '#444';
+      ctx.fillRect(0, -barrelWidth / 2, barrelLength, barrelWidth);
+      ctx.strokeRect(0, -barrelWidth / 2, barrelLength, barrelWidth);
+      
+      // Draw turret base
+      ctx.fillStyle = '#555';
+      ctx.beginPath();
+      ctx.arc(0, 0, turretSize / 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      
+
+      
+      ctx.restore();
     }
   }
 
@@ -901,8 +969,8 @@ drawPlayer(player) {
   }
 
   drawControls() {
-    const controlsWidth = 200;
-    const controlsHeight = 150;
+    const controlsWidth = 220;
+    const controlsHeight = 190;
     const x = 10;
     const y = this.screenHeight - controlsHeight - 10;
     
@@ -920,10 +988,13 @@ drawPlayer(player) {
     this.ctx.fillText('WASD: Move', x + 10, y + 40);
     this.ctx.fillText('Q: Fire Left Cannons', x + 10, y + 55);
     this.ctx.fillText('E: Fire Right Cannons', x + 10, y + 70);
-    this.ctx.fillText('+: Add Cannons', x + 10, y + 85);
-    this.ctx.fillText('-: Remove Cannons', x + 10, y + 100);
-    this.ctx.fillText('Ships turn faster', x + 10, y + 120);
-    this.ctx.fillText('when moving!', x + 10, y + 135);
+    this.ctx.fillText('Mouse: Aim Turrets', x + 10, y + 85);
+    this.ctx.fillText('+/-: Add/Remove Cannons', x + 10, y + 100);
+    this.ctx.fillText('[/]: Add/Remove Turrets', x + 10, y + 115);
+    this.ctx.fillText('Turrets auto-fire at', x + 10, y + 135);
+    this.ctx.fillText('mouse position!', x + 10, y + 150);
+    this.ctx.fillText('Ships turn slower', x + 10, y + 165);
+    this.ctx.fillText('when longer!', x + 10, y + 180);
   }
 
   drawMinimap() {

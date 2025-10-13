@@ -73,9 +73,10 @@ func (w *World) AddClient(client *Client) {
 	// Spawn player at random safe location
 	w.spawnPlayer(client.Player)
 
-	// Initialize ship dimensions and cannon positions
+	// Initialize ship dimensions and weapon positions
 	w.updateShipDimensions(client.Player)
 	w.updatePlayerCannonPositions(client.Player)
+	w.updateTurretPositions(client.Player)
 
 	// Send welcome message to the new client with their player ID
 	w.sendWelcomeMessage(client)
@@ -169,14 +170,19 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 
 	scaledTurnSpeed := ShipTurnSpeed * turnFactor * lengthFactor
 
-	// Handle turning (A/D keys)
+	// Handle turning (A/D keys) and track angular velocity
+	var angularChange float32 = 0
 	if input.Left {
-
+		angularChange = -scaledTurnSpeed
 		player.Angle -= scaledTurnSpeed
 	}
 	if input.Right {
+		angularChange = scaledTurnSpeed
 		player.Angle += scaledTurnSpeed
 	}
+
+	// Store current angular velocity for physics calculations
+	player.AngularVelocity = angularChange
 
 	// Apply drag/deceleration
 	player.VelX *= ShipDeceleration
@@ -194,8 +200,14 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 	player.X += player.VelX
 	player.Y += player.VelY
 
-	// Handle shooting (left and right cannons)
+	// Update turret aiming based on mouse position
+	w.updateTurretAiming(player, input)
+
+	// Handle turret firing (automatic when mouse is within range)
 	now := time.Now()
+	w.fireTurrets(player, input, now)
+
+	// Handle shooting (left and right cannons)
 	if (input.ShootLeft || input.ShootRight) && now.Sub(player.LastShotTime).Seconds() >= CannonCooldown {
 		w.fireAllCannons(player, true)  // Left side cannons
 		w.fireAllCannons(player, false) // Right side cannons
@@ -208,6 +220,12 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 	}
 	if input.DowngradeCannons {
 		w.DowngradePlayerCannons(player.ID)
+	}
+	if input.UpgradeTurrets {
+		w.UpgradePlayerTurrets(player.ID)
+	}
+	if input.DowngradeTurrets {
+		w.DowngradePlayerTurrets(player.ID)
 	}
 
 	// Keep player within world boundaries
@@ -419,10 +437,24 @@ func (w *World) fireAllCannons(player *Player, isLeftSide bool) {
 		worldX := player.X + (cannonPos.X*cos - cannonPos.Y*sin)
 		worldY := player.Y + (cannonPos.X*sin + cannonPos.Y*cos)
 
-		// Bullet fires perpendicular to the ship (in the same direction as the cannon positioning)
-		// includes player velocity for more realistic shooting
-		bulletVelX := float32(math.Cos(float64(sideAngle)))*BulletSpeed + player.VelX*0.7
-		bulletVelY := float32(math.Sin(float64(sideAngle)))*BulletSpeed + player.VelY*0.7
+		// Base bullet velocity in cannon direction (perpendicular to ship)
+		bulletVelX := float32(math.Cos(float64(sideAngle))) * BulletSpeed
+		bulletVelY := float32(math.Sin(float64(sideAngle))) * BulletSpeed
+
+		// Add ship's linear velocity
+		bulletVelX += player.VelX * 0.7
+		bulletVelY += player.VelY * 0.7
+
+		// Add tangential velocity from ship rotation
+		// For cannon at relative position (cannonPos.X, cannonPos.Y):
+		// tangentialVelX = -angularVelocity * cannonPos.Y
+		// tangentialVelY = angularVelocity * cannonPos.X
+		if player.AngularVelocity != 0 {
+			tangentialVelX := -player.AngularVelocity * cannonPos.Y
+			tangentialVelY := player.AngularVelocity * cannonPos.X
+			bulletVelX += tangentialVelX
+			bulletVelY += tangentialVelY
+		}
 
 		// Create bullet at world coordinates
 		bullet := &Bullet{
@@ -578,23 +610,36 @@ func (w *World) DowngradePlayerCannons(playerID uint32) bool {
 	return true
 }
 
-// updateShipDimensions updates ship dimensions based on cannon count
+// updateShipDimensions updates ship dimensions based on cannon and turret count
 func (w *World) updateShipDimensions(player *Player) {
 	// Base dimensions
 	baseShaftLength := float32(PlayerSize*1.2) * 0.5 // Base shaft length (what frontend uses)
 	baseWidth := float32(PlayerSize * 0.8)
+	player.ShipWidth = baseWidth
 
 	// Calculate extra length for additional cannons (same logic as frontend used to have)
-	var extraShaftLength float32
+	var extraCannonLength float32
 	if player.CannonCount > 1 {
 		gunLength := player.Size * 0.35
 		spacing := gunLength * 1.5
-		extraShaftLength = spacing * float32(player.CannonCount-1)
+		extraCannonLength = spacing * float32(player.CannonCount-1)
 	}
 
+	// Calculate minimum length needed for turrets
+	var extraTurretLength float32
+	if player.TurretCount > 0 {
+		turretSpacing := player.Size * 0.7
+		extraTurretLength = turretSpacing * float32(player.TurretCount-1)
+		player.ShipWidth = baseWidth * 1.1
+	}
+
+	minTurretLength := baseShaftLength + extraTurretLength
+	cannonLength := baseShaftLength + extraCannonLength
+	// Ship length should be at least the base length + cannon spacing, but also accommodate turrets
+	requiredLength := float32(math.Max(float64(cannonLength), float64(minTurretLength)))
+
 	// ShipLength now represents the shaft length that frontend expects
-	player.ShipLength = baseShaftLength + extraShaftLength
-	player.ShipWidth = baseWidth      // Width stays constant
+	player.ShipLength = requiredLength
 	player.Size = float32(PlayerSize) // Overall size stays constant for rendering
 	player.CollisionRadius = calculateCollisionRadius(player.ShipLength, player.ShipWidth)
 }
@@ -607,9 +652,6 @@ func (w *World) updatePlayerCannonPositions(player *Player) {
 
 // SetPlayerCannonCount sets the exact number of cannons for a player (for testing/admin)
 func (w *World) SetPlayerCannonCount(playerID uint32, cannonCount int) bool {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-
 	player, exists := w.players[playerID]
 	if !exists {
 		return false
@@ -623,4 +665,140 @@ func (w *World) SetPlayerCannonCount(playerID uint32, cannonCount int) bool {
 	w.updateShipDimensions(player)
 	w.updatePlayerCannonPositions(player) // Update cannon positions after setting count
 	return true
+}
+
+// updateTurretPositions calculates and stores turret positions for a player
+func (w *World) updateTurretPositions(player *Player) {
+	player.Turrets = w.calculateTurretPositions(player)
+}
+
+// calculateTurretPositions calculates the positions of turrets along the center line of the ship
+func (w *World) calculateTurretPositions(player *Player) []Turret {
+	turrets := make([]Turret, player.TurretCount)
+
+	if player.TurretCount == 0 {
+		return turrets
+	}
+
+	// Calculate turret positions based on count with constant margin from ship edges
+	margin := float32(TurretMargin)
+	availableLength := player.ShipLength - 2*margin
+
+	for i := 0; i < player.TurretCount; i++ {
+		var turretX float32
+
+		if player.TurretCount == 1 {
+			// Single turret positioned at the center of the ship
+			turretX = 0
+		} else {
+			// Multiple turrets: start at front (with margin), space evenly toward back
+			turretSpacing := availableLength / float32(player.TurretCount-1)
+			turretX = (player.ShipLength/2 - margin) - float32(i)*turretSpacing
+		}
+
+		turrets[i] = Turret{
+			X:     turretX, // Position along front-to-back axis
+			Y:     0,       // Turrets are always on the center line (left-to-right axis)
+			Angle: 0,       // Will be updated based on mouse position
+			Type:  TurretTypeSingle,
+		}
+	}
+
+	return turrets
+}
+
+// UpgradePlayerTurrets increases the number of turrets for a player
+func (w *World) UpgradePlayerTurrets(playerID uint32) bool {
+	player, exists := w.players[playerID]
+	if !exists || player.TurretCount >= MaxTurrets {
+		return false
+	}
+
+	player.TurretCount++
+	w.updateShipDimensions(player)
+	w.updateTurretPositions(player)
+	w.updatePlayerCannonPositions(player)
+	return true
+}
+
+// DowngradePlayerTurrets decreases the number of turrets for a player
+func (w *World) DowngradePlayerTurrets(playerID uint32) bool {
+	player, exists := w.players[playerID]
+	if !exists || player.TurretCount <= MinTurrets {
+		return false
+	}
+
+	player.TurretCount--
+	w.updateShipDimensions(player)
+	w.updateTurretPositions(player)
+	w.updatePlayerCannonPositions(player)
+	return true
+}
+
+// updateTurretAiming updates turret angles to aim at mouse position
+func (w *World) updateTurretAiming(player *Player, input *InputMsg) {
+	// Convert mouse coordinates from screen space to world space
+	mouseWorldX := input.Mouse.X
+	mouseWorldY := input.Mouse.Y
+
+	// Update each turret's angle to point toward the mouse
+	dx := mouseWorldX - player.X
+	dy := mouseWorldY - player.Y
+
+	angleToMouse := float32(math.Atan2(float64(dy), float64(dx)))
+
+	for i := range player.Turrets {
+		player.Turrets[i].Angle = angleToMouse
+	}
+
+}
+
+// fireTurrets handles automatic turret firing when mouse is in range
+func (w *World) fireTurrets(player *Player, input *InputMsg, now time.Time) {
+	// Check shared turret cooldown first
+	if now.Sub(player.LastTurretShotTime).Seconds() < TurretCooldown {
+		return
+	}
+
+	for i := range player.Turrets {
+		turret := &player.Turrets[i]
+
+		// Calculate turret world position
+		cos := float32(math.Cos(float64(player.Angle)))
+		sin := float32(math.Sin(float64(player.Angle)))
+		turretWorldX := player.X + (turret.X*cos - turret.Y*sin)
+		turretWorldY := player.Y + (turret.X*sin + turret.Y*cos)
+
+		// Base bullet velocity in turret direction
+		bulletVelX := float32(math.Cos(float64(turret.Angle))) * BulletSpeed
+		bulletVelY := float32(math.Sin(float64(turret.Angle))) * BulletSpeed
+
+		// Add ship's linear velocity
+		bulletVelX += player.VelX
+		bulletVelY += player.VelY
+
+		// Add tangential velocity from ship rotation
+		// For turret at relative position (turret.X, turret.Y):
+		// tangentialVelX = -angularVelocity * turret.Y
+		// tangentialVelY = angularVelocity * turret.X
+
+		// Create bullet at turret world coordinates
+		bullet := &Bullet{
+			ID:        w.bulletID,
+			X:         turretWorldX,
+			Y:         turretWorldY,
+			VelX:      bulletVelX,
+			VelY:      bulletVelY,
+			OwnerID:   player.ID,
+			CreatedAt: now,
+			Size:      BulletSize,
+		}
+
+		w.bullets[w.bulletID] = bullet
+		w.bulletID++
+
+		// Set shared turret cooldown and return after firing the first turret
+
+	}
+	player.LastTurretShotTime = now
 }
