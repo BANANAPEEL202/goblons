@@ -76,12 +76,14 @@ func (c *Cannon) Fire(world *World, player *Player, targetAngle float32, now tim
 		bulletVelY += player.VelY * 0.7
 
 		// Add tangential velocity from ship rotation
-		if player.AngularVelocity != 0 {
-			tangentialVelX := -player.AngularVelocity * c.Position.Y
-			tangentialVelY := player.AngularVelocity * c.Position.X
-			bulletVelX += tangentialVelX
-			bulletVelY += tangentialVelY
-		}
+		/*
+			if player.AngularVelocity != 0 {
+				tangentialVelX := -player.AngularVelocity * c.Position.Y
+				tangentialVelY := player.AngularVelocity * c.Position.X
+				bulletVelX += tangentialVelX
+				bulletVelY += tangentialVelY
+			}
+		*/
 
 		bullet := &Bullet{
 			ID:        world.bulletID,
@@ -116,15 +118,9 @@ type Turret struct {
 
 // UpdateAiming updates the turret's angle to aim at target position
 func (t *Turret) UpdateAiming(player *Player, targetX, targetY float32) {
-	// Calculate turret world position
-	cos := float32(math.Cos(float64(player.Angle)))
-	sin := float32(math.Sin(float64(player.Angle)))
-	turretWorldX := player.X + (t.Position.X*cos - t.Position.Y*sin)
-	turretWorldY := player.Y + (t.Position.X*sin + t.Position.Y*cos)
-
 	// Calculate desired angle to target
-	dx := targetX - turretWorldX
-	dy := targetY - turretWorldY
+	dx := targetX - player.X
+	dy := targetY - player.Y
 	targetAngle := float32(math.Atan2(float64(dy), float64(dx)))
 
 	// For now, instantly snap to target (can add smooth rotation later)
@@ -143,7 +139,7 @@ func (t *Turret) CanFire(player *Player, targetX, targetY float32, now time.Time
 }
 
 // Fire makes all cannons in the turret fire simultaneously (ignore individual reload times)
-func (t *Turret) Fire(world *World, player *Player, targetX, targetY float32, now time.Time) []*Bullet {
+func (t *Turret) Fire(world *World, player *Player, now time.Time) []*Bullet {
 	// Check range only (ignore individual cannon reload times for simultaneous firing)
 	var allBullets []*Bullet
 

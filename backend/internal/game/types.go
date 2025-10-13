@@ -41,7 +41,6 @@ type Player struct {
 	VelY               float32   `json:"velY"`
 	Angle              float32   `json:"angle"` // Ship facing direction in radians
 	AngularVelocity    float32   `json:"-"`     // Current angular velocity (radians per update)
-	Size               float32   `json:"size"`
 	Score              int       `json:"score"`
 	State              int       `json:"state"`
 	Name               string    `json:"name"`
@@ -56,8 +55,6 @@ type Player struct {
 	LastTopUpgradeShot   time.Time         `json:"-"`          // When top upgrades last fired
 	LastFrontUpgradeShot time.Time         `json:"-"`          // When front upgrades last fired
 	LastRearUpgradeShot  time.Time         `json:"-"`          // When rear upgrades last fired
-	ShipLength           float32           `json:"shipLength"` // Length of the ship
-	ShipWidth            float32           `json:"shipWidth"`  // Width of the ship
 	ShipConfig           ShipConfiguration `json:"shipConfig"` // New modular upgrade system
 }
 
@@ -140,18 +137,26 @@ func NewPlayer(id uint32) *Player {
 	shipLength := float32(PlayerSize*1.2) * 0.5 // Base shaft length for 1 cannon
 	shipWidth := float32(PlayerSize * 0.8)
 
+	shipConfig := ShipConfiguration{
+		SideUpgrade:  NewBasicSideCannons(1),
+		TopUpgrade:   NewBasicTurrets(0),
+		FrontUpgrade: nil,
+		RearUpgrade:  nil,
+		ShipLength:   shipLength,
+		ShipWidth:    shipWidth,
+		Size:         PlayerSize,
+	}
+
 	return &Player{
 		ID:         id,
 		X:          WorldWidth / 2,
 		Y:          WorldHeight / 2,
-		Size:       PlayerSize,
 		State:      StateAlive,
 		Health:     100,
 		MaxHealth:  100,
 		Color:      generateRandomColor(),
 		Name:       generateRandomName(),
-		ShipLength: shipLength,
-		ShipWidth:  shipWidth,
+		ShipConfig: shipConfig,
 	}
 }
 

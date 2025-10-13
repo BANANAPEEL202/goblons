@@ -633,15 +633,15 @@ drawPlayer(player) {
   const screenX = player.x - this.camera.x;
   const screenY = player.y - this.camera.y;
 
-  const size = player.size || 20;
+  const size = player.size || 50;
   const color = player.color || '#d9534f';
   const angle = player.angle || 0;
 
   // --- Ship dimensions from backend ---
   const bowLength = size * 0.4;
-  const shaftLength = player.shipLength || size * 1.2; // Backend provides the shaft length directly
+  const shaftLength = player.shipConfig.shipLength || size * 1.2; // Backend provides the shaft length directly
   const rearLength = size * 0.3;
-  const shaftWidth = player.shipWidth || size * 0.6;
+  const shaftWidth = player.shipConfig.shipWidth || size * 0.6;
   const totalRearLength = rearLength;
 
   // --- Cannon rendering dimensions ---

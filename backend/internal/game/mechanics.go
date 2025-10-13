@@ -55,8 +55,8 @@ type BoundingBox struct {
 // getShipBoundingBox calculates the axis-aligned bounding box for a rotated ship
 func (gm *GameMechanics) getShipBoundingBox(player *Player) BoundingBox {
 	// Calculate the four corners of the rotated ship rectangle
-	halfLength := player.ShipLength / 2
-	halfWidth := player.ShipWidth / 2
+	halfLength := player.ShipConfig.ShipLength / 2
+	halfWidth := player.ShipConfig.ShipWidth / 2
 
 	cos := float32(math.Cos(float64(player.Angle)))
 	sin := float32(math.Sin(float64(player.Angle)))
@@ -183,7 +183,7 @@ func (gm *GameMechanics) separatePlayers(player1, player2 *Player) {
 
 // respawnPlayer resets a player's state and position
 func (gm *GameMechanics) respawnPlayer(player *Player) {
-	player.Size = PlayerSize
+	player.ShipConfig.Size = PlayerSize
 	player.Score = 0
 	player.Health = player.MaxHealth
 	player.State = StateSpawning
@@ -206,32 +206,16 @@ func (gm *GameMechanics) respawnPlayer(player *Player) {
 // isLocationSafe checks if a location is safe for spawning (no other players nearby)
 func (gm *GameMechanics) isLocationSafe(x, y, size float32) bool {
 	// Create a temporary player to check collision area
-	tempPlayer := &Player{
-		X:          x,
-		Y:          y,
-		Size:       size,
-		ShipLength: size * 1.2,
-		ShipWidth:  size * 0.8,
-		Angle:      0, // Default angle for spawning
-	}
 
 	// Check against all existing players
-	for _, otherPlayer := range gm.world.players {
-		if otherPlayer.State != StateAlive {
+	for _, other := range gm.world.players {
+		if other.State != StateAlive {
 			continue
 		}
-
-		// Use a larger safety margin by scaling up the temp player
-		tempPlayer.ShipLength *= 2 // Double the size for safety margin
-		tempPlayer.ShipWidth *= 2
-
-		if gm.checkRectangularCollision(tempPlayer, otherPlayer) {
+		distance := gm.calculateDistance(x, y, other.X, other.Y)
+		if distance < (size+other.ShipConfig.Size)/2+20 { // 20 units buffer
 			return false
 		}
-
-		// Restore original size for next check
-		tempPlayer.ShipLength /= 2
-		tempPlayer.ShipWidth /= 2
 	}
 
 	return true
@@ -290,7 +274,6 @@ func (gm *GameMechanics) SpawnSpecialItems() {
 func (gm *GameMechanics) ApplyItemEffect(player *Player, item *GameItem) {
 	switch item.Type {
 	case "food":
-		player.Size += 0.5
 		player.Score += item.Value
 
 	case "coin":
@@ -299,19 +282,11 @@ func (gm *GameMechanics) ApplyItemEffect(player *Player, item *GameItem) {
 	case "health_pack":
 		player.Health = int(math.Min(float64(player.MaxHealth), float64(player.Health+item.Value)))
 
-	case "size_boost":
-		player.Size += float32(item.Value)
-
 	case "speed_boost":
 		// This would require adding temporary effects system
 		player.Score += 5 // Give some score for now
 
 	case "score_multiplier":
 		player.Score = int(float32(player.Score) * float32(item.Value))
-	}
-
-	// Cap maximum size
-	if player.Size > 100 {
-		player.Size = 100
 	}
 }

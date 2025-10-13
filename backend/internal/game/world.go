@@ -73,7 +73,6 @@ func (w *World) AddClient(client *Client) {
 	w.spawnPlayer(client.Player)
 
 	// Initialize ship dimensions and weapon positions
-	w.initializePlayerShip(client.Player)
 	w.updateShipDimensions(client.Player)
 
 	// Send welcome message to the new client with their player ID
@@ -163,8 +162,8 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 
 	// Calculate length factor - longer ships turn slower
 	// Base length for comparison (1 cannon = standard ship)
-	baseShipLength := float32(PlayerSize * 1.2)        // 1 cannon ship has no length multiplier
-	lengthFactor := baseShipLength / player.ShipLength // Longer ships get smaller factor
+	baseShipLength := float32(PlayerSize * 1.2)                   // 1 cannon ship has no length multiplier
+	lengthFactor := baseShipLength / player.ShipConfig.ShipLength // Longer ships get smaller factor
 
 	scaledTurnSpeed := ShipTurnSpeed * turnFactor * lengthFactor
 
@@ -201,20 +200,28 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 	// Update turret aiming and firing using modular system
 	now := time.Now()
 	w.updateModularTurretAiming(player, input)
-	w.fireModularUpgrades(player, input, now)
+	w.fireModularUpgrades(player, now)
 
 	// Handle ship upgrades - use new modular system
 	if input.UpgradeCannons {
-		w.UpgradePlayerSideCannonModular(player.ID)
+		player.ShipConfig.SideUpgrade = NewBasicSideCannons(player.ShipConfig.SideUpgrade.Count + 1)
+		player.ShipConfig.CalculateShipDimensions()
+		player.ShipConfig.UpdateUpgradePositions()
 	}
 	if input.DowngradeCannons {
-		w.DowngradePlayerSideCannonModular(player.ID)
+		player.ShipConfig.SideUpgrade = NewBasicSideCannons(player.ShipConfig.SideUpgrade.Count - 1)
+		player.ShipConfig.CalculateShipDimensions()
+		player.ShipConfig.UpdateUpgradePositions()
 	}
 	if input.UpgradeTurrets {
-		//w.UpgradePlayerTurretsModular(player.ID)
+		player.ShipConfig.TopUpgrade = NewBasicTurrets(player.ShipConfig.TopUpgrade.Count + 1)
+		player.ShipConfig.CalculateShipDimensions()
+		player.ShipConfig.UpdateUpgradePositions()
 	}
 	if input.DowngradeTurrets {
-		//w.DowngradePlayerTurretsModular(player.ID)
+		player.ShipConfig.TopUpgrade = NewBasicTurrets(player.ShipConfig.TopUpgrade.Count - 1)
+		player.ShipConfig.CalculateShipDimensions()
+		player.ShipConfig.UpdateUpgradePositions()
 	}
 
 	// Keep player within world boundaries
@@ -395,21 +402,10 @@ func (w *World) HandleInput(clientID uint32, input InputMsg) {
 	}
 }
 
-// initializePlayerShip sets up the initial ship configuration with basic upgrades
-func (w *World) initializePlayerShip(player *Player) {
-	// Initialize with basic side cannons (both left and right in one upgrade)
-	sideCannons := NewBasicSideCannons(true, 1) // Start with 1 cannon count
-
-	// Initialize ship configuration with single upgrades
-	player.ShipConfig = ShipConfiguration{
-		SideUpgrade: &sideCannons,
-	}
-}
-
 // keepPlayerInBounds ensures a player stays within the world boundaries
 func (w *World) keepPlayerInBounds(player *Player) {
-	player.X = float32(math.Max(float64(player.Size/2), math.Min(float64(WorldWidth-player.Size/2), float64(player.X))))
-	player.Y = float32(math.Max(float64(player.Size/2), math.Min(float64(WorldHeight-player.Size/2), float64(player.Y))))
+	player.X = float32(math.Max(float64(player.ShipConfig.Size/2), math.Min(float64(WorldWidth-player.ShipConfig.Size/2), float64(player.X))))
+	player.Y = float32(math.Max(float64(player.ShipConfig.Size/2), math.Min(float64(WorldHeight-player.ShipConfig.Size/2), float64(player.Y))))
 }
 
 // updateBullets handles bullet movement and cleanup
@@ -476,96 +472,18 @@ func (w *World) updateBullets() {
 
 // updateShipDimensions updates ship dimensions based on cannon and turret count
 func (w *World) updateShipDimensions(player *Player) {
-	player.ShipLength, player.ShipWidth = player.ShipConfig.CalculateShipDimensions(player.Size)
+	sc := &player.ShipConfig
+	sc.CalculateShipDimensions()
 
 	// Update positions for all upgrades
-	if player.ShipConfig.SideUpgrade != nil {
-		player.ShipConfig.SideUpgrade.UpdateUpgradePositions(player)
-	}
-	if player.ShipConfig.TopUpgrade != nil {
-		player.ShipConfig.TopUpgrade.UpdateUpgradePositions(player)
-	}
-	if player.ShipConfig.FrontUpgrade != nil {
-		player.ShipConfig.FrontUpgrade.UpdateUpgradePositions(player)
-	}
-	if player.ShipConfig.RearUpgrade != nil {
-		player.ShipConfig.RearUpgrade.UpdateUpgradePositions(player)
-	}
-}
-
-// updateTurretAiming updates turret angles to aim at mouse position
-func (w *World) updateTurretAiming(player *Player, input *InputMsg) {
-	// Convert mouse coordinates from screen space to world space
-	mouseWorldX := input.Mouse.X
-	mouseWorldY := input.Mouse.Y
-
-	// Update each turret's angle to point toward the mouse
-	dx := mouseWorldX - player.X
-	dy := mouseWorldY - player.Y
-
-	angleToMouse := float32(math.Atan2(float64(dy), float64(dx)))
-
-	if player.ShipConfig.TopUpgrade == nil {
-		return
-	}
-
-	for i := range player.ShipConfig.TopUpgrade.Turrets {
-		player.ShipConfig.TopUpgrade.Turrets[i].Angle = angleToMouse
-	}
-
-}
-
-// UpgradePlayerSideCannonModular adds more cannons to the side of the ship using new system
-func (w *World) UpgradePlayerSideCannonModular(playerID uint32) bool {
-	player, exists := w.players[playerID]
-	if !exists {
-		return false
-	}
-
-	// Check if side upgrade exists and can be upgraded
-	if player.ShipConfig.SideUpgrade == nil {
-		// Create initial side upgrade
-		sideCannons := NewBasicSideCannons(true, 1)
-		player.ShipConfig.SideUpgrade = &sideCannons
-	} else if player.ShipConfig.SideUpgrade.Count < MaxCannonsPerSide {
-		// Upgrade existing side cannons
-		newLevel := player.ShipConfig.SideUpgrade.Count + 1
-		sideCannons := NewBasicSideCannons(true, newLevel)
-		player.ShipConfig.SideUpgrade = &sideCannons
-	} else {
-		return false // Already at maximum
-	}
-
-	w.updateShipDimensions(player)
-	return true
-}
-
-// DowngradePlayerSideCannonModular removes cannons from the side of the ship using new system
-func (w *World) DowngradePlayerSideCannonModular(playerID uint32) bool {
-	player, exists := w.players[playerID]
-	if !exists {
-		return false
-	}
-
-	// Check if side upgrade exists and can be downgraded
-	if player.ShipConfig.SideUpgrade == nil || player.ShipConfig.SideUpgrade.Count <= MinCannonsPerSide {
-		return false // Already at minimum or no upgrade
-	}
-
-	// Downgrade existing side cannons
-	newLevel := player.ShipConfig.SideUpgrade.Count - 1
-	sideCannons := NewBasicSideCannons(true, newLevel)
-	player.ShipConfig.SideUpgrade = &sideCannons
-
-	w.updateShipDimensions(player)
-	return true
+	sc.UpdateUpgradePositions()
 }
 
 // fireModularUpgrades fires weapons based on upgrade categories with per-category cooldowns
-func (w *World) fireModularUpgrades(player *Player, input *InputMsg, now time.Time) {
+func (w *World) fireModularUpgrades(player *Player, now time.Time) {
 	// Fire side upgrades (cannons) if input is pressed and cooldown allows
-	if (input.ShootLeft || input.ShootRight) && now.Sub(player.LastSideUpgradeShot).Seconds() >= CannonCooldown {
-		fired := w.fireSideUpgrade(player, input.ShootLeft, input.ShootRight, now)
+	if now.Sub(player.LastSideUpgradeShot).Seconds() >= CannonCooldown {
+		fired := w.fireSideUpgrade(player, now)
 		if fired {
 			player.LastSideUpgradeShot = now
 		}
@@ -573,7 +491,7 @@ func (w *World) fireModularUpgrades(player *Player, input *InputMsg, now time.Ti
 
 	// Fire top upgrades (turrets) if cooldown allows
 	if now.Sub(player.LastTopUpgradeShot).Seconds() >= TurretCooldown {
-		fired := w.fireTopUpgrade(player, input, now)
+		fired := w.fireTopUpgrade(player, now)
 		if fired {
 			player.LastTopUpgradeShot = now
 		}
@@ -581,7 +499,7 @@ func (w *World) fireModularUpgrades(player *Player, input *InputMsg, now time.Ti
 
 	// Fire front upgrades if cooldown allows
 	if now.Sub(player.LastFrontUpgradeShot).Seconds() >= CannonCooldown {
-		fired := w.fireFrontUpgrade(player, input, now)
+		fired := w.fireFrontUpgrade(player, now)
 		if fired {
 			player.LastFrontUpgradeShot = now
 		}
@@ -589,7 +507,7 @@ func (w *World) fireModularUpgrades(player *Player, input *InputMsg, now time.Ti
 
 	// Fire rear upgrades if cooldown allows
 	if now.Sub(player.LastRearUpgradeShot).Seconds() >= CannonCooldown {
-		fired := w.fireRearUpgrade(player, input, now)
+		fired := w.fireRearUpgrade(player, now)
 		if fired {
 			player.LastRearUpgradeShot = now
 		}
@@ -597,7 +515,7 @@ func (w *World) fireModularUpgrades(player *Player, input *InputMsg, now time.Ti
 }
 
 // fireSideUpgrade fires side-mounted cannons from the single side upgrade
-func (w *World) fireSideUpgrade(player *Player, shootLeft, shootRight bool, now time.Time) bool {
+func (w *World) fireSideUpgrade(player *Player, now time.Time) bool {
 	if player.ShipConfig.SideUpgrade == nil {
 		return false
 	}
@@ -610,31 +528,27 @@ func (w *World) fireSideUpgrade(player *Player, shootLeft, shootRight bool, now 
 	fired := false
 	cannonCount := len(upgrade.Cannons) / 2 // Half are left, half are right
 
-	// Fire left side cannons if requested
-	if shootLeft {
-		for i := 0; i < cannonCount; i++ {
-			cannon := upgrade.Cannons[i] // Left side cannons are first half
-			// Calculate left side angle: ship angle + 90 degrees (π/2)
-			leftAngle := player.Angle + float32(math.Pi/2)
-			bullets := cannon.Fire(w, player, leftAngle, now)
-			for _, bullet := range bullets {
-				w.bullets[bullet.ID] = bullet
-				fired = true
-			}
+	// Fire left side cannons
+	for i := 0; i < cannonCount; i++ {
+		cannon := upgrade.Cannons[i] // Left side cannons are first half
+		// Calculate left side angle: ship angle + 90 degrees (π/2)
+		leftAngle := player.Angle + float32(math.Pi/2)
+		bullets := cannon.Fire(w, player, leftAngle, now)
+		for _, bullet := range bullets {
+			w.bullets[bullet.ID] = bullet
+			fired = true
 		}
 	}
 
-	// Fire right side cannons if requested
-	if shootRight {
-		for i := cannonCount; i < len(upgrade.Cannons); i++ {
-			cannon := upgrade.Cannons[i] // Right side cannons are second half
-			// Calculate right side angle: ship angle - 90 degrees (-π/2)
-			rightAngle := player.Angle - float32(math.Pi/2)
-			bullets := cannon.Fire(w, player, rightAngle, now)
-			for _, bullet := range bullets {
-				w.bullets[bullet.ID] = bullet
-				fired = true
-			}
+	// Fire right side cannons
+	for i := cannonCount; i < len(upgrade.Cannons); i++ {
+		cannon := upgrade.Cannons[i] // Right side cannons are second half
+		// Calculate right side angle: ship angle - 90 degrees (-π/2)
+		rightAngle := player.Angle - float32(math.Pi/2)
+		bullets := cannon.Fire(w, player, rightAngle, now)
+		for _, bullet := range bullets {
+			w.bullets[bullet.ID] = bullet
+			fired = true
 		}
 	}
 
@@ -642,20 +556,18 @@ func (w *World) fireSideUpgrade(player *Player, shootLeft, shootRight bool, now 
 }
 
 // fireTopUpgrade fires top-mounted turrets from the single top upgrade
-func (w *World) fireTopUpgrade(player *Player, input *InputMsg, now time.Time) bool {
+func (w *World) fireTopUpgrade(player *Player, now time.Time) bool {
 	if player.ShipConfig.TopUpgrade == nil || player.ShipConfig.TopUpgrade.Type != UpgradeTypeTop {
 		return false
 	}
 
-	mouseWorldX := input.Mouse.X
-	mouseWorldY := input.Mouse.Y
 	upgrade := player.ShipConfig.TopUpgrade
 	fired := false
 
 	// Fire all turrets in the upgrade simultaneously
 	for i := range upgrade.Turrets {
 		turret := &upgrade.Turrets[i]
-		bullets := turret.Fire(w, player, mouseWorldX, mouseWorldY, now)
+		bullets := turret.Fire(w, player, now)
 
 		if len(bullets) > 0 {
 			for _, bullet := range bullets {
@@ -669,7 +581,7 @@ func (w *World) fireTopUpgrade(player *Player, input *InputMsg, now time.Time) b
 }
 
 // fireFrontUpgrade fires front-mounted weapons from the single front upgrade
-func (w *World) fireFrontUpgrade(player *Player, input *InputMsg, now time.Time) bool {
+func (w *World) fireFrontUpgrade(player *Player, now time.Time) bool {
 	if player.ShipConfig.FrontUpgrade == nil || player.ShipConfig.FrontUpgrade.Type != UpgradeTypeFront {
 		return false
 	}
@@ -687,11 +599,9 @@ func (w *World) fireFrontUpgrade(player *Player, input *InputMsg, now time.Time)
 	}
 
 	// Fire all turrets in the upgrade simultaneously
-	mouseWorldX := input.Mouse.X
-	mouseWorldY := input.Mouse.Y
 	for i := range upgrade.Turrets {
 		turret := &upgrade.Turrets[i]
-		bullets := turret.Fire(w, player, mouseWorldX, mouseWorldY, now)
+		bullets := turret.Fire(w, player, now)
 
 		if len(bullets) > 0 {
 			for _, bullet := range bullets {
@@ -705,7 +615,7 @@ func (w *World) fireFrontUpgrade(player *Player, input *InputMsg, now time.Time)
 }
 
 // fireRearUpgrade fires rear-mounted weapons from the single rear upgrade
-func (w *World) fireRearUpgrade(player *Player, input *InputMsg, now time.Time) bool {
+func (w *World) fireRearUpgrade(player *Player, now time.Time) bool {
 	if player.ShipConfig.RearUpgrade == nil || player.ShipConfig.RearUpgrade.Type != UpgradeTypeRear {
 		return false
 	}
@@ -723,11 +633,9 @@ func (w *World) fireRearUpgrade(player *Player, input *InputMsg, now time.Time) 
 	}
 
 	// Fire all turrets in the upgrade simultaneously
-	mouseWorldX := input.Mouse.X
-	mouseWorldY := input.Mouse.Y
 	for i := range upgrade.Turrets {
 		turret := &upgrade.Turrets[i]
-		bullets := turret.Fire(w, player, mouseWorldX, mouseWorldY, now)
+		bullets := turret.Fire(w, player, now)
 
 		if len(bullets) > 0 {
 			for _, bullet := range bullets {
