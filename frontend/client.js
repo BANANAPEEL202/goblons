@@ -50,12 +50,12 @@ class GameClient {
     this.screenWidth = window.innerWidth;
     this.screenHeight = window.innerHeight;
     
-    // UI state for upgrade system
+        // UI state for upgrade system
     this.upgradeUI = {
-      showUpgradeButtons: false,
       selectedUpgradeType: null, // 'side', 'top', 'front', 'rear'
       availableUpgrades: {},     // stores available upgrades for each type
-      pendingUpgrade: false,     // prevents sending multiple upgrade selections
+      pendingUpgrade: false,     // prevents multiple upgrade selections
+      optionPositions: {},       // stores click positions for upgrade options
     };
     
     // Track last mouse screen position for camera movement updates
@@ -375,14 +375,6 @@ class GameClient {
       }
     }
     
-    // Handle upgrade UI toggle
-    if (e.key === 'u' || e.key === 'U') {
-      if (this.gameState.myPlayer && this.gameState.myPlayer.availableUpgrades > 0) {
-        this.upgradeUI.showUpgradeButtons = !this.upgradeUI.showUpgradeButtons;
-        this.upgradeUI.selectedUpgradeType = null;
-      }
-    }
-    
     if (inputChanged) {
       this.sendInput();
     }
@@ -483,49 +475,52 @@ class GameClient {
   }
 
   handleUpgradeUIClick(screenX, screenY) {
-    if (!this.gameState.myPlayer || !this.upgradeUI.showUpgradeButtons || this.upgradeUI.pendingUpgrade) return;
+    if (!this.gameState.myPlayer || this.gameState.myPlayer.availableUpgrades <= 0 || this.upgradeUI.pendingUpgrade) return;
     
-    // Check upgrade type button clicks
-    const buttonWidth = 100;
-    const buttonHeight = 40;
-    const spacing = 20;
-    const totalWidth = (buttonWidth * 4) + (spacing * 3);
-    const startX = (this.screenWidth - totalWidth) / 2;
-    const buttonY = this.screenHeight - 150;
-    
+    // First check if clicking on upgrade type buttons
+    const availableTypes = [];
     const upgradeTypes = ['side', 'top', 'front', 'rear'];
     
-    for (let i = 0; i < upgradeTypes.length; i++) {
-      const type = upgradeTypes[i];
-      const x = startX + (buttonWidth + spacing) * i;
-      
-      if (!this.hasAvailableUpgrades(type)) continue;
-      
-      if (screenX >= x && screenX <= x + buttonWidth && 
-          screenY >= buttonY && screenY <= buttonY + buttonHeight) {
-        this.upgradeUI.selectedUpgradeType = type;
-        return;
+    for (const type of upgradeTypes) {
+      if (this.hasAvailableUpgrades(type)) {
+        availableTypes.push(type);
       }
     }
     
-    // Check upgrade option clicks
-    if (this.upgradeUI.selectedUpgradeType) {
-      const options = this.getAvailableUpgrades(this.upgradeUI.selectedUpgradeType);
-      if (options && options.length > 0) {
-        const optionHeight = 50;
-        const optionWidth = 200;
-        const spacingOpt = 10;
-        const totalHeight = (optionHeight * options.length) + (spacingOpt * (options.length - 1));
-        const startY = this.screenHeight - 250 - totalHeight;
-        const x = (this.screenWidth - optionWidth) / 2;
+    if (availableTypes.length > 0) {
+      const buttonWidth = 100;
+      const buttonHeight = 40;
+      const spacing = 20;
+      const totalWidth = (buttonWidth * availableTypes.length) + (spacing * (availableTypes.length - 1));
+      const startX = (this.screenWidth - totalWidth) / 2;
+      const buttonY = this.screenHeight - 150;
+      
+      for (let i = 0; i < availableTypes.length; i++) {
+        const type = availableTypes[i];
+        const x = startX + (buttonWidth + spacing) * i;
         
-        for (let i = 0; i < options.length; i++) {
-          const y = startY + (optionHeight + spacingOpt) * i;
-          
-          if (screenX >= x && screenX <= x + optionWidth && 
-              screenY >= y && screenY <= y + optionHeight) {
+        if (screenX >= x && screenX <= x + buttonWidth && 
+            screenY >= buttonY && screenY <= buttonY + buttonHeight) {
+          // Toggle selection - if already selected, deselect; otherwise select
+          if (this.upgradeUI.selectedUpgradeType === type) {
+            this.upgradeUI.selectedUpgradeType = null;
+          } else {
+            this.upgradeUI.selectedUpgradeType = type;
+          }
+          return;
+        }
+      }
+    }
+    
+    // Then check upgrade option clicks using stored positions
+    if (this.upgradeUI.optionPositions && this.upgradeUI.selectedUpgradeType) {
+      const positions = this.upgradeUI.optionPositions[this.upgradeUI.selectedUpgradeType];
+      if (positions) {
+        for (const pos of positions) {
+          if (screenX >= pos.x && screenX <= pos.x + pos.width && 
+              screenY >= pos.y && screenY <= pos.y + pos.height) {
             // Select upgrade
-            this.selectUpgrade(this.upgradeUI.selectedUpgradeType, options[i].name);
+            this.selectUpgrade(this.upgradeUI.selectedUpgradeType, pos.option.name);
             return;
           }
         }
@@ -551,8 +546,7 @@ class GameClient {
     this.input.selectUpgrade = '';
     this.input.upgradeChoice = '';
     
-    // Close upgrade UI
-    this.upgradeUI.showUpgradeButtons = false;
+    // Clear selected upgrade type to hide the options
     this.upgradeUI.selectedUpgradeType = null;
     
     // Reset pending flag after a delay (or when server confirms upgrade)
@@ -1161,7 +1155,7 @@ drawPlayer(player) {
     this.ctx.fillText('E: Fire Right Cannons', x + 10, y + 70);
     this.ctx.fillText('Mouse: Aim Turrets', x + 10, y + 85);
     this.ctx.fillText('L: Debug Level Up', x + 10, y + 100);
-    this.ctx.fillText('U: Upgrade Menu', x + 10, y + 115);
+    this.ctx.fillText('Click: Select Upgrades', x + 10, y + 115);
     this.ctx.fillText('+/-: Add/Remove Cannons', x + 10, y + 130);
     this.ctx.fillText('P/O: Add/Remove Scatter', x + 10, y + 145);
     this.ctx.fillText('[/]: Add/Remove Turrets', x + 10, y + 160);
@@ -1248,37 +1242,44 @@ drawPlayer(player) {
     if (player.availableUpgrades > 0) {
       this.ctx.fillStyle = '#FFD700';
       this.ctx.font = 'bold 18px Arial';
-      this.ctx.fillText(`${player.availableUpgrades} Upgrade${player.availableUpgrades > 1 ? 's' : ''} Available! Press U`, this.screenWidth / 2, barY - 40);
+      this.ctx.fillText(`${player.availableUpgrades} Upgrade${player.availableUpgrades > 1 ? 's' : ''} Available!`, this.screenWidth / 2, barY - 40);
     }
   }
   
   drawUpgradeUI() {
-    if (!this.gameState.myPlayer || !this.upgradeUI.showUpgradeButtons) return;
+    if (!this.gameState.myPlayer) return;
     
     const player = this.gameState.myPlayer;
     if (player.availableUpgrades <= 0) {
-      this.upgradeUI.showUpgradeButtons = false;
       return;
     }
     
-    // Draw upgrade type buttons (side, top, front, rear)
+    // Collect available upgrade types
+    const availableTypes = [];
+    const upgradeTypes = ['side', 'top', 'front', 'rear'];
+    
+    for (const type of upgradeTypes) {
+      if (this.hasAvailableUpgrades(type)) {
+        availableTypes.push(type);
+      }
+    }
+    
+    if (availableTypes.length === 0) return;
+    
+    // Draw upgrade type buttons (always centered based on available types)
     const buttonWidth = 100;
     const buttonHeight = 40;
     const spacing = 20;
-    const totalWidth = (buttonWidth * 4) + (spacing * 3);
+    const totalWidth = (buttonWidth * availableTypes.length) + (spacing * (availableTypes.length - 1));
     const startX = (this.screenWidth - totalWidth) / 2;
     const buttonY = this.screenHeight - 150;
     
-    const upgradeTypes = ['side', 'top', 'front', 'rear'];
+    const buttonPositions = {};
     
-    for (let i = 0; i < upgradeTypes.length; i++) {
-      const type = upgradeTypes[i];
+    for (let i = 0; i < availableTypes.length; i++) {
+      const type = availableTypes[i];
       const x = startX + (buttonWidth + spacing) * i;
-      
-      // Check if upgrades are available for this type
-      const hasUpgrades = this.hasAvailableUpgrades(type);
-      
-      if (!hasUpgrades) continue; // Skip if no upgrades available
+      buttonPositions[type] = x;
       
       // Button background
       this.ctx.fillStyle = this.upgradeUI.selectedUpgradeType === type ? '#4ECDC4' : 'rgba(0, 0, 0, 0.8)';
@@ -1294,43 +1295,58 @@ drawPlayer(player) {
       this.ctx.font = 'bold 16px Arial';
       this.ctx.textAlign = 'center';
       this.ctx.fillText(type.toUpperCase(), x + buttonWidth / 2, buttonY + buttonHeight / 2 + 6);
-    }
-    
-    // Draw specific upgrade options if a type is selected
-    if (this.upgradeUI.selectedUpgradeType) {
-      this.drawUpgradeOptions(this.upgradeUI.selectedUpgradeType);
+      
+      // Draw upgrade options only for the selected type
+      if (this.upgradeUI.selectedUpgradeType === type) {
+        this.drawUpgradeOptionsForType(type, x, buttonY, buttonWidth);
+      }
     }
   }
   
-  drawUpgradeOptions(upgradeType) {
+  drawUpgradeOptionsForType(upgradeType, buttonX, buttonY, buttonWidth) {
     const options = this.getAvailableUpgrades(upgradeType);
     if (!options || options.length === 0) return;
     
-    const optionHeight = 50;
-    const optionWidth = 200;
-    const spacing = 10;
+    const optionHeight = 40;
+    const optionWidth = Math.max(buttonWidth, 150); // At least as wide as button
+    const spacing = 5;
     const totalHeight = (optionHeight * options.length) + (spacing * (options.length - 1));
-    const startY = this.screenHeight - 250 - totalHeight;
-    const x = (this.screenWidth - optionWidth) / 2;
+    
+    // Position options directly above the button, centered on it
+    const optionsX = buttonX + (buttonWidth - optionWidth) / 2;
+    const optionsStartY = buttonY - totalHeight - 20; // 20px gap above button
+    
+    // Clear all option positions and only store for the selected type
+    this.upgradeUI.optionPositions = {};
+    this.upgradeUI.optionPositions[upgradeType] = [];
     
     for (let i = 0; i < options.length; i++) {
       const option = options[i];
-      const y = startY + (optionHeight + spacing) * i;
+      const y = optionsStartY + (optionHeight + spacing) * i;
+      
+      // Store position for click detection
+      this.upgradeUI.optionPositions[upgradeType].push({
+        x: optionsX,
+        y: y,
+        width: optionWidth,
+        height: optionHeight,
+        option: option
+      });
       
       // Option background
       this.ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
-      this.ctx.fillRect(x, y, optionWidth, optionHeight);
+      this.ctx.fillRect(optionsX, y, optionWidth, optionHeight);
       
       // Option border
       this.ctx.strokeStyle = '#4ECDC4';
       this.ctx.lineWidth = 2;
-      this.ctx.strokeRect(x, y, optionWidth, optionHeight);
+      this.ctx.strokeRect(optionsX, y, optionWidth, optionHeight);
       
       // Option text
       this.ctx.fillStyle = '#ffffff';
-      this.ctx.font = 'bold 16px Arial';
+      this.ctx.font = 'bold 14px Arial';
       this.ctx.textAlign = 'center';
-      this.ctx.fillText(option.name, x + optionWidth / 2, y + optionHeight / 2 + 6);
+      this.ctx.fillText(option.name, optionsX + optionWidth / 2, y + optionHeight / 2 + 5);
     }
   }
   
