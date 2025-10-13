@@ -633,15 +633,15 @@ drawPlayer(player) {
   const screenX = player.x - this.camera.x;
   const screenY = player.y - this.camera.y;
 
-  const size = player.size || 20;
+  const size = player.size || 50;
   const color = player.color || '#d9534f';
   const angle = player.angle || 0;
 
   // --- Ship dimensions from backend ---
   const bowLength = size * 0.4;
-  const shaftLength = player.shipLength || size * 1.2; // Backend provides the shaft length directly
+  const shaftLength = player.shipConfig.shipLength || size * 1.2; // Backend provides the shaft length directly
   const rearLength = size * 0.3;
-  const shaftWidth = player.shipWidth || size * 0.6;
+  const shaftWidth = player.shipConfig.shipWidth || size * 0.6;
   const totalRearLength = rearLength;
 
   // --- Cannon rendering dimensions ---
@@ -689,39 +689,29 @@ drawPlayer(player) {
   ctx.strokeStyle = '#444';
   ctx.stroke();
 
-  // --- Draw cannons using positions from backend ---
+  // --- Draw cannons using new modular system ---
   ctx.fillStyle = '#444';
 
-  // Draw left side cannons using backend-provided positions
-  if (player.leftCannons && player.leftCannons.length > 0) {
-    for (const cannon of player.leftCannons) {
+  // Draw side cannons from modular system
+  if (player.shipConfig && player.shipConfig.sideUpgrade && player.shipConfig.sideUpgrade.cannons) {
+    for (const cannon of player.shipConfig.sideUpgrade.cannons) {
       // Backend provides relative positions, draw cannon rectangle centered on that position
-      const x = cannon.x - gunLength / 2; // Convert center to top-left for fillRect
-      const y = cannon.y - gunWidth / 2;  // Convert center to top-left for fillRect
+      const x = cannon.position.x - gunLength / 2; // Convert center to top-left for fillRect
+      const y = cannon.position.y - gunWidth / 2;  // Convert center to top-left for fillRect
       ctx.fillRect(x, y, gunLength, gunWidth);
     }
   }
 
-  // Draw right side cannons using backend-provided positions
-  if (player.rightCannons && player.rightCannons.length > 0) {
-    for (const cannon of player.rightCannons) {
-      // Backend provides relative positions, draw cannon rectangle centered on that position
-      const x = cannon.x - gunLength / 2; // Convert center to top-left for fillRect
-      const y = cannon.y - gunWidth / 2;  // Convert center to top-left for fillRect
-      ctx.fillRect(x, y, gunLength, gunWidth);
-    }
-  }
-
-  // --- Draw turrets using positions from backend ---
-  if (player.turrets && player.turrets.length > 0) {
-    for (const turret of player.turrets) {
+  // --- Draw turrets using new modular system ---
+  if (player.shipConfig && player.shipConfig.topUpgrade && player.shipConfig.topUpgrade.turrets) {
+    for (const turret of player.shipConfig.topUpgrade.turrets) {
       // Draw turret base (circular mount)
       const turretSize = size * 0.5;
       const barrelLength = size * 0.5;
       const barrelWidth = size * 0.2;
       
       ctx.save();
-      ctx.translate(turret.x, turret.y);
+      ctx.translate(turret.position.x, turret.position.y);
 
       // Draw turret barrel (rotated to turret.angle)
       // Since the canvas is already rotated to the ship's angle, we need to counter-rotate

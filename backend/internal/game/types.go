@@ -26,54 +26,36 @@ type InputMsg struct {
 	} `json:"mouse"`
 }
 
-// CannonPosition represents the relative position of a single cannon from ship center
-type CannonPosition struct {
+// Position represents the relative position of a single cannon from ship center
+type Position struct {
 	X float32 `json:"x"` // Relative X position from ship center
 	Y float32 `json:"y"` // Relative Y position from ship center
 }
 
-// TurretType represents different types of turrets
-type TurretType int
-
-const (
-	TurretTypeSingle TurretType = iota // Single rotatable gun
-)
-
-// Turret represents a center-mounted rotatable gun
-type Turret struct {
-	X     float32    `json:"x"`     // Relative X position from ship center
-	Y     float32    `json:"y"`     // Relative Y position from ship center
-	Angle float32    `json:"angle"` // Turret rotation angle in radians
-	Type  TurretType `json:"type"`  // Type of turret
-}
-
 // Player represents a game player
 type Player struct {
-	ID                 uint32           `json:"id"`
-	X                  float32          `json:"x"`
-	Y                  float32          `json:"y"`
-	VelX               float32          `json:"velX"`
-	VelY               float32          `json:"velY"`
-	Angle              float32          `json:"angle"` // Ship facing direction in radians
-	AngularVelocity    float32          `json:"-"`     // Current angular velocity (radians per update)
-	Size               float32          `json:"size"`
-	Score              int              `json:"score"`
-	State              int              `json:"state"`
-	Name               string           `json:"name"`
-	Color              string           `json:"color"`
-	Health             int              `json:"health"`
-	MaxHealth          int              `json:"maxHealth"`
-	LastShotTime       time.Time        `json:"-"`
-	LastTurretShotTime time.Time        `json:"-"`               // When turrets last fired (shared cooldown)
-	RespawnTime        time.Time        `json:"-"`               // When the player can respawn
-	CannonCount        int              `json:"cannonCount"`     // Number of cannons per side
-	ShipLength         float32          `json:"shipLength"`      // Length of the ship
-	ShipWidth          float32          `json:"shipWidth"`       // Width of the ship
-	CollisionRadius    float32          `json:"collisionRadius"` // Dynamic collision radius
-	LeftCannons        []CannonPosition `json:"leftCannons"`     // Relative positions of left side cannons
-	RightCannons       []CannonPosition `json:"rightCannons"`    // Relative positions of right side cannons
-	TurretCount        int              `json:"turretCount"`     // Number of turrets
-	Turrets            []Turret         `json:"turrets"`         // Center-mounted turret positions
+	ID                 uint32    `json:"id"`
+	X                  float32   `json:"x"`
+	Y                  float32   `json:"y"`
+	VelX               float32   `json:"velX"`
+	VelY               float32   `json:"velY"`
+	Angle              float32   `json:"angle"` // Ship facing direction in radians
+	AngularVelocity    float32   `json:"-"`     // Current angular velocity (radians per update)
+	Score              int       `json:"score"`
+	State              int       `json:"state"`
+	Name               string    `json:"name"`
+	Color              string    `json:"color"`
+	Health             int       `json:"health"`
+	MaxHealth          int       `json:"maxHealth"`
+	LastShotTime       time.Time `json:"-"`
+	LastTurretShotTime time.Time `json:"-"` // When turrets last fired (shared cooldown)
+	RespawnTime        time.Time `json:"-"` // When the player can respawn
+	// Category-specific reload times
+	LastSideUpgradeShot  time.Time         `json:"-"`          // When side upgrades last fired
+	LastTopUpgradeShot   time.Time         `json:"-"`          // When top upgrades last fired
+	LastFrontUpgradeShot time.Time         `json:"-"`          // When front upgrades last fired
+	LastRearUpgradeShot  time.Time         `json:"-"`          // When rear upgrades last fired
+	ShipConfig           ShipConfiguration `json:"shipConfig"` // New modular upgrade system
 }
 
 // GameItem represents collectible items in the game
@@ -95,6 +77,7 @@ type Bullet struct {
 	OwnerID   uint32    `json:"ownerId"`
 	CreatedAt time.Time `json:"-"`
 	Size      float32   `json:"size"`
+	Damage    int       `json:"damage"`
 }
 
 // Snapshot represents the current game state sent to clients
@@ -150,27 +133,30 @@ func NewClient(id uint32, conn *websocket.Conn) *Client {
 
 // NewPlayer creates a new player with default values
 func NewPlayer(id uint32) *Player {
-	cannonCount := 1 // Default number of cannons per side
-	turretCount := 1 // Default number of turrets
 	// Calculate initial shaft length (same logic as updateShipDimensions)
 	shipLength := float32(PlayerSize*1.2) * 0.5 // Base shaft length for 1 cannon
 	shipWidth := float32(PlayerSize * 0.8)
 
+	shipConfig := ShipConfiguration{
+		SideUpgrade:  NewBasicSideCannons(1),
+		TopUpgrade:   NewBasicTurrets(0),
+		FrontUpgrade: nil,
+		RearUpgrade:  nil,
+		ShipLength:   shipLength,
+		ShipWidth:    shipWidth,
+		Size:         PlayerSize,
+	}
+
 	return &Player{
-		ID:              id,
-		X:               WorldWidth / 2,
-		Y:               WorldHeight / 2,
-		Size:            PlayerSize,
-		State:           StateAlive,
-		Health:          100,
-		MaxHealth:       100,
-		Color:           generateRandomColor(),
-		Name:            generateRandomName(),
-		CannonCount:     cannonCount,
-		TurretCount:     turretCount,
-		ShipLength:      shipLength,
-		ShipWidth:       shipWidth,
-		CollisionRadius: calculateCollisionRadius(shipLength, shipWidth),
+		ID:         id,
+		X:          WorldWidth / 2,
+		Y:          WorldHeight / 2,
+		State:      StateAlive,
+		Health:     100,
+		MaxHealth:  100,
+		Color:      generateRandomColor(),
+		Name:       generateRandomName(),
+		ShipConfig: shipConfig,
 	}
 }
 
