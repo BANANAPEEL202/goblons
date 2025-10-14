@@ -9,12 +9,12 @@ import (
 type WeaponType string
 
 const (
-	WeaponTypeCannon     WeaponType = "cannon"
-	WeaponTypeTurret     WeaponType = "turret"
-	WeaponTypeTwinTurret WeaponType = "twin_turret"
-	WeaponTypeRam        WeaponType = "ram"
-	WeaponTypeRudder     WeaponType = "rudder"
-	WeaponTypeScatter    WeaponType = "scatter"
+	WeaponTypeCannon           WeaponType = "cannon"
+	WeaponTypeTurret           WeaponType = "turret"
+	WeaponTypeMachineGunTurret WeaponType = "machine_gun_turret"
+	WeaponTypeRam              WeaponType = "ram"
+	WeaponTypeRudder           WeaponType = "rudder"
+	WeaponTypeScatter          WeaponType = "scatter"
 )
 
 // CannonStats holds the properties of a cannon
@@ -79,8 +79,8 @@ func (c *Cannon) Fire(world *World, player *Player, targetAngle float32, now tim
 		bulletVelY := float32(math.Sin(float64(bulletAngle))) * bulletSpeed
 
 		// Add ship's linear velocity
-		bulletVelX += player.VelX * 0.7
-		bulletVelY += player.VelY * 0.7
+		//bulletVelX += player.VelX * 0.7
+		//bulletVelY += player.VelY * 0.7
 
 		// Add tangential velocity from ship rotation
 		/*
@@ -142,7 +142,7 @@ func (t *Turret) UpdateAiming(player *Player, targetX, targetY float32) {
 
 // CanFire checks if any cannon in the turret can fire and target is in range
 func (t *Turret) CanFire(player *Player, targetX, targetY float32, now time.Time) bool {
-	if t.Type == WeaponTypeTwinTurret && len(t.Cannons) > 1 {
+	if t.Type == WeaponTypeMachineGunTurret && len(t.Cannons) > 1 {
 		// For twin turrets, check turret reload time (shared between cannons)
 		if t.NextCannonIndex >= len(t.Cannons) {
 			t.NextCannonIndex = 0
@@ -166,7 +166,7 @@ func (t *Turret) CanFire(player *Player, targetX, targetY float32, now time.Time
 func (t *Turret) Fire(world *World, player *Player, now time.Time) []*Bullet {
 	var allBullets []*Bullet
 
-	if t.Type == WeaponTypeTwinTurret && len(t.Cannons) > 1 {
+	if t.Type == WeaponTypeMachineGunTurret && len(t.Cannons) > 1 {
 		// Twin turret: fire alternating cannons with shared reload time
 		if t.NextCannonIndex >= len(t.Cannons) {
 			t.NextCannonIndex = 0
@@ -211,8 +211,8 @@ func (t *Turret) Fire(world *World, player *Player, now time.Time) []*Bullet {
 				bulletVelY := float32(math.Sin(float64(bulletAngle))) * bulletSpeed
 
 				// Add ship's linear velocity
-				bulletVelX += player.VelX * 0.7
-				bulletVelY += player.VelY * 0.7
+				//bulletVelX += player.VelX * 0.7
+				//bulletVelY += player.VelY * 0.7
 
 				// Calculate bullet damage and size with upgrades
 				baseDamage := float32(BulletDamage) * cannon.Stats.BulletDamageMod
@@ -260,8 +260,8 @@ func (t *Turret) Fire(world *World, player *Player, now time.Time) []*Bullet {
 // Predefined cannon types for easy configuration
 func NewBasicCannon() CannonStats {
 	return CannonStats{
-		ReloadTime:      1.0, // 1 second reload
-		BulletSpeedMod:  1.0, // Normal speed
+		ReloadTime:      1.5, // 1 second reload
+		BulletSpeedMod:  0.7, // Normal speed
 		BulletDamageMod: 1.0, // Normal damage
 		BulletCount:     1,   // Single shot
 		SpreadAngle:     0,   // No spread
@@ -289,8 +289,8 @@ func NewScatterCannon() CannonStats {
 		BulletDamageMod: 0.6,
 		BulletCount:     3,   // Fires 3 bullets
 		SpreadAngle:     0.5, // ~30 degree spread
-		Range:           300, // Limited range
-		Size:            1.2,
+		Range:           0,   // Limited range
+		Size:            0.7,
 	}
 }
 
@@ -306,14 +306,14 @@ func NewTurretCannon() CannonStats {
 	}
 }
 
-func NewTwinTurretCannon() CannonStats {
+func NewMachineGunCannon() CannonStats {
 	return CannonStats{
-		ReloadTime:      0.5,
-		BulletSpeedMod:  1.0,
-		BulletDamageMod: 0.5,
+		ReloadTime:      0.2,
+		BulletSpeedMod:  1,
+		BulletDamageMod: 0.1,
 		BulletCount:     1,
 		SpreadAngle:     0,
 		Range:           0,
-		Size:            0.8,
+		Size:            0.7,
 	}
 }
