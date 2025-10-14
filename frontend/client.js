@@ -1194,7 +1194,7 @@ drawPlayer(player) {
     const player = this.gameState.myPlayer;
     const panelX = 10;
     const panelY = 10; // Top left corner
-    const panelWidth = 270;
+    const panelWidth = 250;
     
     // Calculate total upgrades for the counter
     let totalUpgrades = 0;
