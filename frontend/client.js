@@ -616,8 +616,19 @@ class GameClient {
     const cost = statUpgrade.currentCost || 10;
     const coins = player.coins || 0;
     
+    // Calculate total upgrades across all stats
+    let totalUpgrades = 0;
+    Object.values(player.statUpgrades).forEach(upgrade => {
+      totalUpgrades += upgrade.level || 0;
+    });
+    
     if (level >= maxLevel) {
       console.log(`${statNames[statKey]} is already at maximum level (${maxLevel})`);
+      return;
+    }
+    
+    if (totalUpgrades >= 75) {
+      console.log(`Cannot upgrade ${statNames[statKey]} - Total upgrade limit reached (75/75)`);
       return;
     }
     
@@ -1187,18 +1198,57 @@ drawPlayer(player) {
     const player = this.gameState.myPlayer;
     const panelX = 10;
     const panelY = 10; // Top left corner
-    const panelWidth = 350;
+    const panelWidth = 270;
     
-    // Title
+    // Calculate total upgrades for the counter
+    let totalUpgrades = 0;
+    if (player.statUpgrades) {
+      Object.values(player.statUpgrades).forEach(upgrade => {
+        totalUpgrades += upgrade.level || 0;
+      });
+    }
+    
+    // Title bar with background
+    const titleBarHeight = 25;
+    const titleBarY = panelY + 5;
+    
+    // Title background
+    this.ctx.fillStyle = 'rgba(64, 64, 64, 0.8)';
+    this.drawRoundedRect(panelX, titleBarY, panelWidth, titleBarHeight, 5);
+    this.ctx.fill();
+    
+    // Title border
+    this.ctx.strokeStyle = 'rgba(64, 64, 64, 0.8)';
+    this.ctx.lineWidth = 2;
+    this.drawRoundedRect(panelX, titleBarY, panelWidth, titleBarHeight, 5);
+    this.ctx.stroke();
+    
+    // Title text (centered)
     this.ctx.fillStyle = '#FFFFFF';
     this.ctx.font = 'bold 16px Arial';
-    this.ctx.textAlign = 'left';
-    this.ctx.fillText('Stat Upgrades', panelX, panelY + 20);
+    this.ctx.textAlign = 'center';
+    this.ctx.fillText(`Stat Upgrades ${totalUpgrades}/75`, panelX + panelWidth / 2, titleBarY + 18);
     
-    // Coins display
+    // Coins bar with background
+    const coinsBarHeight = 25;
+    const coinsBarY = titleBarY + titleBarHeight + 5;
+    
+    // Coins background
+    this.ctx.fillStyle = 'rgba(64, 64, 64, 0.8)';
+    this.drawRoundedRect(panelX, coinsBarY, panelWidth, coinsBarHeight, 5);
+    this.ctx.fill();
+    
+    // Coins border
+    this.ctx.strokeStyle = 'rgba(64, 64, 64, 0.8)';
+    this.ctx.lineWidth = 2;
+    this.drawRoundedRect(panelX, coinsBarY, panelWidth, coinsBarHeight, 5);
+    this.ctx.stroke();
+    
+    // Coins text (centered)
     this.ctx.fillStyle = '#FFFFFF';
     this.ctx.font = 'bold 14px Arial';
-    this.ctx.fillText(`$ Coins: ${player.coins || 0}`, panelX, panelY + 40);
+    this.ctx.textAlign = 'center';
+    this.ctx.fillText(`$ Coins: ${player.coins || 0}`, panelX + panelWidth / 2, coinsBarY + 18);
     
     // Stat upgrades
     if (player.statUpgrades) {
@@ -1213,7 +1263,7 @@ drawPlayer(player) {
         'bodyDamage': 'Body Damage'
       };
       
-      let yOffset = 55;
+      let yOffset = coinsBarY + coinsBarHeight ; // Start after coins bar
       const statOrder = [
         'hullStrength', 'autoRepairs', 'cannonRange', 'cannonDamage',
         'reloadSpeed', 'moveSpeed', 'turnSpeed', 'bodyDamage'
@@ -1228,14 +1278,14 @@ drawPlayer(player) {
           const keyNumber = index + 1;
           
           // Individual upgrade bar with padding
-          const barX = panelX + 5;
+          const barX = panelX;
           const barY = panelY + yOffset;
-          const barWidth = panelWidth - 80; // Leave space for key number on the right
+          const barWidth = panelWidth; // Leave space for key number on the right
           const barHeight = 20;
           const borderRadius = 5;
           
           // Background (empty part)
-          this.ctx.fillStyle = '#404040'; // Dark gray
+          this.ctx.fillStyle = 'rgba(64, 64, 64, 0.8)';
           this.drawRoundedRect(barX, barY, barWidth, barHeight, borderRadius);
           this.ctx.fill();
           
@@ -1243,9 +1293,7 @@ drawPlayer(player) {
           const progress = level / maxLevel;
           const fillWidth = barWidth * progress;
           
-          if (level === maxLevel) {
-            this.ctx.fillStyle = '#FFFFFF'; // White for maxed
-          } else if (level > 0) {
+          if (level > 0) {
             this.ctx.fillStyle = '#B0B0B0'; // Light gray for upgraded
           } else {
             this.ctx.fillStyle = '#606060'; // Medium gray for no upgrades
@@ -1257,7 +1305,7 @@ drawPlayer(player) {
           }
           
           // Border
-          this.ctx.strokeStyle = '#404040'; // Dark gray border
+          this.ctx.strokeStyle = 'rgba(64, 64, 64, 0.8)';
           this.ctx.lineWidth = 2;
           this.drawRoundedRect(barX, barY, barWidth, barHeight, borderRadius);
           this.ctx.stroke();
@@ -1269,7 +1317,7 @@ drawPlayer(player) {
           // Center: Stat name
           const centerText = `${statNames[statKey]}`;
           const centerTextWidth = this.ctx.measureText(centerText).width;
-          this.ctx.fillText(centerText, barX + (barWidth - centerTextWidth) / 2, barY + 14);
+          this.ctx.fillText(centerText, barX + 10 + centerTextWidth / 2, barY + 14);
           
           // Right side: Cost or MAX (inside bar)
           let rightText;
@@ -1293,13 +1341,15 @@ drawPlayer(player) {
       });
       
       // Instructions
-      this.ctx.fillStyle = '#B0B0B0';
+      this.ctx.fillStyle = '#FFFFFF';
       this.ctx.font = '11px Arial';
-      this.ctx.fillText('Press 1-8 to upgrade stats', panelX, panelY + yOffset + 10);
+      this.ctx.textAlign = 'left';
+      this.ctx.fillText('Press 1-8 to upgrade stats', panelX, yOffset + 20);
     } else {
       this.ctx.fillStyle = '#B0B0B0';
       this.ctx.font = '12px Arial';
-      this.ctx.fillText('No stat upgrade data available', panelX, panelY + 70);
+      this.ctx.textAlign = 'left';
+      this.ctx.fillText('No stat upgrade data available', panelX, coinsBarY + coinsBarHeight + 30);
     }
   }
 

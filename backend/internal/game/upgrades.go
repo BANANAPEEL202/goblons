@@ -438,6 +438,17 @@ func UpgradeStatLevel(player *Player, upgradeType StatUpgradeType) bool {
 		return false
 	}
 
+	// Calculate total upgrades across all stats
+	totalUpgrades := 0
+	for _, statUpgrade := range player.StatUpgrades {
+		totalUpgrades += statUpgrade.Level
+	}
+
+	// Check if total upgrade limit is reached (75)
+	if totalUpgrades >= 75 {
+		return false
+	}
+
 	// Check if player has enough coins
 	if player.Coins < upgrade.CurrentCost {
 		return false
