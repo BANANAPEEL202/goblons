@@ -159,9 +159,12 @@ func (sc *ShipConfiguration) UpdateUpgradePositions() {
 // CalculateShipDimensions calculates ship size based on upgrades
 func (sc *ShipConfiguration) CalculateShipDimensions() {
 	// Start with base dimensions
-	baseSize := sc.Size
-	length := float32(PlayerSize*1.2) * 0.5 // Base shaft length for 1 cannon
-	width := float32(PlayerSize * 0.8)
+	size := sc.Size
+	baseLength := float32(size*1.2) * 0.5 // Base shaft length for 1 cannon
+	baseWidth := float32(size * 0.8)
+
+	sideLength := baseLength
+	turretLength := baseLength
 
 	// Add length for side cannons
 	maxSideCannonCount := 0
@@ -170,9 +173,9 @@ func (sc *ShipConfiguration) CalculateShipDimensions() {
 	}
 
 	if maxSideCannonCount > 1 {
-		gunLength := baseSize * 0.35
+		gunLength := size * 0.35
 		spacing := gunLength * 0.75
-		length += spacing * float32(maxSideCannonCount-1)
+		sideLength += spacing * float32(maxSideCannonCount-1)
 	}
 
 	// Add length for turrets
@@ -181,13 +184,12 @@ func (sc *ShipConfiguration) CalculateShipDimensions() {
 		turretCount = len(sc.TopUpgrade.Turrets)
 	}
 	if turretCount > 0 {
-		turretSpacing := baseSize * 0.7
-		turretLength := turretSpacing * float32(turretCount-1)
-		length = float32(math.Max(float64(length), float64(length+turretLength)))
+		turretSpacing := size * 0.7
+		turretLength = baseLength + turretSpacing*float32(turretCount-1)
 	}
 
-	sc.ShipLength = length
-	sc.ShipWidth = width
+	sc.ShipLength = max(sideLength, turretLength)
+	sc.ShipWidth = baseWidth
 }
 
 // Predefined upgrade templates
