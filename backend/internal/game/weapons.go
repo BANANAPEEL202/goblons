@@ -9,11 +9,12 @@ import (
 type WeaponType string
 
 const (
-	WeaponTypeCannon  WeaponType = "cannon"
-	WeaponTypeTurret  WeaponType = "turret"
-	WeaponTypeRam     WeaponType = "ram"
-	WeaponTypeRudder  WeaponType = "rudder"
-	WeaponTypeScatter WeaponType = "scatter"
+	WeaponTypeCannon     WeaponType = "cannon"
+	WeaponTypeTurret     WeaponType = "turret"
+	WeaponTypeTwinTurret WeaponType = "twin_turret"
+	WeaponTypeRam        WeaponType = "ram"
+	WeaponTypeRudder     WeaponType = "rudder"
+	WeaponTypeScatter    WeaponType = "scatter"
 )
 
 // CannonStats holds the properties of a cannon
@@ -93,8 +94,8 @@ func (c *Cannon) Fire(world *World, player *Player, targetAngle float32, now tim
 
 		// Calculate bullet damage and size with upgrades
 		baseDamage := float32(BulletDamage) * c.Stats.BulletDamageMod
-		finalDamage := baseDamage + effects["bulletDamage"] // Add cannon damage bonus
-		bulletSize := BulletSize + effects["bulletWidth"]   // Add bullet width bonus
+		finalDamage := baseDamage + effects["bulletDamage"]            // Add cannon damage bonus
+		bulletSize := BulletSize*c.Stats.Size + effects["bulletWidth"] // Add bullet width bonus
 
 		bullet := &Bullet{
 			ID:        world.bulletID,
@@ -118,13 +119,14 @@ func (c *Cannon) Fire(world *World, player *Player, targetAngle float32, now tim
 
 // Turret represents a rotatable weapon system with one or more cannons
 type Turret struct {
-	ID           uint32     `json:"id"`
-	Angle        float32    `json:"angle"` // Current aiming angle in world space
-	Cannons      []Cannon   `json:"cannons"`
-	Position     Position   `json:"position"`  // Relative position from ship center
-	TurnSpeed    float32    `json:"turnSpeed"` // How fast turret can rotate (rad/s)
-	LastFireTime time.Time  `json:"-"`
-	Type         WeaponType `json:"type"`
+	ID              uint32     `json:"id"`
+	Angle           float32    `json:"angle"` // Current aiming angle in world space
+	Cannons         []Cannon   `json:"cannons"`
+	Position        Position   `json:"position"`  // Relative position from ship center
+	TurnSpeed       float32    `json:"turnSpeed"` // How fast turret can rotate (rad/s)
+	LastFireTime    time.Time  `json:"-"`
+	Type            WeaponType `json:"type"`
+	NextCannonIndex int        `json:"nextCannonIndex"` // For alternating fire
 }
 
 // UpdateAiming updates the turret's angle to aim at target position
@@ -140,29 +142,116 @@ func (t *Turret) UpdateAiming(player *Player, targetX, targetY float32) {
 
 // CanFire checks if any cannon in the turret can fire and target is in range
 func (t *Turret) CanFire(player *Player, targetX, targetY float32, now time.Time) bool {
-	// Check if any cannon can fire
-	for _, cannon := range t.Cannons {
-		if cannon.CanFire(player, now) {
-			return true
+	if t.Type == WeaponTypeTwinTurret && len(t.Cannons) > 1 {
+		// For twin turrets, check turret reload time (shared between cannons)
+		if t.NextCannonIndex >= len(t.Cannons) {
+			t.NextCannonIndex = 0
 		}
+		effects := GetStatUpgradeEffects(player)
+		cannon := t.Cannons[t.NextCannonIndex]
+		reloadTime := float64(cannon.Stats.ReloadTime) * float64(effects["reloadSpeedMultiplier"])
+		return now.Sub(t.LastFireTime).Seconds() >= reloadTime
+	} else {
+		// For regular turrets, check if any cannon can fire
+		for _, cannon := range t.Cannons {
+			if cannon.CanFire(player, now) {
+				return true
+			}
+		}
+		return false
 	}
-	return false
 }
 
-// Fire makes all cannons in the turret fire simultaneously (ignore individual reload times)
+// Fire makes all cannons in the turret fire (simultaneously or alternating based on type)
 func (t *Turret) Fire(world *World, player *Player, now time.Time) []*Bullet {
-	// Check range only (ignore individual cannon reload times for simultaneous firing)
 	var allBullets []*Bullet
 
-	// Fire ALL cannons simultaneously (ignore individual reload times)
-	for i := range t.Cannons {
-		cannon := &t.Cannons[i]
-		bullets := cannon.Fire(world, player, t.Angle, now)
-		allBullets = append(allBullets, bullets...)
-	}
+	if t.Type == WeaponTypeTwinTurret && len(t.Cannons) > 1 {
+		// Twin turret: fire alternating cannons with shared reload time
+		if t.NextCannonIndex >= len(t.Cannons) {
+			t.NextCannonIndex = 0
+		}
 
-	if len(allBullets) > 0 {
-		t.LastFireTime = now
+		// Check turret reload time instead of individual cannon reload
+		effects := GetStatUpgradeEffects(player)
+		cannon := &t.Cannons[t.NextCannonIndex]
+		reloadTime := float64(cannon.Stats.ReloadTime) * float64(effects["reloadSpeedMultiplier"])
+
+		if now.Sub(t.LastFireTime).Seconds() >= reloadTime {
+			// Fire the specific cannon with proper position calculation
+			bullets := make([]*Bullet, 0, cannon.Stats.BulletCount)
+
+			// Calculate world position of cannon (turret position + cannon offset)
+			shipCos := float32(math.Cos(float64(player.Angle)))
+			shipSin := float32(math.Sin(float64(player.Angle)))
+
+			// First, get turret world position relative to ship (rotated by ship angle)
+			turretWorldX := player.X + (t.Position.X*shipCos - t.Position.Y*shipSin)
+			turretWorldY := player.Y + (t.Position.X*shipSin + t.Position.Y*shipCos)
+
+			// Then, add cannon offset relative to turret (rotated by turret angle)
+			turretCos := float32(math.Cos(float64(t.Angle)))
+			turretSin := float32(math.Sin(float64(t.Angle)))
+			worldX := turretWorldX + (cannon.Position.X*turretCos - cannon.Position.Y*turretSin)
+			worldY := turretWorldY + (cannon.Position.X*turretSin + cannon.Position.Y*turretCos)
+
+			// Create bullets
+			for i := 0; i < cannon.Stats.BulletCount; i++ {
+				// Calculate bullet angle (with spread for multi-bullet cannons)
+				bulletAngle := t.Angle
+				if cannon.Stats.BulletCount > 1 {
+					spreadOffset := cannon.Stats.SpreadAngle * (float32(i)/float32(cannon.Stats.BulletCount-1) - 0.5)
+					bulletAngle += spreadOffset
+				}
+
+				// Base bullet velocity with cannon range upgrade
+				bulletSpeed := BulletSpeed * cannon.Stats.BulletSpeedMod
+				bulletSpeed += effects["bulletSpeed"]
+				bulletVelX := float32(math.Cos(float64(bulletAngle))) * bulletSpeed
+				bulletVelY := float32(math.Sin(float64(bulletAngle))) * bulletSpeed
+
+				// Add ship's linear velocity
+				bulletVelX += player.VelX * 0.7
+				bulletVelY += player.VelY * 0.7
+
+				// Calculate bullet damage and size with upgrades
+				baseDamage := float32(BulletDamage) * cannon.Stats.BulletDamageMod
+				finalDamage := baseDamage + effects["bulletDamage"]
+				bulletSize := BulletSize*cannon.Stats.Size + effects["bulletWidth"]
+
+				bullet := &Bullet{
+					ID:        world.bulletID,
+					X:         worldX,
+					Y:         worldY,
+					VelX:      bulletVelX,
+					VelY:      bulletVelY,
+					OwnerID:   player.ID,
+					CreatedAt: now,
+					Size:      bulletSize,
+					Damage:    int(finalDamage),
+				}
+
+				bullets = append(bullets, bullet)
+				world.bulletID++
+			}
+
+			allBullets = append(allBullets, bullets...)
+
+			// Move to next cannon for alternating fire
+			t.NextCannonIndex = (t.NextCannonIndex + 1) % len(t.Cannons)
+			t.LastFireTime = now
+		}
+	} else {
+		// Regular turret: fire all cannons simultaneously
+		for i := range t.Cannons {
+			cannon := &t.Cannons[i]
+			bullets := cannon.Fire(world, player, t.Angle, now)
+			allBullets = append(allBullets, bullets...)
+		}
+
+		if len(allBullets) > 0 {
+			t.LastFireTime = now
+		}
 	}
 
 	return allBullets
@@ -178,18 +267,6 @@ func NewBasicCannon() CannonStats {
 		SpreadAngle:     0,   // No spread
 		Range:           0,   // Unlimited range
 		Size:            1.0, // Normal size
-	}
-}
-
-func NewFastCannon() CannonStats {
-	return CannonStats{
-		ReloadTime:      0.5, // Fast reload
-		BulletSpeedMod:  1.2, // 20% faster bullets
-		BulletDamageMod: 0.8, // 20% less damage
-		BulletCount:     1,
-		SpreadAngle:     0,
-		Range:           0,
-		Size:            0.8,
 	}
 }
 
@@ -219,12 +296,24 @@ func NewScatterCannon() CannonStats {
 
 func NewTurretCannon() CannonStats {
 	return CannonStats{
-		ReloadTime:      0.5, // Fast turret firing
+		ReloadTime:      1, // Fast turret firing
 		BulletSpeedMod:  1.0,
 		BulletDamageMod: 1.0,
 		BulletCount:     1,
 		SpreadAngle:     0,
 		Range:           0,
-		Size:            0.9,
+		Size:            1.0,
+	}
+}
+
+func NewTwinTurretCannon() CannonStats {
+	return CannonStats{
+		ReloadTime:      0.5,
+		BulletSpeedMod:  1.0,
+		BulletDamageMod: 0.5,
+		BulletCount:     1,
+		SpreadAngle:     0,
+		Range:           0,
+		Size:            0.8,
 	}
 }

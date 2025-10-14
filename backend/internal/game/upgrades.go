@@ -29,8 +29,8 @@ type ShipUpgrade struct {
 	Name    string        `json:"name"`
 	Count   int           `json:"level"`   // Upgrade level (1, 2, 3, etc.)
 	Effect  UpgradeEffect `json:"effect"`  // Stat modifications
-	Cannons []Cannon      `json:"cannons"` // Weapons (if applicable)
-	Turrets []Turret      `json:"turrets"` // Turret weapons (if applicable)
+	Cannons []*Cannon     `json:"cannons"` // Weapons (if applicable)
+	Turrets []*Turret     `json:"turrets"` // Turret weapons (if applicable)
 
 	NextUpgrades []*ShipUpgrade `json:"nextUpgrades,omitempty"` // Possible next upgrades
 
@@ -128,10 +128,13 @@ func (sc *ShipConfiguration) UpdateUpgradePositions() {
 				X: 0,
 				Y: 0,
 			}
-			for j := range topUpgrade.Turrets[0].Cannons {
-				topUpgrade.Turrets[0].Cannons[j].Position = Position{
-					X: 0,
-					Y: 0,
+			// Only reset cannon positions for regular turrets, not twin turrets
+			if topUpgrade.Turrets[0].Type != WeaponTypeTwinTurret {
+				for j := range topUpgrade.Turrets[0].Cannons {
+					topUpgrade.Turrets[0].Cannons[j].Position = Position{
+						X: 0,
+						Y: 0,
+					}
 				}
 			}
 		} else {
@@ -145,10 +148,13 @@ func (sc *ShipConfiguration) UpdateUpgradePositions() {
 					X: offset,
 					Y: 0,
 				}
-				for j := range topUpgrade.Turrets[i].Cannons {
-					topUpgrade.Turrets[i].Cannons[j].Position = Position{
-						X: offset,
-						Y: 0,
+				// Only reset cannon positions for regular turrets, not twin turrets
+				if topUpgrade.Turrets[i].Type != WeaponTypeTwinTurret {
+					for j := range topUpgrade.Turrets[i].Cannons {
+						topUpgrade.Turrets[i].Cannons[j].Position = Position{
+							X: offset,
+							Y: 0,
+						}
 					}
 				}
 			}
@@ -196,11 +202,11 @@ func (sc *ShipConfiguration) CalculateShipDimensions() {
 func NewBasicSideCannons(cannonCount int) *ShipUpgrade {
 	cannonCount = int(math.Max(1, float64(cannonCount))) // Ensure at least 1 cannon per side
 	// Create cannons for both sides (cannonCount per side)
-	cannons := make([]Cannon, cannonCount*2)
+	cannons := make([]*Cannon, cannonCount*2)
 
 	// Left side cannons - angle will be calculated dynamically based on ship orientation
 	for i := 0; i < cannonCount; i++ {
-		cannons[i] = Cannon{
+		cannons[i] = &Cannon{
 			ID:    uint32(i + 1),
 			Angle: 0, // Relative angle - actual angle calculated during firing
 			Stats: NewBasicCannon(),
@@ -210,7 +216,7 @@ func NewBasicSideCannons(cannonCount int) *ShipUpgrade {
 
 	// Right side cannons - angle will be calculated dynamically based on ship orientation
 	for i := 0; i < cannonCount; i++ {
-		cannons[cannonCount+i] = Cannon{
+		cannons[cannonCount+i] = &Cannon{
 			ID:    uint32(cannonCount + i + 1),
 			Angle: 0, // Relative angle - actual angle calculated during firing
 			Stats: NewBasicCannon(),
@@ -235,11 +241,11 @@ func NewBasicSideCannons(cannonCount int) *ShipUpgrade {
 func NewScatterSideCannons(cannonCount int) *ShipUpgrade {
 	cannonCount = int(math.Max(1, float64(cannonCount))) // Ensure at least 1 cannon per side
 	// Create scatter cannons for both sides (cannonCount per side)
-	cannons := make([]Cannon, cannonCount*2)
+	cannons := make([]*Cannon, cannonCount*2)
 
 	// Left side scatter cannons
 	for i := 0; i < cannonCount; i++ {
-		cannons[i] = Cannon{
+		cannons[i] = &Cannon{
 			ID:    uint32(i + 1),
 			Angle: 0, // Relative angle - actual angle calculated during firing
 			Stats: NewScatterCannon(),
@@ -249,7 +255,7 @@ func NewScatterSideCannons(cannonCount int) *ShipUpgrade {
 
 	// Right side scatter cannons
 	for i := 0; i < cannonCount; i++ {
-		cannons[cannonCount+i] = Cannon{
+		cannons[cannonCount+i] = &Cannon{
 			ID:    uint32(cannonCount + i + 1),
 			Angle: 0, // Relative angle - actual angle calculated during firing
 			Stats: NewScatterCannon(),
@@ -280,9 +286,9 @@ func NewBasicTurrets(turretCount int) *ShipUpgrade {
 		Type:  WeaponTypeCannon,
 	}
 
-	turrets := make([]Turret, turretCount)
+	turrets := make([]*Turret, turretCount)
 	for i := 0; i < turretCount; i++ {
-		turret := Turret{
+		turret := &Turret{
 			ID:      uint32(i + 1),
 			Angle:   0, // Will be controlled by turret aiming
 			Cannons: []Cannon{turretCannon},
@@ -305,11 +311,63 @@ func NewBasicTurrets(turretCount int) *ShipUpgrade {
 	}
 }
 
+func NewTwinTurrets(turretCount int) *ShipUpgrade {
+	turretCount = int(math.Max(0, float64(turretCount))) // Ensure non-negative
+
+	turrets := make([]*Turret, turretCount)
+	for i := 0; i < turretCount; i++ {
+		// Create two cannons for each twin turret, positioned side by side
+		leftCannon := Cannon{
+			ID:    uint32(i*2 + 1),
+			Angle: 0, // Will be controlled by turret aiming
+			Stats: NewTwinTurretCannon(),
+			Type:  WeaponTypeCannon,
+			Position: Position{
+				X: 0, // Slightly left of center
+				Y: -7,
+			},
+		}
+
+		rightCannon := Cannon{
+			ID:    uint32(i*2 + 2),
+			Angle: 0, // Will be controlled by turret aiming
+			Stats: NewTwinTurretCannon(),
+			Type:  WeaponTypeCannon,
+			Position: Position{
+				X: 0, // Slightly right of center
+				Y: 7,
+			},
+		}
+
+		turret := &Turret{
+			ID:              uint32(i + 1),
+			Angle:           0, // Will be controlled by turret aiming
+			Cannons:         []Cannon{leftCannon, rightCannon},
+			Type:            WeaponTypeTwinTurret,
+			NextCannonIndex: 0, // Start with the first cannon
+		}
+		turrets[i] = turret
+	}
+
+	return &ShipUpgrade{
+		Type:    UpgradeTypeTop,
+		Name:    "Twin Turret",
+		Count:   turretCount,
+		Turrets: turrets,
+		Effect: UpgradeEffect{
+			SpeedMultiplier:    0.96, // Slightly more penalty due to heavier turrets
+			TurnRateMultiplier: 0.92,
+			HealthBonus:        0,
+			ArmorBonus:         0,
+		},
+	}
+}
+
 func NewTopUpgradeTree() *ShipUpgrade {
 	root := &ShipUpgrade{
 		Type:    UpgradeTypeTop,
 		Name:    "No Top Upgrades",
-		Turrets: []Turret{},
+		Turrets: []*Turret{},
 	}
 
 	// Build the basic turret upgrade path: 1 -> 2 -> 3 -> 4
@@ -318,11 +376,22 @@ func NewTopUpgradeTree() *ShipUpgrade {
 	turret3 := NewBasicTurrets(3)
 	turret4 := NewBasicTurrets(4)
 
-	// Link the chain
-	root.NextUpgrades = []*ShipUpgrade{turret1}
+	// Build the twin turret upgrade path: 1 -> 2
+	twinTurret1 := NewTwinTurrets(1)
+	twinTurret2 := NewTwinTurrets(2)
+
+	// Link the upgrade paths
+	// From root, you can choose basic turret or twin turret
+	root.NextUpgrades = []*ShipUpgrade{turret1, twinTurret1}
+
+	// Basic turret path
 	turret1.NextUpgrades = []*ShipUpgrade{turret2}
 	turret2.NextUpgrades = []*ShipUpgrade{turret3}
 	turret3.NextUpgrades = []*ShipUpgrade{turret4}
+
+	// Twin turret path
+	twinTurret1.NextUpgrades = []*ShipUpgrade{twinTurret2} // Can branch to basic turrets
+	// twinTurret2 is end of path for now
 
 	return root
 }

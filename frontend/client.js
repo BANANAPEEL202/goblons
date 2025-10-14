@@ -991,22 +991,34 @@ drawPlayer(player) {
       ctx.save();
       ctx.translate(turret.position.x, turret.position.y);
 
-      // Draw turret barrel (rotated to turret.angle)
-      // Since the canvas is already rotated to the ship's angle, we need to counter-rotate
-      // the turret angle to get the correct world orientation
+      // Draw turret barrel(s) based on turret type
       ctx.rotate(turret.angle - angle);
       ctx.fillStyle = '#444';
-      ctx.fillRect(0, -barrelWidth / 2, barrelLength, barrelWidth);
-      ctx.strokeRect(0, -barrelWidth / 2, barrelLength, barrelWidth);
       
-      // Draw turret base
+      if (turret.type === 'twin_turret' && turret.cannons && turret.cannons.length >= 2) {
+        // Draw two parallel barrels for twin turret
+        const barrelSeparation = barrelWidth * 1.5;
+        
+        // Left barrel
+        ctx.fillRect(0, -barrelSeparation/2 - barrelWidth/2, barrelLength, barrelWidth);
+        ctx.strokeRect(0, -barrelSeparation/2 - barrelWidth/2, barrelLength, barrelWidth);
+        
+        // Right barrel
+        ctx.fillRect(0, barrelSeparation/2 - barrelWidth/2, barrelLength, barrelWidth);
+        ctx.strokeRect(0, barrelSeparation/2 - barrelWidth/2, barrelLength, barrelWidth);
+      } else {
+        // Single barrel for regular turret
+        ctx.fillRect(0, -barrelWidth / 2, barrelLength, barrelWidth);
+        ctx.strokeRect(0, -barrelWidth / 2, barrelLength, barrelWidth);
+      }
+      
+      // Draw turret base (slightly larger for twin turrets)
+      const baseSize = turret.type === 'twin_turret' ? turretSize * 0.7 : turretSize * 0.5;
       ctx.fillStyle = '#555';
       ctx.beginPath();
-      ctx.arc(0, 0, turretSize / 2, 0, Math.PI * 2);
+      ctx.arc(0, 0, baseSize, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
-      
-
       
       ctx.restore();
     }
