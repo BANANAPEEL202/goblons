@@ -828,12 +828,14 @@ drawPlayer(player) {
   ctx.stroke();
 
   // --- Center circle ---
-  ctx.beginPath();
-  ctx.arc(0, 0, shaftWidth * 0.2, 0, Math.PI * 2);
-  ctx.fillStyle = '#444';
-  ctx.fill();
-  ctx.strokeStyle = '#444';
-  ctx.stroke();
+  if (player.shipConfig && player.shipConfig.topUpgrade && player.shipConfig.topUpgrade.turrets && player.shipConfig.topUpgrade.turrets.length == 0) {
+    ctx.beginPath();
+    ctx.arc(0, 0, shaftWidth * 0.2, 0, Math.PI * 2);
+    ctx.fillStyle = '#444';
+    ctx.fill();
+    ctx.strokeStyle = '#444';
+    ctx.stroke();
+  }
 
   // --- Draw cannons using new modular system ---
   ctx.fillStyle = '#444';

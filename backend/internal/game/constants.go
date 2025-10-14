@@ -34,12 +34,10 @@ const (
 
 // Turret constants
 const (
-	TurretCooldown      = 0.5  // Seconds between turret shots (faster than cannons)
-	TurretRange         = 400  // Maximum turret firing range
-	MaxTurrets          = 20   // Maximum number of turrets
-	MinTurrets          = 0    // Minimum number of turrets
-	TurretSpacingFactor = 1.2  // Factor for spacing turrets along ship center line
-	TurretMargin        = 15.0 // Constant margin from ship edges in units
+	TurretCooldown = 0.5 // Seconds between turret shots (faster than cannons)
+	TurretRange    = 400 // Maximum turret firing range
+	MaxTurrets     = 20  // Maximum number of turrets
+	MinTurrets     = 0   // Minimum number of turrets
 )
 
 // Message types for client-server communication

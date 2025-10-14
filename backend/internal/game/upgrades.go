@@ -108,7 +108,7 @@ func (sc *ShipConfiguration) UpdateUpgradePositions() {
 				Y: sc.ShipWidth/2 + gunWidth/2,
 			}
 
-			// Right side cannon (negative Y in ship coordinates)
+			// Right side cannon (negative Y in ship coordinates)w
 			sideUpgrade.Cannons[cannonCount+i].Position = Position{
 				X: relativeX,
 				Y: -sc.ShipWidth/2 - gunWidth/2,
@@ -117,20 +117,39 @@ func (sc *ShipConfiguration) UpdateUpgradePositions() {
 	}
 
 	topUpgrade := sc.TopUpgrade
-	if topUpgrade != nil {
+	if topUpgrade != nil && len(topUpgrade.Turrets) > 0 {
 		// Position turrets evenly along the center line of the ship
-		turretSpacing := float64(sc.ShipLength) / float64(topUpgrade.Count+1)
+		// Use consistent spacing with the dimension calculation
+		turretSpacing := sc.Size * 0.7
 
-		for i := 0; i < topUpgrade.Count; i++ {
-			offset := -float64(sc.ShipLength/2) + turretSpacing*float64(i+1)
-			topUpgrade.Turrets[i].Position = Position{
-				X: float32(offset),
+		if len(topUpgrade.Turrets) == 1 {
+			// Single turret goes in the center
+			topUpgrade.Turrets[0].Position = Position{
+				X: 0,
 				Y: 0,
 			}
-			for j := range topUpgrade.Turrets[i].Cannons {
-				topUpgrade.Turrets[i].Cannons[j].Position = Position{
-					X: float32(offset),
+			for j := range topUpgrade.Turrets[0].Cannons {
+				topUpgrade.Turrets[0].Cannons[j].Position = Position{
+					X: 0,
 					Y: 0,
+				}
+			}
+		} else {
+			// Multiple turrets: space them evenly
+			totalTurretLength := turretSpacing * float32(len(topUpgrade.Turrets)-1)
+			startOffset := -totalTurretLength / 2
+
+			for i := 0; i < len(topUpgrade.Turrets); i++ {
+				offset := startOffset + turretSpacing*float32(i)
+				topUpgrade.Turrets[i].Position = Position{
+					X: offset,
+					Y: 0,
+				}
+				for j := range topUpgrade.Turrets[i].Cannons {
+					topUpgrade.Turrets[i].Cannons[j].Position = Position{
+						X: offset,
+						Y: 0,
+					}
 				}
 			}
 		}
@@ -141,8 +160,8 @@ func (sc *ShipConfiguration) UpdateUpgradePositions() {
 func (sc *ShipConfiguration) CalculateShipDimensions() {
 	// Start with base dimensions
 	baseSize := sc.Size
-	length := baseSize * 0.5
-	width := baseSize * 0.8
+	length := float32(PlayerSize*1.2) * 0.5 // Base shaft length for 1 cannon
+	width := float32(PlayerSize * 0.8)
 
 	// Add length for side cannons
 	maxSideCannonCount := 0
@@ -164,8 +183,7 @@ func (sc *ShipConfiguration) CalculateShipDimensions() {
 	if turretCount > 0 {
 		turretSpacing := baseSize * 0.7
 		turretLength := turretSpacing * float32(turretCount-1)
-		length = float32(math.Max(float64(length), float64(baseSize*1.2+turretLength)))
-		width *= 1.1 // Slightly wider for turrets
+		length = float32(math.Max(float64(length), float64(length+turretLength)))
 	}
 
 	sc.ShipLength = length
@@ -287,8 +305,9 @@ func NewBasicTurrets(turretCount int) *ShipUpgrade {
 
 func NewTopUpgradeTree() *ShipUpgrade {
 	root := &ShipUpgrade{
-		Type: UpgradeTypeTop,
-		Name: "No Top Upgrades",
+		Type:    UpgradeTypeTop,
+		Name:    "No Top Upgrades",
+		Turrets: []Turret{},
 	}
 
 	// Build the basic turret upgrade path: 1 -> 2 -> 3 -> 4
