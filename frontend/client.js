@@ -498,29 +498,25 @@ class GameClient {
 
   handleUpgradeUIClick(screenX, screenY) {
     if (!this.gameState.myPlayer || this.gameState.myPlayer.availableUpgrades <= 0 || this.upgradeUI.pendingUpgrade) return;
-    
     // First check if clicking on upgrade type buttons
     const availableTypes = [];
     const upgradeTypes = ['side', 'top', 'front', 'rear'];
-    
     for (const type of upgradeTypes) {
       if (this.hasAvailableUpgrades(type)) {
         availableTypes.push(type);
       }
     }
-    
     if (availableTypes.length > 0) {
-      const buttonWidth = 100;
-      const buttonHeight = 40;
+      // Match button dimensions to drawUpgradeUI
+      const buttonWidth = 50;
+      const buttonHeight = 50;
       const spacing = 20;
       const totalWidth = (buttonWidth * availableTypes.length) + (spacing * (availableTypes.length - 1));
       const startX = (this.screenWidth - totalWidth) / 2;
       const buttonY = this.screenHeight - 150;
-      
       for (let i = 0; i < availableTypes.length; i++) {
         const type = availableTypes[i];
         const x = startX + (buttonWidth + spacing) * i;
-        
         if (screenX >= x && screenX <= x + buttonWidth && 
             screenY >= buttonY && screenY <= buttonY + buttonHeight) {
           // Toggle selection - if already selected, deselect; otherwise select
@@ -1493,7 +1489,6 @@ drawPlayer(player) {
     this.ctx.fillStyle = '#FFFFFF';
     this.ctx.font = 'bold 16px Arial';
     this.ctx.textAlign = 'center';
-    this.ctx.fillText(`Level ${player.level || 1}`, this.screenWidth / 2, barY - 15);
     
     // Experience text
     const currentLevelExp = this.getExperienceForLevel(player.level || 1);
@@ -1506,7 +1501,7 @@ drawPlayer(player) {
     if (player.availableUpgrades > 0) {
       this.ctx.fillStyle = '#FFFFFF';
       this.ctx.font = 'bold 18px Arial';
-      this.ctx.fillText(`${player.availableUpgrades} Upgrade${player.availableUpgrades > 1 ? 's' : ''} Available!`, this.screenWidth / 2, barY - 40);
+      this.ctx.fillText(`${player.availableUpgrades} Upgrade${player.availableUpgrades > 1 ? 's' : ''} Available!`, this.screenWidth / 2, barY - 20);
     }
   }
   
@@ -1531,8 +1526,8 @@ drawPlayer(player) {
     if (availableTypes.length === 0) return;
     
     // Draw upgrade type buttons (always centered based on available types)
-    const buttonWidth = 100;
-    const buttonHeight = 40;
+    const buttonWidth = 50;
+    const buttonHeight = 50;
     const spacing = 20;
     const totalWidth = (buttonWidth * availableTypes.length) + (spacing * (availableTypes.length - 1));
     const startX = (this.screenWidth - totalWidth) / 2;
@@ -1551,14 +1546,14 @@ drawPlayer(player) {
       this.ctx.fill();
       
       // Button border
-      this.ctx.strokeStyle = '#FFFFFF';
+      this.ctx.strokeStyle = 'rgba(64, 64, 64, 0.8)';
       this.ctx.lineWidth = 2;
       this.drawRoundedRect(x, buttonY, buttonWidth, buttonHeight, 5);
       this.ctx.stroke();
       
       // Button text
       this.ctx.fillStyle = '#FFFFFF';
-      this.ctx.font = 'bold 16px Arial';
+      this.ctx.font = 'bold 14px Arial';
       this.ctx.textAlign = 'center';
       this.ctx.fillText(type.toUpperCase(), x + buttonWidth / 2, buttonY + buttonHeight / 2 + 6);
       
@@ -1573,14 +1568,14 @@ drawPlayer(player) {
     const options = this.getAvailableUpgrades(upgradeType);
     if (!options || options.length === 0) return;
     
-    const optionHeight = 40;
-    const optionWidth = Math.max(buttonWidth, 150); // At least as wide as button
-    const spacing = 5;
+    const optionHeight = 30;
+    const optionWidth = Math.max(buttonWidth, 125); // At least as wide as button
+    const spacing = 10;
     const totalHeight = (optionHeight * options.length) + (spacing * (options.length - 1));
     
     // Position options directly above the button, centered on it
     const optionsX = buttonX + (buttonWidth - optionWidth) / 2;
-    const optionsStartY = buttonY - totalHeight - 20; // 20px gap above button
+    const optionsStartY = buttonY - totalHeight - 10; // 20px gap above button
     
     // Clear all option positions and only store for the selected type
     this.upgradeUI.optionPositions = {};
@@ -1600,19 +1595,19 @@ drawPlayer(player) {
       });
       
       // Option background
-      this.ctx.fillStyle = 'rgba(64, 64, 64, 0.9)';
+      this.ctx.fillStyle = 'rgba(64, 64, 64, 0.8)';
       this.drawRoundedRect(optionsX, y, optionWidth, optionHeight, 5);
       this.ctx.fill();
       
       // Option border
-      this.ctx.strokeStyle = '#B0B0B0';
+      this.ctx.strokeStyle = 'rgba(64, 64, 64, 0.8)';
       this.ctx.lineWidth = 2;
       this.drawRoundedRect(optionsX, y, optionWidth, optionHeight, 5);
       this.ctx.stroke();
       
       // Option text
       this.ctx.fillStyle = '#FFFFFF';
-      this.ctx.font = 'bold 14px Arial';
+      this.ctx.font = '14px Arial';
       this.ctx.textAlign = 'center';
       this.ctx.fillText(option.name, optionsX + optionWidth / 2, y + optionHeight / 2 + 5);
     }
