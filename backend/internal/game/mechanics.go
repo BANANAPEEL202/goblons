@@ -275,18 +275,32 @@ func (gm *GameMechanics) ApplyItemEffect(player *Player, item *GameItem) {
 	switch item.Type {
 	case "food":
 		player.Score += item.Value
+		// Award coins and experience for food collection
+		player.Coins += item.Value / 2       // Half the score value in coins
+		player.AddExperience(item.Value * 2) // Double the score value in experience
 
 	case "coin":
 		player.Score += item.Value
+		// Award coins directly for coin items
+		player.Coins += item.Value * 2   // Double coins for coin items
+		player.AddExperience(item.Value) // Experience equal to score value
 
 	case "health_pack":
 		player.Health = int(math.Min(float64(player.MaxHealth), float64(player.Health+item.Value)))
+		// Award small amount of coins and experience for health packs
+		player.Coins += 5
+		player.AddExperience(10)
 
 	case "speed_boost":
 		// This would require adding temporary effects system
 		player.Score += 5 // Give some score for now
+		player.Coins += 10
+		player.AddExperience(20)
 
 	case "score_multiplier":
 		player.Score = int(float32(player.Score) * float32(item.Value))
+		// Award bonus coins and experience for score multipliers
+		player.Coins += 20
+		player.AddExperience(50)
 	}
 }

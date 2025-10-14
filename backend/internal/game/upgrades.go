@@ -189,7 +189,7 @@ func (sc *ShipConfiguration) CalculateShipDimensions() {
 	}
 
 	sc.ShipLength = max(sideLength, turretLength)
-	sc.ShipWidth = baseWidth
+	sc.ShipWidth = max(baseWidth, sc.ShipWidth)
 }
 
 // Predefined upgrade templates
@@ -420,4 +420,130 @@ func (sc *ShipConfiguration) ApplyUpgrade(upgradeType UpgradeType, upgradeID str
 	sc.UpdateUpgradePositions()
 
 	return true
+}
+
+// UpgradeStatLevel attempts to upgrade a specific stat for a player
+func UpgradeStatLevel(player *Player, upgradeType StatUpgradeType) bool {
+	if player.StatUpgrades == nil {
+		InitializeStatUpgrades(player)
+	}
+
+	upgrade, exists := player.StatUpgrades[upgradeType]
+	if !exists {
+		return false
+	}
+
+	// Check if upgrade is maxed out
+	if upgrade.Level >= upgrade.MaxLevel {
+		return false
+	}
+
+	// Calculate total upgrades across all stats
+	totalUpgrades := 0
+	for _, statUpgrade := range player.StatUpgrades {
+		totalUpgrades += statUpgrade.Level
+	}
+
+	// Check if total upgrade limit is reached (75)
+	if totalUpgrades >= 75 {
+		return false
+	}
+
+	// Check if player has enough coins
+	if player.Coins < upgrade.CurrentCost {
+		return false
+	}
+
+	// Deduct coins and upgrade
+	player.Coins -= upgrade.CurrentCost
+	upgrade.Level++
+	upgrade.CurrentCost = upgrade.BaseCost * (upgrade.Level + 1) // 10, 20, 30, etc.
+	player.StatUpgrades[upgradeType] = upgrade
+
+	// Apply upgrade effects to player
+	applyStatUpgradeEffects(player, upgradeType)
+
+	return true
+}
+
+// applyStatUpgradeEffects applies the effects of a stat upgrade to the player
+func applyStatUpgradeEffects(player *Player, upgradeType StatUpgradeType) {
+	switch upgradeType {
+	case StatUpgradeHullStrength:
+		healthIncrease := 50
+		player.MaxHealth += healthIncrease
+		player.Health += healthIncrease     // Heal on upgrade
+		player.ShipConfig.ShipWidth *= 1.01 // Small width increase per level
+
+	case StatUpgradeAutoRepairs:
+		// Adds 1.5 health per second regeneration per upgrade level
+		// This will be handled in the game loop, just track the level
+
+	case StatUpgradeCannonRange:
+		// Increases bullet speed by 26 units/s, increases cannon length by 0.3
+		// These effects will be applied when bullets are created and cannons are rendered
+
+	case StatUpgradeCannonDamage:
+		// Increases damage by 2.6 and width by 0.4 per level
+		// These effects will be applied when bullets are created
+
+	case StatUpgradeReloadSpeed:
+		// Decreases cooldown time by 4% per level
+		// This will be applied when checking weapon cooldowns
+
+	case StatUpgradeMoveSpeed:
+		// Increases movement speed by 5 units/s per level
+		// This will be applied in movement calculations
+
+	case StatUpgradeTurnSpeed:
+		// Increases turning speed by 3 arc/s per level
+		// This will be applied in rotation calculations
+
+	case StatUpgradeBodyDamage:
+		// Increases collision damage per tick
+		// This will be applied in collision calculations
+	}
+}
+
+// GetStatUpgradeEffects returns the calculated effects for all stat upgrades
+func GetStatUpgradeEffects(player *Player) map[string]float32 {
+	if player.StatUpgrades == nil {
+		return make(map[string]float32)
+	}
+
+	effects := make(map[string]float32)
+
+	// Hull Strength effects
+	hullLevel := player.StatUpgrades[StatUpgradeHullStrength].Level
+	effects["speedReduction"] = float32(hullLevel) * 0.02 // 3.5% per level
+
+	// Auto Repairs effects
+	repairLevel := player.StatUpgrades[StatUpgradeAutoRepairs].Level
+	effects["healthRegen"] = float32(repairLevel) * 1 // 1.5 HP/s per level
+
+	// Cannon Range effects
+	rangeLevel := player.StatUpgrades[StatUpgradeCannonRange].Level
+	effects["bulletSpeed"] = float32(rangeLevel) * 0.1
+
+	// Cannon Damage effects
+	damageLevel := player.StatUpgrades[StatUpgradeCannonDamage].Level
+	effects["bulletDamage"] = float32(damageLevel) * 1 // 2.6 damage per level
+
+	// Reload Speed effects
+	reloadLevel := player.StatUpgrades[StatUpgradeReloadSpeed].Level
+	effects["reloadSpeedMultiplier"] = 1.0 - (float32(reloadLevel) * 0.03) // 4% faster per level
+
+	// Move Speed effects
+	moveLevel := player.StatUpgrades[StatUpgradeMoveSpeed].Level
+	effects["moveSpeedBonus"] = float32(moveLevel) * 0.05
+
+	// Turn Speed effects
+	turnLevel := player.StatUpgrades[StatUpgradeTurnSpeed].Level
+	effects["turnSpeedBonus"] = float32(turnLevel) * 0.001
+
+	// Body Damage effects
+	bodyLevel := player.StatUpgrades[StatUpgradeBodyDamage].Level
+	effects["bodyDamage"] = float32(bodyLevel) * 1
+
+	return effects
 }
