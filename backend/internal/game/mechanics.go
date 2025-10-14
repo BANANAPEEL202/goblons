@@ -39,8 +39,8 @@ func (gm *GameMechanics) HandlePlayerCollisions() {
 
 // checkRectangularCollision checks if two ships' rectangular bounding boxes collide
 func (gm *GameMechanics) checkRectangularCollision(player1, player2 *Player) bool {
-	bbox1 := gm.getShipBoundingBox(player1)
-	bbox2 := gm.getShipBoundingBox(player2)
+	bbox1 := gm.GetShipBoundingBox(player1)
+	bbox2 := gm.GetShipBoundingBox(player2)
 
 	// Check if bounding boxes overlap
 	return bbox1.MinX < bbox2.MaxX && bbox1.MaxX > bbox2.MinX &&
@@ -52,8 +52,8 @@ type BoundingBox struct {
 	MinX, MinY, MaxX, MaxY float32
 }
 
-// getShipBoundingBox calculates the axis-aligned bounding box for a rotated ship
-func (gm *GameMechanics) getShipBoundingBox(player *Player) BoundingBox {
+// GetShipBoundingBox calculates the axis-aligned bounding box for a rotated ship
+func (gm *GameMechanics) GetShipBoundingBox(player *Player) BoundingBox {
 	// Calculate the four corners of the rotated ship rectangle
 	halfLength := player.ShipConfig.ShipLength / 2
 	halfWidth := player.ShipConfig.ShipWidth / 2
@@ -103,8 +103,8 @@ func (gm *GameMechanics) handlePlayerCollision(player1, player2 *Player) {
 
 // pushShipsApart pushes two colliding ships apart based on their bounding boxes
 func (gm *GameMechanics) pushShipsApart(p1, p2 *Player) {
-	bbox1 := gm.getShipBoundingBox(p1)
-	bbox2 := gm.getShipBoundingBox(p2)
+	bbox1 := gm.GetShipBoundingBox(p1)
+	bbox2 := gm.GetShipBoundingBox(p2)
 
 	// Calculate overlap in both axes
 	overlapX := float32(math.Min(float64(bbox1.MaxX), float64(bbox2.MaxX))) - float32(math.Max(float64(bbox1.MinX), float64(bbox2.MinX)))

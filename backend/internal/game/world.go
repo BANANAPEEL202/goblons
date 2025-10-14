@@ -581,11 +581,8 @@ func (w *World) updateBullets() {
 				continue
 			}
 
-			// Calculate distance between bullet and player
-			distance := float32(math.Sqrt(float64((bullet.X-player.X)*(bullet.X-player.X) + (bullet.Y-player.Y)*(bullet.Y-player.Y))))
-
-			// Check if bullet hits player (bullet size + collision radius)
-			if distance < BulletSize {
+			// Use rectangular bounding box collision similar to ship collisions
+			if w.checkBulletPlayerCollision(bullet, player) {
 				// Apply damage
 				damage := bullet.Damage
 				if damage == 0 {
@@ -614,6 +611,25 @@ func (w *World) updateBullets() {
 			}
 		}
 	}
+}
+
+// checkBulletPlayerCollision checks if a bullet collides with a player using rectangular bounding boxes
+func (w *World) checkBulletPlayerCollision(bullet *Bullet, player *Player) bool {
+	// Get player's bounding box using the mechanics instance
+	playerBbox := w.mechanics.GetShipBoundingBox(player)
+	
+	// Create bullet bounding box (treat bullet as a small rectangle)
+	bulletHalfSize := bullet.Size / 2
+	bulletBbox := BoundingBox{
+		MinX: bullet.X - bulletHalfSize,
+		MinY: bullet.Y - bulletHalfSize,
+		MaxX: bullet.X + bulletHalfSize,
+		MaxY: bullet.Y + bulletHalfSize,
+	}
+	
+	// Check if bounding boxes overlap
+	return bulletBbox.MinX < playerBbox.MaxX && bulletBbox.MaxX > playerBbox.MinX &&
+		bulletBbox.MinY < playerBbox.MaxY && bulletBbox.MaxY > playerBbox.MinY
 }
 
 // updateShipDimensions updates ship dimensions based on cannon and turret count
