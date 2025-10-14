@@ -18,9 +18,15 @@ type InputMsg struct {
 	ShootRight       bool   `json:"shootRight"`
 	UpgradeCannons   bool   `json:"upgradeCannons"`
 	DowngradeCannons bool   `json:"downgradeCannons"`
+	UpgradeScatter   bool   `json:"upgradeScatter"`
+	DowngradeScatter bool   `json:"downgradeScatter"`
 	UpgradeTurrets   bool   `json:"upgradeTurrets"`
 	DowngradeTurrets bool   `json:"downgradeTurrets"`
-	Mouse            struct {
+	// New leveling system inputs
+	DebugLevelUp  bool   `json:"debugLevelUp"`
+	SelectUpgrade string `json:"selectUpgrade"` // "side", "top", "front", "rear"
+	UpgradeChoice string `json:"upgradeChoice"` // Specific upgrade ID/name
+	Mouse         struct {
 		X float32 `json:"x"`
 		Y float32 `json:"y"`
 	} `json:"mouse"`
@@ -34,22 +40,24 @@ type Position struct {
 
 // Player represents a game player
 type Player struct {
-	ID                 uint32    `json:"id"`
-	X                  float32   `json:"x"`
-	Y                  float32   `json:"y"`
-	VelX               float32   `json:"velX"`
-	VelY               float32   `json:"velY"`
-	Angle              float32   `json:"angle"` // Ship facing direction in radians
-	AngularVelocity    float32   `json:"-"`     // Current angular velocity (radians per update)
-	Score              int       `json:"score"`
-	State              int       `json:"state"`
-	Name               string    `json:"name"`
-	Color              string    `json:"color"`
-	Health             int       `json:"health"`
-	MaxHealth          int       `json:"maxHealth"`
-	LastShotTime       time.Time `json:"-"`
-	LastTurretShotTime time.Time `json:"-"` // When turrets last fired (shared cooldown)
-	RespawnTime        time.Time `json:"-"` // When the player can respawn
+	ID              uint32    `json:"id"`
+	X               float32   `json:"x"`
+	Y               float32   `json:"y"`
+	VelX            float32   `json:"velX"`
+	VelY            float32   `json:"velY"`
+	Angle           float32   `json:"angle"` // Ship facing direction in radians
+	AngularVelocity float32   `json:"-"`     // Current angular velocity (radians per update)
+	Score           int       `json:"score"`
+	State           int       `json:"state"`
+	Name            string    `json:"name"`
+	Color           string    `json:"color"`
+	Health          int       `json:"health"`
+	MaxHealth       int       `json:"maxHealth"`
+	RespawnTime     time.Time `json:"-"` // When the player can respawn
+	// Leveling system
+	Level             int `json:"level"`             // Current player level
+	Experience        int `json:"experience"`        // Current experience points
+	AvailableUpgrades int `json:"availableUpgrades"` // Number of pending upgrade points
 	// Category-specific reload times
 	LastSideUpgradeShot  time.Time         `json:"-"`          // When side upgrades last fired
 	LastTopUpgradeShot   time.Time         `json:"-"`          // When top upgrades last fired
@@ -95,15 +103,28 @@ type WelcomeMsg struct {
 	PlayerId uint32 `json:"playerId"`
 }
 
+// UpgradeInfo represents simplified upgrade information for client
+type UpgradeInfo struct {
+	Name string `json:"name"`
+	Type string `json:"type"`
+}
+
+// AvailableUpgradesMsg represents available upgrades for a player
+type AvailableUpgradesMsg struct {
+	Type     string                   `json:"type"`
+	Upgrades map[string][]UpgradeInfo `json:"upgrades"`
+}
+
 // Client represents a connected game client
 type Client struct {
-	ID       uint32
-	Conn     *websocket.Conn
-	Player   *Player
-	Input    InputMsg
-	Send     chan []byte
-	LastSeen time.Time
-	mu       sync.RWMutex
+	ID          uint32
+	Conn        *websocket.Conn
+	Player      *Player
+	Input       InputMsg
+	Send        chan []byte
+	LastSeen    time.Time
+	LastUpgrade time.Time // Prevents rapid upgrade applications
+	mu          sync.RWMutex
 }
 
 // World represents the game world and all its entities
@@ -138,8 +159,8 @@ func NewPlayer(id uint32) *Player {
 	shipWidth := float32(PlayerSize * 0.8)
 
 	shipConfig := ShipConfiguration{
-		SideUpgrade:  NewBasicSideCannons(1),
-		TopUpgrade:   NewBasicTurrets(0),
+		SideUpgrade:  NewSideUpgradeTree(),
+		TopUpgrade:   NewTopUpgradeTree(),
 		FrontUpgrade: nil,
 		RearUpgrade:  nil,
 		ShipLength:   shipLength,
@@ -148,15 +169,18 @@ func NewPlayer(id uint32) *Player {
 	}
 
 	return &Player{
-		ID:         id,
-		X:          WorldWidth / 2,
-		Y:          WorldHeight / 2,
-		State:      StateAlive,
-		Health:     100,
-		MaxHealth:  100,
-		Color:      generateRandomColor(),
-		Name:       generateRandomName(),
-		ShipConfig: shipConfig,
+		ID:                id,
+		X:                 WorldWidth / 2,
+		Y:                 WorldHeight / 2,
+		State:             StateAlive,
+		Health:            100,
+		MaxHealth:         100,
+		Color:             generateRandomColor(),
+		Name:              generateRandomName(),
+		Level:             1,
+		Experience:        0,
+		AvailableUpgrades: 0,
+		ShipConfig:        shipConfig,
 	}
 }
 
@@ -177,4 +201,60 @@ func generateRandomColor() string {
 func generateRandomName() string {
 	names := []string{"Pirate", "Buccaneer", "Sailor", "Captain", "Admiral", "Navigator", "Corsair", "Raider"}
 	return names[int(time.Now().UnixNano())%len(names)]
+}
+
+// GetExperienceRequiredForLevel returns the experience needed to reach a specific level
+func GetExperienceRequiredForLevel(level int) int {
+	// Linear progression: level 1 = 0, level 2 = 100, level 3 = 200, etc.
+	return (level - 1) * 100
+}
+
+// GetExperienceRequiredForNextLevel returns the experience needed to reach the next level
+func (p *Player) GetExperienceRequiredForNextLevel() int {
+	return GetExperienceRequiredForLevel(p.Level + 1)
+}
+
+// GetExperienceForCurrentLevel returns the experience required for the current level
+func (p *Player) GetExperienceForCurrentLevel() int {
+	return GetExperienceRequiredForLevel(p.Level)
+}
+
+// GetExperienceProgressToNextLevel returns progress (0.0 to 1.0) to next level
+func (p *Player) GetExperienceProgressToNextLevel() float32 {
+	currentLevelExp := p.GetExperienceForCurrentLevel()
+	nextLevelExp := p.GetExperienceRequiredForNextLevel()
+	levelExpNeeded := nextLevelExp - currentLevelExp
+
+	if levelExpNeeded <= 0 {
+		return 1.0
+	}
+
+	progress := float32(p.Experience-currentLevelExp) / float32(levelExpNeeded)
+	if progress < 0 {
+		return 0
+	}
+	if progress > 1 {
+		return 1
+	}
+	return progress
+}
+
+// AddExperience adds experience and handles level ups
+func (p *Player) AddExperience(exp int) bool {
+	p.Experience += exp
+
+	// Check for level up
+	if p.Experience >= p.GetExperienceRequiredForNextLevel() {
+		p.Level++
+		p.AvailableUpgrades++
+		return true // Level up occurred
+	}
+	return false
+}
+
+// DebugLevelUp increases the player's level (for testing)
+func (p *Player) DebugLevelUp() {
+	p.Level++
+	p.Experience = p.GetExperienceForCurrentLevel()
+	p.AvailableUpgrades++
 }

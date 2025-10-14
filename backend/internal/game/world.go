@@ -78,6 +78,9 @@ func (w *World) AddClient(client *Client) {
 	// Send welcome message to the new client with their player ID
 	w.sendWelcomeMessage(client)
 
+	// Send available upgrades
+	w.sendAvailableUpgrades(client)
+
 	log.Printf("Player %d (%s) joined the game", client.ID, client.Player.Name)
 }
 
@@ -96,8 +99,6 @@ func (w *World) RemoveClient(clientID uint32) {
 
 // GetClient returns a client by ID
 func (w *World) GetClient(id uint32) (*Client, bool) {
-	w.mu.RLock()
-	defer w.mu.RUnlock()
 	client, exists := w.clients[id]
 	return client, exists
 }
@@ -213,6 +214,16 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 		player.ShipConfig.CalculateShipDimensions()
 		player.ShipConfig.UpdateUpgradePositions()
 	}
+	if input.UpgradeScatter {
+		player.ShipConfig.SideUpgrade = NewScatterSideCannons(player.ShipConfig.SideUpgrade.Count + 1)
+		player.ShipConfig.CalculateShipDimensions()
+		player.ShipConfig.UpdateUpgradePositions()
+	}
+	if input.DowngradeScatter {
+		player.ShipConfig.SideUpgrade = NewScatterSideCannons(player.ShipConfig.SideUpgrade.Count - 1)
+		player.ShipConfig.CalculateShipDimensions()
+		player.ShipConfig.UpdateUpgradePositions()
+	}
 	if input.UpgradeTurrets {
 		player.ShipConfig.TopUpgrade = NewBasicTurrets(player.ShipConfig.TopUpgrade.Count + 1)
 		player.ShipConfig.CalculateShipDimensions()
@@ -222,6 +233,60 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 		player.ShipConfig.TopUpgrade = NewBasicTurrets(player.ShipConfig.TopUpgrade.Count - 1)
 		player.ShipConfig.CalculateShipDimensions()
 		player.ShipConfig.UpdateUpgradePositions()
+	}
+
+	// Handle leveling system
+	if input.DebugLevelUp {
+		player.DebugLevelUp()
+		// Send updated available upgrades to client
+		if client, exists := w.GetClient(player.ID); exists {
+			w.sendAvailableUpgrades(client)
+		}
+	}
+
+	// Handle upgrade selection (only one upgrade per level with cooldown protection)
+	if input.SelectUpgrade != "" && input.UpgradeChoice != "" && player.AvailableUpgrades > 0 {
+		// Get client for cooldown check
+		if client, exists := w.GetClient(player.ID); exists {
+			now := time.Now()
+
+			// Enforce upgrade cooldown (500ms between upgrades)
+			if now.Sub(client.LastUpgrade) < 500*time.Millisecond {
+				// Clear input and skip processing
+				input.SelectUpgrade = ""
+				input.UpgradeChoice = ""
+				return
+			}
+
+			var upgradeType UpgradeType
+			switch input.SelectUpgrade {
+			case "side":
+				upgradeType = UpgradeTypeSide
+			case "top":
+				upgradeType = UpgradeTypeTop
+			case "front":
+				upgradeType = UpgradeTypeFront
+			case "rear":
+				upgradeType = UpgradeTypeRear
+			default:
+				upgradeType = ""
+			}
+
+			if upgradeType != "" {
+				if player.ShipConfig.ApplyUpgrade(upgradeType, input.UpgradeChoice) {
+					player.AvailableUpgrades--
+					client.LastUpgrade = now // Update last upgrade time
+					log.Printf("Player %d applied upgrade %s:%s, remaining upgrades: %d",
+						player.ID, upgradeType, input.UpgradeChoice, player.AvailableUpgrades)
+					// Send updated available upgrades to client
+					w.sendAvailableUpgrades(client)
+				}
+			}
+		}
+
+		// Clear upgrade input to prevent multiple upgrades per frame
+		input.SelectUpgrade = ""
+		input.UpgradeChoice = ""
 	}
 
 	// Keep player within world boundaries
@@ -389,6 +454,48 @@ func (w *World) sendWelcomeMessage(client *Client) {
 	default:
 		// Channel full, skip
 		log.Printf("Could not send welcome message to client %d", client.ID)
+	}
+}
+
+// sendAvailableUpgrades sends available upgrades to a specific client
+func (w *World) sendAvailableUpgrades(client *Client) {
+	upgrades := make(map[string][]UpgradeInfo)
+
+	// Get available upgrades for each type and convert to simplified format
+	upgradeTypes := []UpgradeType{UpgradeTypeSide, UpgradeTypeTop, UpgradeTypeFront, UpgradeTypeRear}
+
+	for _, upgradeType := range upgradeTypes {
+		availableUpgrades := client.Player.ShipConfig.GetAvailableUpgrades(upgradeType)
+		upgradeInfos := make([]UpgradeInfo, 0, len(availableUpgrades))
+
+		for _, upgrade := range availableUpgrades {
+			if upgrade != nil {
+				upgradeInfos = append(upgradeInfos, UpgradeInfo{
+					Name: upgrade.Name,
+					Type: string(upgrade.Type),
+				})
+			}
+		}
+
+		upgrades[string(upgradeType)] = upgradeInfos
+	}
+
+	upgradesMsg := AvailableUpgradesMsg{
+		Type:     "availableUpgrades",
+		Upgrades: upgrades,
+	}
+
+	data, err := json.Marshal(upgradesMsg)
+	if err != nil {
+		log.Printf("Error marshaling available upgrades message: %v", err)
+		return
+	}
+
+	select {
+	case client.Send <- data:
+	default:
+		// Channel full, skip
+		log.Printf("Could not send available upgrades to client %d", client.ID)
 	}
 }
 
