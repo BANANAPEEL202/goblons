@@ -1,6 +1,7 @@
 package game
 
 import (
+	"math"
 	"sync"
 	"time"
 
@@ -102,7 +103,8 @@ type GameItem struct {
 	X     float32 `json:"x"`
 	Y     float32 `json:"y"`
 	Type  string  `json:"type"`
-	Value int     `json:"value"`
+	Coins int     `json:"coins"`
+	XP    int     `json:"xp"`
 }
 
 // Bullet represents a projectile fired from ship cannons
@@ -242,8 +244,26 @@ func generateRandomName() string {
 
 // GetExperienceRequiredForLevel returns the experience needed to reach a specific level
 func GetExperienceRequiredForLevel(level int) int {
-	// Linear progression: level 1 = 0, level 2 = 100, level 3 = 200, etc.
-	return (level - 1) * 100
+	// Exponential progression: each level requires 50% more experience than the previous
+	// Level 1 = 0, Level 2 = 100, Level 3 = 250, Level 4 = 475, etc.
+	if level <= 1 {
+		return 0
+	}
+
+	totalExp := 0
+	baseExp := 100 // Experience needed to go from level 1 to 2
+
+	for i := 2; i <= level; i++ {
+		if i == 2 {
+			totalExp += baseExp
+		} else {
+			// Each level requires 50% more than the previous level's requirement
+			levelExp := int(float64(baseExp) * math.Pow(2, float64(i-2)))
+			totalExp += levelExp
+		}
+	}
+
+	return totalExp
 }
 
 // GetExperienceRequiredForNextLevel returns the experience needed to reach the next level

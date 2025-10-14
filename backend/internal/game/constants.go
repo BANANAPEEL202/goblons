@@ -56,6 +56,19 @@ const (
 	RespawnDelay = 0.0 // Seconds to wait before respawning
 )
 
+// Item constants
+const (
+	ItemPickupSize = 16.0 // Size of item pickup bounding box
+)
+
+// Item type constants
+const (
+	ItemTypeGrayCircle   = "gray_circle"
+	ItemTypeYellowCircle = "yellow_circle"
+	ItemTypeOrangeCircle = "orange_circle"
+	ItemTypeBlueDiamond  = "blue_diamond"
+)
+
 // Player states
 const (
 	StateAlive = iota
