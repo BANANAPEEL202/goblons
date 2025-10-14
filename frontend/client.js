@@ -1502,7 +1502,7 @@ drawPlayer(player) {
   }
 
   drawMinimap() {
-    const minimapSize = 120;
+    const minimapSize = 160;
     const minimapX = this.screenWidth - minimapSize - 20;
     const minimapY = this.screenHeight - minimapSize - 20;
     
@@ -1530,6 +1530,17 @@ drawPlayer(player) {
       this.ctx.arc(dotX, dotY, dotSize, 0, Math.PI * 2);
       this.ctx.fill();
     });
+    
+    // Draw current player position as a small white dot (using predicted position for responsiveness)
+    if (this.predictedPlayerPos) {
+      const playerDotX = minimapX + (this.predictedPlayerPos.x * scaleX);
+      const playerDotY = minimapY + (this.predictedPlayerPos.y * scaleY);
+      
+      this.ctx.fillStyle = '#FFFFFF';
+      this.ctx.beginPath();
+      this.ctx.arc(playerDotX, playerDotY, 2, 0, Math.PI * 2);
+      this.ctx.fill();
+    }
     
     // Draw items as smaller dots
     this.ctx.fillStyle = 'rgba(255, 215, 0, 0.6)';
