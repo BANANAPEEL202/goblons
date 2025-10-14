@@ -1028,7 +1028,7 @@ drawPlayer(player) {
     const baseWidth = 50;
     const barWidth = Math.max(baseWidth, baseWidth + (maxHealth - 100) * 0.05); // Wider for higher max health
     const barHeight = 8;
-    const barOffsetY = 40; // Position above the ship
+    const barOffsetY = 50; // Position above the ship
     const borderRadius = 4; // Rounded corners
     
     // Skip drawing if player is dead
@@ -1045,7 +1045,7 @@ drawPlayer(player) {
     
     // Health bar foreground - green for own player, red for enemies
     const isOwnPlayer = player.id === this.myPlayerId;
-    const healthColor = isOwnPlayer ? '#00cc00' : '#cc0000'; // Green for self, red for enemies
+    const healthColor = isOwnPlayer ? '#00cc00' : '#d9534f'; // Green for self, red for enemies
     
     ctx.fillStyle = healthColor;
     const fillWidth = barWidth * healthPercentage;
