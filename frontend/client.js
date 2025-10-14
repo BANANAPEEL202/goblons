@@ -1071,27 +1071,48 @@ drawPlayer(player) {
       return;
     }
     
-    let color = '#FFD700'; // Default gold
-    let size = 8;
+    let color = '#808080'; // Default gray
+    let size = 7;
     let shape = 'circle';
     
     switch (item.type) {
+      case 'gray_circle':
+        color = '#808080'; // Gray
+        shape = 'circle';
+        break;
+      case 'yellow_circle':
+        color = '#FFD700'; // Yellow/Gold
+        shape = 'circle';
+        break;
+      case 'orange_circle':
+        color = '#FF8C00'; // Orange
+        shape = 'circle';
+        break;
+      case 'blue_diamond':
+        color = '#4169E1'; // Royal Blue
+        size = 14;
+        shape = 'diamond';
+        break;
+      // Legacy support for old item types
       case 'coin':
         color = '#FFD700';
-        size = 6;
+        size = 8;
+        shape = 'circle';
+        break;
+      case 'food':
+        color = '#808080';
+        size = 8;
+        shape = 'circle';
         break;
       case 'health_pack':
         color = '#FF6B6B';
         size = 10;
         shape = 'cross';
         break;
-      case 'food':
-        color = '#4ECDC4';
-        size = 4;
-        break;
       case 'size_boost':
         color = '#96CEB4';
         size = 12;
+        shape = 'circle';
         break;
       case 'speed_boost':
         color = '#FFEAA7';
@@ -1105,25 +1126,56 @@ drawPlayer(player) {
         break;
     }
     
+    // Draw the item shape
     this.ctx.fillStyle = color;
     
     if (shape === 'circle') {
       this.ctx.beginPath();
       this.ctx.arc(screenX, screenY, size, 0, Math.PI * 2);
       this.ctx.fill();
+      
+      // Add outline based on item value
+      this.ctx.strokeStyle = this.getItemOutlineColor(item.type);
+      this.ctx.lineWidth = this.getItemOutlineWidth(item.type);
+      this.ctx.stroke();
+      
     } else if (shape === 'cross') {
       // Draw a cross for health packs
       this.ctx.fillRect(screenX - size/2, screenY - size/6, size, size/3);
       this.ctx.fillRect(screenX - size/6, screenY - size/2, size/3, size);
+      
+      // Add outline
+      this.ctx.strokeStyle = '#ffffff';
+      this.ctx.lineWidth = 1;
+      this.ctx.strokeRect(screenX - size/2, screenY - size/6, size, size/3);
+      this.ctx.strokeRect(screenX - size/6, screenY - size/2, size/3, size);
+      
     } else if (shape === 'diamond') {
-      // Draw a diamond for speed boost
+      // Draw a diamond (for blue_diamond and speed_boost)
       this.ctx.beginPath();
       this.ctx.moveTo(screenX, screenY - size);
-      this.ctx.lineTo(screenX + size, screenY);
+      this.ctx.lineTo(screenX + size * 0.7, screenY);
       this.ctx.lineTo(screenX, screenY + size);
-      this.ctx.lineTo(screenX - size, screenY);
+      this.ctx.lineTo(screenX - size * 0.7, screenY);
       this.ctx.closePath();
       this.ctx.fill();
+      
+      // Add special outline for blue diamond
+      if (item.type === 'blue_diamond') {
+        this.ctx.strokeStyle = '#87CEEB'; // Light blue outline
+        this.ctx.lineWidth = 2;
+        this.ctx.stroke();
+        
+        // Add inner glow effect
+        this.ctx.strokeStyle = '#ffffff';
+        this.ctx.lineWidth = 1;
+        this.ctx.stroke();
+      } else {
+        this.ctx.strokeStyle = '#ffffff';
+        this.ctx.lineWidth = 1;
+        this.ctx.stroke();
+      }
+      
     } else if (shape === 'star') {
       // Draw a simple star for score multiplier
       this.ctx.beginPath();
@@ -1136,12 +1188,44 @@ drawPlayer(player) {
       }
       this.ctx.closePath();
       this.ctx.fill();
+      
+      // Add outline
+      this.ctx.strokeStyle = '#ffffff';
+      this.ctx.lineWidth = 1;
+      this.ctx.stroke();
     }
-    
-    // Add sparkle effect
-    this.ctx.strokeStyle = '#ffffff';
-    this.ctx.lineWidth = 1;
-    this.ctx.stroke();
+  }
+
+  // Helper function to get outline color based on item type
+  getItemOutlineColor(itemType) {
+    switch (itemType) {
+      case 'gray_circle':
+        return '#A0A0A0'; // Light gray outline
+      case 'yellow_circle':
+        return '#FFF700'; // Bright yellow outline
+      case 'orange_circle':
+        return '#FFA500'; // Bright orange outline
+      case 'blue_diamond':
+        return '#87CEEB'; // Light blue outline
+      default:
+        return '#ffffff'; // Default white outline
+    }
+  }
+
+  // Helper function to get outline width based on item type
+  getItemOutlineWidth(itemType) {
+    switch (itemType) {
+      case 'gray_circle':
+        return 1; // Thin outline for common items
+      case 'yellow_circle':
+        return 1.5; // Medium outline
+      case 'orange_circle':
+        return 2; // Thicker outline for uncommon items
+      case 'blue_diamond':
+        return 2.5; // Thickest outline for rare items
+      default:
+        return 1; // Default thin outline
+    }
   }
 
   drawBullet(bullet) {
@@ -1615,7 +1699,26 @@ drawPlayer(player) {
   
   // Helper functions
   getExperienceForLevel(level) {
-    return (level - 1) * 100;
+    // Exponential progression: each level requires 50% more experience than the previous
+    // Level 1 = 0, Level 2 = 100, Level 3 = 250, Level 4 = 475, etc.
+    if (level <= 1) {
+      return 0;
+    }
+    
+    let totalExp = 0;
+    const baseExp = 100; // Experience needed to go from level 1 to 2
+    
+    for (let i = 2; i <= level; i++) {
+      if (i === 2) {
+        totalExp += baseExp;
+      } else {
+        // Each level requires 50% more than the previous level's requirement
+        const levelExp = Math.floor(baseExp * Math.pow(2, i - 2));
+        totalExp += levelExp;
+      }
+    }
+    
+    return totalExp;
   }
   
   getExperienceProgress(player) {

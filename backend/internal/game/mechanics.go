@@ -228,42 +228,49 @@ func (gm *GameMechanics) calculateDistance(x1, y1, x2, y2 float32) float32 {
 	return float32(math.Sqrt(float64(dx*dx + dy*dy)))
 }
 
-// SpawnFoodItems spawns food items around the map
+// SpawnFoodItems spawns the new 4-tier item system around the map
 func (gm *GameMechanics) SpawnFoodItems() {
-	// Spawn small food items regularly
+	// Define the 4 item types with their properties
+	itemTypes := []struct {
+		name   string
+		coins  int
+		xp     int
+		weight int // Spawn weight (higher = more common)
+	}{
+		{ItemTypeGrayCircle, 10, 10, 30},   // Most common
+		{ItemTypeYellowCircle, 10, 10, 20}, // Common
+		{ItemTypeOrangeCircle, 10, 10, 20}, // Uncommon
+		{ItemTypeBlueDiamond, 30, 20, 10},  // Rare
+	}
+
+	// Calculate total weight
+	totalWeight := 0
+	for _, itemType := range itemTypes {
+		totalWeight += itemType.weight
+	}
+
+	// Spawn 5 items with weighted random selection
 	for i := 0; i < 5; i++ {
+		// Select item type based on weighted probability
+		roll := rand.Intn(totalWeight)
+		currentWeight := 0
+		selectedType := itemTypes[0] // fallback
+
+		for _, itemType := range itemTypes {
+			currentWeight += itemType.weight
+			if roll < currentWeight {
+				selectedType = itemType
+				break
+			}
+		}
+
 		item := &GameItem{
 			ID:    gm.world.itemID,
 			X:     float32(rand.Intn(int(WorldWidth-50)) + 25),
 			Y:     float32(rand.Intn(int(WorldHeight-50)) + 25),
-			Type:  "food",
-			Value: 1,
-		}
-		gm.world.itemID++
-		gm.world.items[item.ID] = item
-	}
-}
-
-// SpawnSpecialItems spawns special power-up items less frequently
-func (gm *GameMechanics) SpawnSpecialItems() {
-	if rand.Float32() < 0.3 { // 30% chance
-		itemTypes := []struct {
-			name  string
-			value int
-		}{
-			{"speed_boost", 1},
-			{"size_boost", 5},
-			{"health_pack", 50},
-			{"score_multiplier", 2},
-		}
-
-		chosen := itemTypes[rand.Intn(len(itemTypes))]
-		item := &GameItem{
-			ID:    gm.world.itemID,
-			X:     float32(rand.Intn(int(WorldWidth-100)) + 50),
-			Y:     float32(rand.Intn(int(WorldHeight-100)) + 50),
-			Type:  chosen.name,
-			Value: chosen.value,
+			Type:  selectedType.name,
+			Coins: selectedType.coins,
+			XP:    selectedType.xp,
 		}
 		gm.world.itemID++
 		gm.world.items[item.ID] = item
@@ -272,35 +279,7 @@ func (gm *GameMechanics) SpawnSpecialItems() {
 
 // ApplyItemEffect applies the effect of a collected item to a player
 func (gm *GameMechanics) ApplyItemEffect(player *Player, item *GameItem) {
-	switch item.Type {
-	case "food":
-		player.Score += item.Value
-		// Award coins and experience for food collection
-		player.Coins += item.Value / 2       // Half the score value in coins
-		player.AddExperience(item.Value * 2) // Double the score value in experience
-
-	case "coin":
-		player.Score += item.Value
-		// Award coins directly for coin items
-		player.Coins += item.Value * 2   // Double coins for coin items
-		player.AddExperience(item.Value) // Experience equal to score value
-
-	case "health_pack":
-		player.Health = int(math.Min(float64(player.MaxHealth), float64(player.Health+item.Value)))
-		// Award small amount of coins and experience for health packs
-		player.Coins += 5
-		player.AddExperience(10)
-
-	case "speed_boost":
-		// This would require adding temporary effects system
-		player.Score += 5 // Give some score for now
-		player.Coins += 10
-		player.AddExperience(20)
-
-	case "score_multiplier":
-		player.Score = int(float32(player.Score) * float32(item.Value))
-		// Award bonus coins and experience for score multipliers
-		player.Coins += 20
-		player.AddExperience(50)
-	}
+	player.Score += item.XP
+	player.Coins += item.Coins
+	player.AddExperience(item.XP)
 }

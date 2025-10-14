@@ -338,10 +338,9 @@ func (w *World) checkCollisions() {
 			continue
 		}
 
-		// Check item collisions
+		// Check item collisions using rectangular bounding boxes
 		for itemID, item := range w.items {
-			distance := float32(math.Sqrt(float64((player.X-item.X)*(player.X-item.X) + (player.Y-item.Y)*(player.Y-item.Y))))
-			if distance < 10 { // Item pickup radius using dynamic collision radius
+			if w.checkPlayerItemCollision(player, item) {
 				w.collectItem(playerID, itemID)
 			}
 		}
@@ -396,41 +395,8 @@ func (w *World) spawnItems() {
 				w.mechanics.SpawnFoodItems()
 			}
 			w.mu.Unlock()
-		case <-specialTicker.C:
-			w.mu.Lock()
-			if len(w.items) < 100 {
-				w.mechanics.SpawnSpecialItems()
-			}
-			w.mu.Unlock()
 		}
 	}
-}
-
-// spawnRandomItem spawns a random item at a random location
-func (w *World) spawnRandomItem() {
-	item := &GameItem{
-		ID: w.itemID,
-		X:  float32(rand.Intn(int(WorldWidth-100)) + 50),
-		Y:  float32(rand.Intn(int(WorldHeight-100)) + 50),
-	}
-	w.itemID++
-
-	// Random item type
-	itemTypes := []struct {
-		name  string
-		value int
-	}{
-		{"coin", 10},
-		{"coin", 25},
-		{"health", 20},
-		{"size", 1},
-	}
-
-	chosen := itemTypes[rand.Intn(len(itemTypes))]
-	item.Type = chosen.name
-	item.Value = chosen.value
-
-	w.items[item.ID] = item
 }
 
 // broadcastSnapshot sends the current game state to all clients
@@ -617,7 +583,7 @@ func (w *World) updateBullets() {
 func (w *World) checkBulletPlayerCollision(bullet *Bullet, player *Player) bool {
 	// Get player's bounding box using the mechanics instance
 	playerBbox := w.mechanics.GetShipBoundingBox(player)
-	
+
 	// Create bullet bounding box (treat bullet as a small rectangle)
 	bulletHalfSize := bullet.Size / 2
 	bulletBbox := BoundingBox{
@@ -626,10 +592,29 @@ func (w *World) checkBulletPlayerCollision(bullet *Bullet, player *Player) bool 
 		MaxX: bullet.X + bulletHalfSize,
 		MaxY: bullet.Y + bulletHalfSize,
 	}
-	
+
 	// Check if bounding boxes overlap
 	return bulletBbox.MinX < playerBbox.MaxX && bulletBbox.MaxX > playerBbox.MinX &&
 		bulletBbox.MinY < playerBbox.MaxY && bulletBbox.MaxY > playerBbox.MinY
+}
+
+// checkPlayerItemCollision checks if a player collides with an item using rectangular bounding boxes
+func (w *World) checkPlayerItemCollision(player *Player, item *GameItem) bool {
+	// Get player's bounding box using the mechanics instance
+	playerBbox := w.mechanics.GetShipBoundingBox(player)
+
+	// Create item bounding box (treat item as a small rectangle)
+	itemHalfSize := float32(ItemPickupSize) / 2
+	itemBbox := BoundingBox{
+		MinX: item.X - itemHalfSize,
+		MinY: item.Y - itemHalfSize,
+		MaxX: item.X + itemHalfSize,
+		MaxY: item.Y + itemHalfSize,
+	}
+
+	// Check if bounding boxes overlap
+	return itemBbox.MinX < playerBbox.MaxX && itemBbox.MaxX > playerBbox.MinX &&
+		itemBbox.MinY < playerBbox.MaxY && itemBbox.MaxY > playerBbox.MinY
 }
 
 // updateShipDimensions updates ship dimensions based on cannon and turret count
