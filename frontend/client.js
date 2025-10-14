@@ -1024,10 +1024,12 @@ drawPlayer(player) {
     const currentHealth = player.health || maxHealth;
     const healthPercentage = currentHealth / maxHealth;
     
-    // Health bar dimensions
-    const barWidth = 60;
+    // Health bar dimensions - width scales with max health
+    const baseWidth = 50;
+    const barWidth = Math.max(baseWidth, baseWidth + (maxHealth - 100) * 0.05); // Wider for higher max health
     const barHeight = 8;
-    const barOffsetY = -40; // Position above the ship
+    const barOffsetY = 40; // Position above the ship
+    const borderRadius = 4; // Rounded corners
     
     // Skip drawing if player is dead
     if (currentHealth <= 0) {
@@ -1036,27 +1038,27 @@ drawPlayer(player) {
     
     ctx.save();
     
-    // Health bar background (red)
-    ctx.fillStyle = '#cc0000';
-    ctx.fillRect(screenX - barWidth/2, screenY + barOffsetY, barWidth, barHeight);
+    // Health bar background (dark red/gray rounded rectangle)
+    ctx.fillStyle = '#444444';
+    this.drawRoundedRect(screenX - barWidth/2, screenY + barOffsetY, barWidth, barHeight, borderRadius);
+    ctx.fill();
     
-    // Health bar foreground (green to red gradient based on health)
-    const healthColor = healthPercentage > 0.6 ? '#00cc00' : 
-                       healthPercentage > 0.3 ? '#cccc00' : '#cc0000';
+    // Health bar foreground - green for own player, red for enemies
+    const isOwnPlayer = player.id === this.myPlayerId;
+    const healthColor = isOwnPlayer ? '#00cc00' : '#cc0000'; // Green for self, red for enemies
     
     ctx.fillStyle = healthColor;
-    ctx.fillRect(screenX - barWidth/2, screenY + barOffsetY, barWidth * healthPercentage, barHeight);
+    const fillWidth = barWidth * healthPercentage;
+    if (fillWidth > 0) {
+      this.drawRoundedRect(screenX - barWidth/2, screenY + barOffsetY, fillWidth, barHeight, borderRadius);
+      ctx.fill();
+    }
     
-    // Health bar border
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(screenX - barWidth/2, screenY + barOffsetY, barWidth, barHeight);
-    
-    // Health text (optional)
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '12px Arial';
-    ctx.textAlign = 'center';
-    ctx.fillText(`${currentHealth}/${maxHealth}`, screenX, screenY + barOffsetY - 2);
+    // Health bar borderw
+    ctx.strokeStyle = '#444444';
+    ctx.lineWidth = 2;
+    this.drawRoundedRect(screenX - barWidth/2, screenY + barOffsetY, barWidth, barHeight, borderRadius);
+    ctx.stroke();
     
     ctx.restore();
   }
