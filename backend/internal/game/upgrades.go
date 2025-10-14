@@ -16,10 +16,9 @@ const (
 
 // UpgradeEffect represents the effects an upgrade has on ship stats
 type UpgradeEffect struct {
-	SpeedMultiplier    float32 `json:"speedMultiplier"`    // Speed modification (1.0 = no change)
-	TurnRateMultiplier float32 `json:"turnRateMultiplier"` // Turn rate modification (1.0 = no change)
-	HealthBonus        int     `json:"healthBonus"`        // Additional health points
-	ArmorBonus         float32 `json:"armorBonus"`         // Damage reduction (0.1 = 10% reduction)
+	SpeedMultiplier     float32 `json:"speedMultiplier"`     // Speed modification (1.0 = no change)
+	TurnRateMultiplier  float32 `json:"turnRateMultiplier"`  // Turn rate modification (1.0 = no change)
+	ShipWidthMultiplier float32 `json:"shipWidthMultiplier"` // Width modification (1.0 = no change)
 }
 
 // ShipUpgrade represents a single upgrade installed on a ship
@@ -29,8 +28,8 @@ type ShipUpgrade struct {
 	Name    string        `json:"name"`
 	Count   int           `json:"level"`   // Upgrade level (1, 2, 3, etc.)
 	Effect  UpgradeEffect `json:"effect"`  // Stat modifications
-	Cannons []Cannon      `json:"cannons"` // Weapons (if applicable)
-	Turrets []Turret      `json:"turrets"` // Turret weapons (if applicable)
+	Cannons []*Cannon     `json:"cannons"` // Weapons (if applicable)
+	Turrets []*Turret     `json:"turrets"` // Turret weapons (if applicable)
 
 	NextUpgrades []*ShipUpgrade `json:"nextUpgrades,omitempty"` // Possible next upgrades
 
@@ -52,10 +51,9 @@ type ShipConfiguration struct {
 // GetTotalEffect calculates the combined effect of all upgrades
 func (sc *ShipConfiguration) GetTotalEffect() UpgradeEffect {
 	effect := UpgradeEffect{
-		SpeedMultiplier:    1.0,
-		TurnRateMultiplier: 1.0,
-		HealthBonus:        0,
-		ArmorBonus:         0,
+		SpeedMultiplier:     1.0,
+		TurnRateMultiplier:  1.0,
+		ShipWidthMultiplier: 1.0,
 	}
 
 	// Collect all non-nil upgrades
@@ -65,8 +63,7 @@ func (sc *ShipConfiguration) GetTotalEffect() UpgradeEffect {
 		if upgrade != nil {
 			effect.SpeedMultiplier *= upgrade.Effect.SpeedMultiplier
 			effect.TurnRateMultiplier *= upgrade.Effect.TurnRateMultiplier
-			effect.HealthBonus += upgrade.Effect.HealthBonus
-			effect.ArmorBonus += upgrade.Effect.ArmorBonus
+			effect.ShipWidthMultiplier *= upgrade.Effect.ShipWidthMultiplier
 		}
 	}
 
@@ -128,10 +125,13 @@ func (sc *ShipConfiguration) UpdateUpgradePositions() {
 				X: 0,
 				Y: 0,
 			}
-			for j := range topUpgrade.Turrets[0].Cannons {
-				topUpgrade.Turrets[0].Cannons[j].Position = Position{
-					X: 0,
-					Y: 0,
+			// Only reset cannon positions for regular turrets, not machine turrets
+			if topUpgrade.Turrets[0].Type != WeaponTypeMachineGunTurret {
+				for j := range topUpgrade.Turrets[0].Cannons {
+					topUpgrade.Turrets[0].Cannons[j].Position = Position{
+						X: 0,
+						Y: 0,
+					}
 				}
 			}
 		} else {
@@ -145,10 +145,13 @@ func (sc *ShipConfiguration) UpdateUpgradePositions() {
 					X: offset,
 					Y: 0,
 				}
-				for j := range topUpgrade.Turrets[i].Cannons {
-					topUpgrade.Turrets[i].Cannons[j].Position = Position{
-						X: offset,
-						Y: 0,
+				// Only reset cannon positions for regular turrets, not machine turrets
+				if topUpgrade.Turrets[i].Type != WeaponTypeMachineGunTurret {
+					for j := range topUpgrade.Turrets[i].Cannons {
+						topUpgrade.Turrets[i].Cannons[j].Position = Position{
+							X: offset,
+							Y: 0,
+						}
 					}
 				}
 			}
@@ -162,6 +165,8 @@ func (sc *ShipConfiguration) CalculateShipDimensions() {
 	size := sc.Size
 	baseLength := float32(size*1.2) * 0.5 // Base shaft length for 1 cannon
 	baseWidth := float32(size * 0.8)
+
+	upgradeEffects := sc.GetTotalEffect()
 
 	sideLength := baseLength
 	turretLength := baseLength
@@ -189,18 +194,18 @@ func (sc *ShipConfiguration) CalculateShipDimensions() {
 	}
 
 	sc.ShipLength = max(sideLength, turretLength)
-	sc.ShipWidth = max(baseWidth, sc.ShipWidth)
+	sc.ShipWidth = max(baseWidth*upgradeEffects.ShipWidthMultiplier, sc.ShipWidth)
 }
 
 // Predefined upgrade templates
 func NewBasicSideCannons(cannonCount int) *ShipUpgrade {
 	cannonCount = int(math.Max(1, float64(cannonCount))) // Ensure at least 1 cannon per side
 	// Create cannons for both sides (cannonCount per side)
-	cannons := make([]Cannon, cannonCount*2)
+	cannons := make([]*Cannon, cannonCount*2)
 
 	// Left side cannons - angle will be calculated dynamically based on ship orientation
 	for i := 0; i < cannonCount; i++ {
-		cannons[i] = Cannon{
+		cannons[i] = &Cannon{
 			ID:    uint32(i + 1),
 			Angle: 0, // Relative angle - actual angle calculated during firing
 			Stats: NewBasicCannon(),
@@ -210,7 +215,7 @@ func NewBasicSideCannons(cannonCount int) *ShipUpgrade {
 
 	// Right side cannons - angle will be calculated dynamically based on ship orientation
 	for i := 0; i < cannonCount; i++ {
-		cannons[cannonCount+i] = Cannon{
+		cannons[cannonCount+i] = &Cannon{
 			ID:    uint32(cannonCount + i + 1),
 			Angle: 0, // Relative angle - actual angle calculated during firing
 			Stats: NewBasicCannon(),
@@ -224,10 +229,9 @@ func NewBasicSideCannons(cannonCount int) *ShipUpgrade {
 		Count:   cannonCount,
 		Cannons: cannons,
 		Effect: UpgradeEffect{
-			SpeedMultiplier:    0.95, // Slightly slower due to weight
-			TurnRateMultiplier: 0.9,  // Slower turning due to length
-			HealthBonus:        0,
-			ArmorBonus:         0,
+			SpeedMultiplier:     0.95, // Slightly slower due to weight
+			TurnRateMultiplier:  0.9,  // Slower turning due to length
+			ShipWidthMultiplier: 1.0,
 		},
 	}
 }
@@ -235,11 +239,11 @@ func NewBasicSideCannons(cannonCount int) *ShipUpgrade {
 func NewScatterSideCannons(cannonCount int) *ShipUpgrade {
 	cannonCount = int(math.Max(1, float64(cannonCount))) // Ensure at least 1 cannon per side
 	// Create scatter cannons for both sides (cannonCount per side)
-	cannons := make([]Cannon, cannonCount*2)
+	cannons := make([]*Cannon, cannonCount*2)
 
 	// Left side scatter cannons
 	for i := 0; i < cannonCount; i++ {
-		cannons[i] = Cannon{
+		cannons[i] = &Cannon{
 			ID:    uint32(i + 1),
 			Angle: 0, // Relative angle - actual angle calculated during firing
 			Stats: NewScatterCannon(),
@@ -249,7 +253,7 @@ func NewScatterSideCannons(cannonCount int) *ShipUpgrade {
 
 	// Right side scatter cannons
 	for i := 0; i < cannonCount; i++ {
-		cannons[cannonCount+i] = Cannon{
+		cannons[cannonCount+i] = &Cannon{
 			ID:    uint32(cannonCount + i + 1),
 			Angle: 0, // Relative angle - actual angle calculated during firing
 			Stats: NewScatterCannon(),
@@ -263,10 +267,9 @@ func NewScatterSideCannons(cannonCount int) *ShipUpgrade {
 		Count:   cannonCount,
 		Cannons: cannons,
 		Effect: UpgradeEffect{
-			SpeedMultiplier:    0.92, // Slower due to heavier scatter cannons
-			TurnRateMultiplier: 0.88, // Slower turning due to weight and length
-			HealthBonus:        10,   // Slightly more armored
-			ArmorBonus:         0.05, // 5% damage reduction
+			SpeedMultiplier:     0.92, // Slower due to heavier scatter cannons
+			TurnRateMultiplier:  0.88, // Slower turning due to weight and length
+			ShipWidthMultiplier: 1,
 		},
 	}
 }
@@ -280,9 +283,9 @@ func NewBasicTurrets(turretCount int) *ShipUpgrade {
 		Type:  WeaponTypeCannon,
 	}
 
-	turrets := make([]Turret, turretCount)
+	turrets := make([]*Turret, turretCount)
 	for i := 0; i < turretCount; i++ {
-		turret := Turret{
+		turret := &Turret{
 			ID:      uint32(i + 1),
 			Angle:   0, // Will be controlled by turret aiming
 			Cannons: []Cannon{turretCannon},
@@ -297,10 +300,60 @@ func NewBasicTurrets(turretCount int) *ShipUpgrade {
 		Count:   turretCount,
 		Turrets: turrets,
 		Effect: UpgradeEffect{
-			SpeedMultiplier:    0.98,
-			TurnRateMultiplier: 0.95,
-			HealthBonus:        0,
-			ArmorBonus:         0,
+			SpeedMultiplier:     0.98,
+			TurnRateMultiplier:  0.95,
+			ShipWidthMultiplier: 1.0,
+		},
+	}
+}
+
+func NewMachineGunTurrest(turretCount int) *ShipUpgrade {
+	turretCount = int(math.Max(0, float64(turretCount))) // Ensure non-negative
+
+	turrets := make([]*Turret, turretCount)
+	for i := 0; i < turretCount; i++ {
+		// Create two cannons for each machine gu  turret, positioned side by side
+		leftCannon := Cannon{
+			ID:    uint32(i*2 + 1),
+			Angle: 0, // Will be controlled by turret aiming
+			Stats: NewMachineGunCannon(),
+			Type:  WeaponTypeCannon,
+			Position: Position{
+				X: 0, // Slightly left of center
+				Y: -7,
+			},
+		}
+
+		rightCannon := Cannon{
+			ID:    uint32(i*2 + 2),
+			Angle: 0, // Will be controlled by turret aiming
+			Stats: NewMachineGunCannon(),
+			Type:  WeaponTypeCannon,
+			Position: Position{
+				X: 0, // Slightly right of center
+				Y: 7,
+			},
+		}
+
+		turret := &Turret{
+			ID:              uint32(i + 1),
+			Angle:           0, // Will be controlled by turret aiming
+			Cannons:         []Cannon{leftCannon, rightCannon},
+			Type:            WeaponTypeMachineGunTurret,
+			NextCannonIndex: 0, // Start with the first cannon
+		}
+		turrets[i] = turret
+	}
+
+	return &ShipUpgrade{
+		Type:    UpgradeTypeTop,
+		Name:    "Machine Gun Turret",
+		Count:   turretCount,
+		Turrets: turrets,
+		Effect: UpgradeEffect{
+			SpeedMultiplier:     0.96, // Slightly more penalty due to heavier turrets
+			TurnRateMultiplier:  0.92,
+			ShipWidthMultiplier: 1.1,
 		},
 	}
 }
@@ -309,7 +362,7 @@ func NewTopUpgradeTree() *ShipUpgrade {
 	root := &ShipUpgrade{
 		Type:    UpgradeTypeTop,
 		Name:    "No Top Upgrades",
-		Turrets: []Turret{},
+		Turrets: []*Turret{},
 	}
 
 	// Build the basic turret upgrade path: 1 -> 2 -> 3 -> 4
@@ -318,11 +371,25 @@ func NewTopUpgradeTree() *ShipUpgrade {
 	turret3 := NewBasicTurrets(3)
 	turret4 := NewBasicTurrets(4)
 
-	// Link the chain
-	root.NextUpgrades = []*ShipUpgrade{turret1}
+	// Build the machine gun turret upgrade path: 1 -> 2
+	machineGunTurret1 := NewMachineGunTurrest(1)
+	machineGunTurret2 := NewMachineGunTurrest(2)
+	machineGunTurret3 := NewMachineGunTurrest(3) // Future expansion
+
+	// Link the upgrade paths
+	// From root, you can choose basic turret or machine gun turret
+	root.NextUpgrades = []*ShipUpgrade{turret1, machineGunTurret1}
+
+	// Basic turret path
 	turret1.NextUpgrades = []*ShipUpgrade{turret2}
 	turret2.NextUpgrades = []*ShipUpgrade{turret3}
 	turret3.NextUpgrades = []*ShipUpgrade{turret4}
+
+	// machine gun path
+	machineGunTurret1.NextUpgrades = []*ShipUpgrade{machineGunTurret2}
+	machineGunTurret2.NextUpgrades = []*ShipUpgrade{machineGunTurret3}
+
+	root = machineGunTurret3
 
 	return root
 }

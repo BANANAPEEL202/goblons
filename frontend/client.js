@@ -924,7 +924,7 @@ drawPlayer(player) {
   }
 
   // --- Draw cannons using new modular system ---
-  ctx.fillStyle = '#444';
+  ctx.fillStyle = '#666';
 
   // Draw side cannons from modular system
   if (player.shipConfig && player.shipConfig.sideUpgrade && player.shipConfig.sideUpgrade.cannons) {
@@ -969,13 +969,14 @@ drawPlayer(player) {
         
         // Add stroke for better visibility
         ctx.strokeStyle = '#333';
-        ctx.lineWidth = 1;
         ctx.stroke();
       } else {
         // Draw regular cannon as rectangle
         const x = centerX - gunLength / 2; // Convert center to top-left for fillRect
         const y = centerY - gunWidth / 2;  // Convert center to top-left for fillRect
         ctx.fillRect(x, y, gunLength, gunWidth);
+        ctx.strokeRect(x, y, gunLength, gunWidth);
+
       }
     }
   }
@@ -991,22 +992,34 @@ drawPlayer(player) {
       ctx.save();
       ctx.translate(turret.position.x, turret.position.y);
 
-      // Draw turret barrel (rotated to turret.angle)
-      // Since the canvas is already rotated to the ship's angle, we need to counter-rotate
-      // the turret angle to get the correct world orientation
+      // Draw turret barrel(s) based on turret type
       ctx.rotate(turret.angle - angle);
-      ctx.fillStyle = '#444';
-      ctx.fillRect(0, -barrelWidth / 2, barrelLength, barrelWidth);
-      ctx.strokeRect(0, -barrelWidth / 2, barrelLength, barrelWidth);
+      ctx.fillStyle = '#666';
       
-      // Draw turret base
-      ctx.fillStyle = '#555';
+      if (turret.type === 'machine_gun_turret' && turret.cannons && turret.cannons.length >= 2) {
+        // Draw two parallel barrels for machine gun turret
+        const barrelSeparation = barrelWidth;
+        
+        // Left barrel
+        ctx.fillRect(0, -barrelSeparation/2 - barrelWidth/2, barrelLength, barrelWidth);
+        ctx.strokeRect(0, -barrelSeparation/2 - barrelWidth/2, barrelLength, barrelWidth);
+        
+        // Right barrel
+        ctx.fillRect(0, barrelSeparation/2 - barrelWidth/2, barrelLength, barrelWidth);
+        ctx.strokeRect(0, barrelSeparation/2 - barrelWidth/2, barrelLength, barrelWidth);
+      } else {
+        // Single barrel for regular turret
+        ctx.fillRect(0, -barrelWidth / 2, barrelLength, barrelWidth);
+        ctx.strokeRect(0, -barrelWidth / 2, barrelLength, barrelWidth);
+      }
+      
+      // Draw turret base (slightly larger for machine gun turrets)
+      const baseSize = turret.type === 'machine_gun_turret' ? turretSize * 0.6 : turretSize * 0.5;
+      ctx.fillStyle = '#666';
       ctx.beginPath();
-      ctx.arc(0, 0, turretSize / 2, 0, Math.PI * 2);
+      ctx.arc(0, 0, baseSize, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
-      
-
       
       ctx.restore();
     }
@@ -1591,8 +1604,9 @@ drawPlayer(player) {
     const currentLevelExp = this.getExperienceForLevel(player.level || 1);
     const nextLevelExp = this.getExperienceForLevel((player.level || 1) + 1);
     const currentExp = player.experience || 0;
+    const progressPercent = Math.round(((currentExp - currentLevelExp) / (nextLevelExp - currentLevelExp)) * 100);
     this.ctx.font = '14px Arial';
-    this.ctx.fillText(`${currentExp - currentLevelExp}/${nextLevelExp - currentLevelExp} XP`, this.screenWidth / 2, barY + 20);
+    this.ctx.fillText(`${progressPercent}%`, this.screenWidth / 2, barY + 20);
     
     // Available upgrades indicator
     if (player.availableUpgrades > 0) {

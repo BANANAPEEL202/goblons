@@ -652,7 +652,7 @@ func (w *World) fireSideUpgrade(player *Player, now time.Time) bool {
 
 	// Fire left side cannons
 	for i := 0; i < cannonCount; i++ {
-		cannon := &upgrade.Cannons[i] // Use pointer to modify original cannon
+		cannon := upgrade.Cannons[i] // Use pointer to modify original cannon
 		// Calculate left side angle: ship angle + 90 degrees (π/2)
 		leftAngle := player.Angle + float32(math.Pi/2)
 		bullets := cannon.Fire(w, player, leftAngle, now)
@@ -664,7 +664,7 @@ func (w *World) fireSideUpgrade(player *Player, now time.Time) bool {
 
 	// Fire right side cannons
 	for i := cannonCount; i < len(upgrade.Cannons); i++ {
-		cannon := &upgrade.Cannons[i] // Use pointer to modify original cannon
+		cannon := upgrade.Cannons[i] // Use pointer to modify original cannon
 		// Calculate right side angle: ship angle - 90 degrees (-π/2)
 		rightAngle := player.Angle - float32(math.Pi/2)
 		bullets := cannon.Fire(w, player, rightAngle, now)
@@ -688,7 +688,7 @@ func (w *World) fireTopUpgrade(player *Player, now time.Time) bool {
 
 	// Fire all turrets in the upgrade simultaneously
 	for i := range upgrade.Turrets {
-		turret := &upgrade.Turrets[i]
+		turret := upgrade.Turrets[i] // Already a pointer to maintain state changes
 		bullets := turret.Fire(w, player, now)
 
 		if len(bullets) > 0 {
@@ -713,7 +713,7 @@ func (w *World) fireFrontUpgrade(player *Player, now time.Time) bool {
 
 	// Fire all cannons in the upgrade simultaneously
 	for i := range upgrade.Cannons {
-		cannon := &upgrade.Cannons[i] // Use pointer to modify original cannon
+		cannon := upgrade.Cannons[i] // Use pointer to modify original cannon
 		bullets := cannon.Fire(w, player, cannon.Angle, now)
 		for _, bullet := range bullets {
 			w.bullets[bullet.ID] = bullet
@@ -723,7 +723,7 @@ func (w *World) fireFrontUpgrade(player *Player, now time.Time) bool {
 
 	// Fire all turrets in the upgrade simultaneously
 	for i := range upgrade.Turrets {
-		turret := &upgrade.Turrets[i]
+		turret := upgrade.Turrets[i]
 		bullets := turret.Fire(w, player, now)
 
 		if len(bullets) > 0 {
@@ -748,7 +748,7 @@ func (w *World) fireRearUpgrade(player *Player, now time.Time) bool {
 
 	// Fire all cannons in the upgrade simultaneously
 	for i := range upgrade.Cannons {
-		cannon := &upgrade.Cannons[i] // Use pointer to modify original cannon
+		cannon := upgrade.Cannons[i] // Use pointer to modify original cannon
 		bullets := cannon.Fire(w, player, cannon.Angle, now)
 		for _, bullet := range bullets {
 			w.bullets[bullet.ID] = bullet
@@ -758,7 +758,7 @@ func (w *World) fireRearUpgrade(player *Player, now time.Time) bool {
 
 	// Fire all turrets in the upgrade simultaneously
 	for i := range upgrade.Turrets {
-		turret := &upgrade.Turrets[i]
+		turret := upgrade.Turrets[i]
 		bullets := turret.Fire(w, player, now)
 
 		if len(bullets) > 0 {
@@ -783,7 +783,7 @@ func (w *World) updateModularTurretAiming(player *Player, input *InputMsg) {
 	for _, upgrade := range upgrades {
 		if upgrade != nil {
 			for i := range upgrade.Turrets {
-				turret := &upgrade.Turrets[i]
+				turret := upgrade.Turrets[i]
 				turret.UpdateAiming(player, mouseWorldX, mouseWorldY)
 			}
 		}
