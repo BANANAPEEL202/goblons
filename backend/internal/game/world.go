@@ -137,6 +137,9 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 		return
 	}
 
+	// Get stat upgrade effects for movement calculations
+	statEffects := GetStatUpgradeEffects(player)
+
 	// Handle thrust (W/S keys) - this affects speed, not direction
 	var thrustForce float32 = 0
 	if input.Up {
@@ -154,19 +157,23 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 		player.VelY += thrustY
 	}
 
-	speed := min(float32(math.Sqrt(float64(player.VelX*player.VelX+player.VelY*player.VelY))), ShipMaxSpeed)
+	// Calculate max speed with move speed upgrade and hull strength reduction
+	maxSpeed := BaseShipMaxSpeed + statEffects["moveSpeedBonus"] - (BaseShipMaxSpeed * statEffects["speedReduction"])
+	speed := min(float32(math.Sqrt(float64(player.VelX*player.VelX+player.VelY*player.VelY))), maxSpeed)
 
 	// Scale turn speed based on current speed and ship length
 	// Example: turn faster at low speed, slower at high speed
 	// Longer ships turn slower (more realistic naval physics)
-	turnFactor := speed / ShipMaxSpeed
+	turnFactor := speed / BaseShipMaxSpeed
 
 	// Calculate length factor - longer ships turn slower
 	// Base length for comparison (1 cannon = standard ship)
 	baseShipLength := float32(PlayerSize * 1.2)                   // 1 cannon ship has no length multiplier
 	lengthFactor := baseShipLength / player.ShipConfig.ShipLength // Longer ships get smaller factor
 
-	scaledTurnSpeed := ShipTurnSpeed * turnFactor * lengthFactor
+	// Apply turn speed upgrade
+	baseTurnSpeed := BaseShipTurnSpeed + statEffects["turnSpeedBonus"]
+	scaledTurnSpeed := baseTurnSpeed * turnFactor * lengthFactor
 
 	// Handle turning (A/D keys) and track angular velocity
 	var angularChange float32 = 0
@@ -188,8 +195,8 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 
 	// Limit maximum speed
 	newSpeed := float32(math.Sqrt(float64(player.VelX*player.VelX + player.VelY*player.VelY)))
-	if newSpeed > ShipMaxSpeed {
-		speedRatio := ShipMaxSpeed / newSpeed
+	if newSpeed > maxSpeed {
+		speedRatio := maxSpeed / newSpeed
 		player.VelX *= speedRatio
 		player.VelY *= speedRatio
 	}
@@ -287,6 +294,37 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 		// Clear upgrade input to prevent multiple upgrades per frame
 		input.SelectUpgrade = ""
 		input.UpgradeChoice = ""
+	}
+
+	// Handle stat upgrade purchases
+	if input.StatUpgradeType != "" {
+		statUpgradeType := StatUpgradeType(input.StatUpgradeType)
+		if UpgradeStatLevel(player, statUpgradeType) {
+			log.Printf("Player %d upgraded %s to level %d, coins remaining: %d",
+				player.ID, statUpgradeType, player.StatUpgrades[statUpgradeType].Level, player.Coins)
+		}
+		input.StatUpgradeType = "" // Clear input
+	}
+
+	// Handle health regeneration from auto repairs upgrade
+	if player.StatUpgrades != nil {
+		now := time.Now()
+		if autoRepairs, exists := player.StatUpgrades[StatUpgradeAutoRepairs]; exists && autoRepairs.Level > 0 {
+			// Regenerate health based on time elapsed
+			if !player.LastRegenTime.IsZero() {
+				elapsedSeconds := float32(now.Sub(player.LastRegenTime).Seconds())
+				regenRate := float32(autoRepairs.Level) * 1.5 // 1.5 HP/s per level
+				healthToRegen := int(elapsedSeconds * regenRate)
+
+				if healthToRegen > 0 && player.Health < player.MaxHealth {
+					player.Health += healthToRegen
+					if player.Health > player.MaxHealth {
+						player.Health = player.MaxHealth
+					}
+				}
+			}
+			player.LastRegenTime = now
+		}
 	}
 
 	// Keep player within world boundaries
@@ -565,9 +603,10 @@ func (w *World) updateBullets() {
 					player.RespawnTime = now.Add(time.Duration(RespawnDelay) * time.Second)
 					log.Printf("Player %d (%s) was killed by Player %d", playerID, player.Name, bullet.OwnerID)
 
-					// Award score to shooter
+					// Award score and coins to shooter
 					if shooter, exists := w.players[bullet.OwnerID]; exists {
 						shooter.Score += 100
+						shooter.Coins += 50 // Award coins for kills
 					}
 				}
 
@@ -589,36 +628,11 @@ func (w *World) updateShipDimensions(player *Player) {
 // fireModularUpgrades fires weapons based on upgrade categories with per-category cooldowns
 func (w *World) fireModularUpgrades(player *Player, now time.Time) {
 	// Fire side upgrades (cannons) if input is pressed and cooldown allows
-	if now.Sub(player.LastSideUpgradeShot).Seconds() >= CannonCooldown {
-		fired := w.fireSideUpgrade(player, now)
-		if fired {
-			player.LastSideUpgradeShot = now
-		}
-	}
 
-	// Fire top upgrades (turrets) if cooldown allows
-	if now.Sub(player.LastTopUpgradeShot).Seconds() >= TurretCooldown {
-		fired := w.fireTopUpgrade(player, now)
-		if fired {
-			player.LastTopUpgradeShot = now
-		}
-	}
-
-	// Fire front upgrades if cooldown allows
-	if now.Sub(player.LastFrontUpgradeShot).Seconds() >= CannonCooldown {
-		fired := w.fireFrontUpgrade(player, now)
-		if fired {
-			player.LastFrontUpgradeShot = now
-		}
-	}
-
-	// Fire rear upgrades if cooldown allows
-	if now.Sub(player.LastRearUpgradeShot).Seconds() >= CannonCooldown {
-		fired := w.fireRearUpgrade(player, now)
-		if fired {
-			player.LastRearUpgradeShot = now
-		}
-	}
+	w.fireSideUpgrade(player, now)
+	w.fireTopUpgrade(player, now)
+	w.fireFrontUpgrade(player, now)
+	w.fireRearUpgrade(player, now)
 }
 
 // fireSideUpgrade fires side-mounted cannons from the single side upgrade
@@ -637,7 +651,7 @@ func (w *World) fireSideUpgrade(player *Player, now time.Time) bool {
 
 	// Fire left side cannons
 	for i := 0; i < cannonCount; i++ {
-		cannon := upgrade.Cannons[i] // Left side cannons are first half
+		cannon := &upgrade.Cannons[i] // Use pointer to modify original cannon
 		// Calculate left side angle: ship angle + 90 degrees (π/2)
 		leftAngle := player.Angle + float32(math.Pi/2)
 		bullets := cannon.Fire(w, player, leftAngle, now)
@@ -649,7 +663,7 @@ func (w *World) fireSideUpgrade(player *Player, now time.Time) bool {
 
 	// Fire right side cannons
 	for i := cannonCount; i < len(upgrade.Cannons); i++ {
-		cannon := upgrade.Cannons[i] // Right side cannons are second half
+		cannon := &upgrade.Cannons[i] // Use pointer to modify original cannon
 		// Calculate right side angle: ship angle - 90 degrees (-π/2)
 		rightAngle := player.Angle - float32(math.Pi/2)
 		bullets := cannon.Fire(w, player, rightAngle, now)
@@ -697,7 +711,8 @@ func (w *World) fireFrontUpgrade(player *Player, now time.Time) bool {
 	fired := false
 
 	// Fire all cannons in the upgrade simultaneously
-	for _, cannon := range upgrade.Cannons {
+	for i := range upgrade.Cannons {
+		cannon := &upgrade.Cannons[i] // Use pointer to modify original cannon
 		bullets := cannon.Fire(w, player, cannon.Angle, now)
 		for _, bullet := range bullets {
 			w.bullets[bullet.ID] = bullet
@@ -731,7 +746,8 @@ func (w *World) fireRearUpgrade(player *Player, now time.Time) bool {
 	fired := false
 
 	// Fire all cannons in the upgrade simultaneously
-	for _, cannon := range upgrade.Cannons {
+	for i := range upgrade.Cannons {
+		cannon := &upgrade.Cannons[i] // Use pointer to modify original cannon
 		bullets := cannon.Fire(w, player, cannon.Angle, now)
 		for _, bullet := range bullets {
 			w.bullets[bullet.ID] = bullet

@@ -7,6 +7,29 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+// StatUpgradeType defines the category of stat upgrade
+type StatUpgradeType string
+
+const (
+	StatUpgradeHullStrength StatUpgradeType = "hullStrength" // Increases health and widens ship
+	StatUpgradeAutoRepairs  StatUpgradeType = "autoRepairs"  // Health regeneration
+	StatUpgradeCannonRange  StatUpgradeType = "cannonRange"  // Bullet speed and cannon length
+	StatUpgradeCannonDamage StatUpgradeType = "cannonDamage" // Bullet damage and width
+	StatUpgradeReloadSpeed  StatUpgradeType = "reloadSpeed"  // Reduces cooldown time
+	StatUpgradeMoveSpeed    StatUpgradeType = "moveSpeed"    // Movement speed
+	StatUpgradeTurnSpeed    StatUpgradeType = "turnSpeed"    // Turn rate
+	StatUpgradeBodyDamage   StatUpgradeType = "bodyDamage"   // Collision damage
+)
+
+// StatUpgrade represents a single stat upgrade level
+type StatUpgrade struct {
+	Type        StatUpgradeType `json:"type"`
+	Level       int             `json:"level"`       // Current level (0-75)
+	MaxLevel    int             `json:"maxLevel"`    // Maximum level (75)
+	BaseCost    int             `json:"baseCost"`    // Base cost (10)
+	CurrentCost int             `json:"currentCost"` // Current upgrade cost
+}
+
 // InputMsg represents player input from client
 type InputMsg struct {
 	Type             string `json:"type"`
@@ -26,7 +49,9 @@ type InputMsg struct {
 	DebugLevelUp  bool   `json:"debugLevelUp"`
 	SelectUpgrade string `json:"selectUpgrade"` // "side", "top", "front", "rear"
 	UpgradeChoice string `json:"upgradeChoice"` // Specific upgrade ID/name
-	Mouse         struct {
+	// Stat upgrade inputs
+	StatUpgradeType string `json:"statUpgradeType"` // Which stat to upgrade
+	Mouse           struct {
 		X float32 `json:"x"`
 		Y float32 `json:"y"`
 	} `json:"mouse"`
@@ -64,6 +89,11 @@ type Player struct {
 	LastFrontUpgradeShot time.Time         `json:"-"`          // When front upgrades last fired
 	LastRearUpgradeShot  time.Time         `json:"-"`          // When rear upgrades last fired
 	ShipConfig           ShipConfiguration `json:"shipConfig"` // New modular upgrade system
+
+	// Stat upgrades
+	Coins         int                             `json:"coins"`        // Currency for stat upgrades
+	StatUpgrades  map[StatUpgradeType]StatUpgrade `json:"statUpgrades"` // Applied stat upgrades
+	LastRegenTime time.Time                       `json:"-"`            // Last health regeneration time
 }
 
 // GameItem represents collectible items in the game
@@ -168,7 +198,7 @@ func NewPlayer(id uint32) *Player {
 		Size:         PlayerSize,
 	}
 
-	return &Player{
+	player := &Player{
 		ID:                id,
 		X:                 WorldWidth / 2,
 		Y:                 WorldHeight / 2,
@@ -181,7 +211,14 @@ func NewPlayer(id uint32) *Player {
 		Experience:        0,
 		AvailableUpgrades: 0,
 		ShipConfig:        shipConfig,
+		Coins:             100000, // Starting coins
+		StatUpgrades:      make(map[StatUpgradeType]StatUpgrade),
 	}
+
+	// Initialize stat upgrades
+	InitializeStatUpgrades(player)
+
+	return player
 }
 
 // calculateCollisionRadius calculates the collision radius based on ship dimensions
@@ -257,4 +294,30 @@ func (p *Player) DebugLevelUp() {
 	p.Level++
 	p.Experience = p.GetExperienceForCurrentLevel()
 	p.AvailableUpgrades++
+}
+
+// InitializeStatUpgrades initializes the stat upgrade system for a player
+func InitializeStatUpgrades(player *Player) {
+	player.StatUpgrades = make(map[StatUpgradeType]StatUpgrade)
+
+	upgradeTypes := []StatUpgradeType{
+		StatUpgradeHullStrength,
+		StatUpgradeAutoRepairs,
+		StatUpgradeCannonRange,
+		StatUpgradeCannonDamage,
+		StatUpgradeReloadSpeed,
+		StatUpgradeMoveSpeed,
+		StatUpgradeTurnSpeed,
+		StatUpgradeBodyDamage,
+	}
+
+	for _, upgradeType := range upgradeTypes {
+		player.StatUpgrades[upgradeType] = StatUpgrade{
+			Type:        upgradeType,
+			Level:       0,
+			MaxLevel:    15,
+			BaseCost:    10,
+			CurrentCost: 10,
+		}
+	}
 }

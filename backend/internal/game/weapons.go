@@ -38,13 +38,15 @@ type Cannon struct {
 }
 
 // CanFire checks if the cannon is ready to fire based on reload time
-func (c *Cannon) CanFire(now time.Time) bool {
-	return now.Sub(c.LastFireTime).Seconds() >= float64(c.Stats.ReloadTime)
+func (c *Cannon) CanFire(player *Player, now time.Time) bool {
+	effects := GetStatUpgradeEffects(player)
+	reloadTime := float64(c.Stats.ReloadTime) * float64(effects["reloadSpeedMultiplier"])
+	return now.Sub(c.LastFireTime).Seconds() >= reloadTime
 }
 
 // Fire creates bullets from this cannon
 func (c *Cannon) Fire(world *World, player *Player, targetAngle float32, now time.Time) []*Bullet {
-	if !c.CanFire(now) {
+	if !c.CanFire(player, now) {
 		return nil
 	}
 
@@ -66,8 +68,12 @@ func (c *Cannon) Fire(world *World, player *Player, targetAngle float32, now tim
 			bulletAngle += spreadOffset
 		}
 
-		// Base bullet velocity
+		// Get stat upgrade effects
+		effects := GetStatUpgradeEffects(player)
+
+		// Base bullet velocity with cannon range upgrade
 		bulletSpeed := BulletSpeed * c.Stats.BulletSpeedMod
+		bulletSpeed += effects["bulletSpeed"] // Add cannon range bonus
 		bulletVelX := float32(math.Cos(float64(bulletAngle))) * bulletSpeed
 		bulletVelY := float32(math.Sin(float64(bulletAngle))) * bulletSpeed
 
@@ -85,6 +91,11 @@ func (c *Cannon) Fire(world *World, player *Player, targetAngle float32, now tim
 			}
 		*/
 
+		// Calculate bullet damage and size with upgrades
+		baseDamage := float32(BulletDamage) * c.Stats.BulletDamageMod
+		finalDamage := baseDamage + effects["bulletDamage"] // Add cannon damage bonus
+		bulletSize := BulletSize + effects["bulletWidth"]   // Add bullet width bonus
+
 		bullet := &Bullet{
 			ID:        world.bulletID,
 			X:         worldX,
@@ -93,8 +104,8 @@ func (c *Cannon) Fire(world *World, player *Player, targetAngle float32, now tim
 			VelY:      bulletVelY,
 			OwnerID:   player.ID,
 			CreatedAt: now,
-			Size:      BulletSize,
-			Damage:    int(float32(BulletDamage) * c.Stats.BulletDamageMod),
+			Size:      bulletSize,
+			Damage:    int(finalDamage),
 		}
 
 		bullets = append(bullets, bullet)
@@ -131,7 +142,7 @@ func (t *Turret) UpdateAiming(player *Player, targetX, targetY float32) {
 func (t *Turret) CanFire(player *Player, targetX, targetY float32, now time.Time) bool {
 	// Check if any cannon can fire
 	for _, cannon := range t.Cannons {
-		if cannon.CanFire(now) {
+		if cannon.CanFire(player, now) {
 			return true
 		}
 	}

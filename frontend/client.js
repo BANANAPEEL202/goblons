@@ -31,6 +31,7 @@ class GameClient {
       debugLevelUp: false,
       selectUpgrade: '',
       upgradeChoice: '',
+      statUpgradeType: '',
       mouse: { x: 0, y: 0 }
     };
     
@@ -68,6 +69,21 @@ class GameClient {
     
     this.resizeCanvas();
     this.init();
+  }
+
+  // Helper function for rounded rectangles
+  drawRoundedRect(x, y, width, height, radius) {
+    this.ctx.beginPath();
+    this.ctx.moveTo(x + radius, y);
+    this.ctx.lineTo(x + width - radius, y);
+    this.ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+    this.ctx.lineTo(x + width, y + height - radius);
+    this.ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+    this.ctx.lineTo(x + radius, y + height);
+    this.ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+    this.ctx.lineTo(x, y + radius);
+    this.ctx.quadraticCurveTo(x, y, x + radius, y);
+    this.ctx.closePath();
   }
 
   init() {
@@ -375,6 +391,12 @@ class GameClient {
       }
     }
     
+    // Handle stat upgrade keys (1-8)
+    if (e.key >= '1' && e.key <= '8') {
+      this.handleStatUpgradeKey(parseInt(e.key));
+      // Don't set inputChanged since we handle this separately
+    }
+    
     if (inputChanged) {
       this.sendInput();
     }
@@ -555,6 +577,63 @@ class GameClient {
     }, 1000);
   }
 
+  handleStatUpgradeKey(keyNumber) {
+    if (!this.gameState.myPlayer || !this.gameState.myPlayer.statUpgrades) return;
+    
+    const player = this.gameState.myPlayer;
+    
+    // Map number keys to stat upgrade types
+    const statKeyMap = {
+      1: 'hullStrength',
+      2: 'autoRepairs',
+      3: 'cannonRange', 
+      4: 'cannonDamage',
+      5: 'reloadSpeed',
+      6: 'moveSpeed',
+      7: 'turnSpeed',
+      8: 'bodyDamage'
+    };
+    
+    const statNames = {
+      'hullStrength': 'Hull Strength',
+      'autoRepairs': 'Auto Repairs', 
+      'cannonRange': 'Cannon Range',
+      'cannonDamage': 'Cannon Damage',
+      'reloadSpeed': 'Reload Speed',
+      'moveSpeed': 'Move Speed',
+      'turnSpeed': 'Turn Speed',
+      'bodyDamage': 'Body Damage'
+    };
+    
+    const statKey = statKeyMap[keyNumber];
+    if (!statKey) return;
+    
+    const statUpgrade = player.statUpgrades[statKey];
+    if (!statUpgrade) return;
+    
+    const level = statUpgrade.level || 0;
+    const maxLevel = statUpgrade.maxLevel || 15;
+    const cost = statUpgrade.currentCost || 10;
+    const coins = player.coins || 0;
+    
+    if (level >= maxLevel) {
+      console.log(`${statNames[statKey]} is already at maximum level (${maxLevel})`);
+      return;
+    }
+    
+    if (coins < cost) {
+      console.log(`Not enough coins to upgrade ${statNames[statKey]}. Need ${cost}, have ${coins}`);
+      return;
+    }
+    
+    // Send stat upgrade request
+    this.input.statUpgradeType = statKey;
+    this.sendInput();
+    this.input.statUpgradeType = ''; // Clear immediately
+    console.log(`Upgrading ${statNames[statKey]} (Level ${level} -> ${level + 1}) for ${cost} coins`);
+  }
+
+
   sendInput() {
     if (this.socket && this.socket.readyState === WebSocket.OPEN) {
       this.socket.send(JSON.stringify(this.input));
@@ -710,7 +789,7 @@ class GameClient {
 
   drawGrid() {
     const gridSize = 25;
-    this.ctx.strokeStyle = '#9393a3ff';
+    this.ctx.strokeStyle = '#808080';
     this.ctx.lineWidth = 1;
     
     const startX = Math.floor(this.camera.x / gridSize) * gridSize;
@@ -742,7 +821,7 @@ class GameClient {
     const borderBottom = worldHeight - this.camera.y;
     
     // Only draw border segments that are visible on screen
-    this.ctx.strokeStyle = '#333'; 
+    this.ctx.strokeStyle = '#404040'; 
     this.ctx.lineWidth = 4;
     
     this.ctx.beginPath();
@@ -1086,26 +1165,11 @@ drawPlayer(player) {
   }
 
   drawUI() {
-    // Semi-transparent background for UI elements
-    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-    this.ctx.fillRect(10, 10, 200, 100);
-    
-    if (this.gameState.myPlayer) {
-      // Player info
-      this.ctx.fillStyle = '#ffffff';
-      this.ctx.font = '18px Arial';
-      this.ctx.textAlign = 'left';
-      this.ctx.fillText(`${this.gameState.myPlayer.name}`, 20, 35);
-      this.ctx.fillText(`Score: ${this.gameState.myPlayer.score || 0}`, 20, 55);
-      this.ctx.fillText(`Level: ${this.gameState.myPlayer.level || 1}`, 20, 75);
-      this.ctx.fillText(`Players: ${this.gameState.players.length}`, 20, 95);
-    }
+    // Draw stat upgrade panel (moved to top left)
+    this.drawStatUpgradePanel();
     
     // Mini leaderboard in top right
     this.drawLeaderboard();
-    
-    // Draw controls help
-    this.drawControls();
     
     // Draw minimap
     this.drawMinimap();
@@ -1115,6 +1179,128 @@ drawPlayer(player) {
     
     // Draw upgrade UI
     this.drawUpgradeUI();
+  }
+
+  drawStatUpgradePanel() {
+    if (!this.gameState.myPlayer) return;
+    
+    const player = this.gameState.myPlayer;
+    const panelX = 10;
+    const panelY = 10; // Top left corner
+    const panelWidth = 350;
+    
+    // Title
+    this.ctx.fillStyle = '#FFFFFF';
+    this.ctx.font = 'bold 16px Arial';
+    this.ctx.textAlign = 'left';
+    this.ctx.fillText('Stat Upgrades', panelX, panelY + 20);
+    
+    // Coins display
+    this.ctx.fillStyle = '#FFFFFF';
+    this.ctx.font = 'bold 14px Arial';
+    this.ctx.fillText(`$ Coins: ${player.coins || 0}`, panelX, panelY + 40);
+    
+    // Stat upgrades
+    if (player.statUpgrades) {
+      const statNames = {
+        'hullStrength': 'Hull Strength',
+        'autoRepairs': 'Auto Repairs', 
+        'cannonRange': 'Cannon Range',
+        'cannonDamage': 'Cannon Damage',
+        'reloadSpeed': 'Reload Speed',
+        'moveSpeed': 'Move Speed',
+        'turnSpeed': 'Turn Speed',
+        'bodyDamage': 'Body Damage'
+      };
+      
+      let yOffset = 55;
+      const statOrder = [
+        'hullStrength', 'autoRepairs', 'cannonRange', 'cannonDamage',
+        'reloadSpeed', 'moveSpeed', 'turnSpeed', 'bodyDamage'
+      ];
+      
+      statOrder.forEach((statKey, index) => {
+        const statUpgrade = player.statUpgrades[statKey];
+        if (statUpgrade) {
+          const level = statUpgrade.level || 0;
+          const maxLevel = 15;
+          const cost = statUpgrade.currentCost || 10;
+          const keyNumber = index + 1;
+          
+          // Individual upgrade bar with padding
+          const barX = panelX + 5;
+          const barY = panelY + yOffset;
+          const barWidth = panelWidth - 80; // Leave space for key number on the right
+          const barHeight = 20;
+          const borderRadius = 5;
+          
+          // Background (empty part)
+          this.ctx.fillStyle = '#404040'; // Dark gray
+          this.drawRoundedRect(barX, barY, barWidth, barHeight, borderRadius);
+          this.ctx.fill();
+          
+          // Progress fill
+          const progress = level / maxLevel;
+          const fillWidth = barWidth * progress;
+          
+          if (level === maxLevel) {
+            this.ctx.fillStyle = '#FFFFFF'; // White for maxed
+          } else if (level > 0) {
+            this.ctx.fillStyle = '#B0B0B0'; // Light gray for upgraded
+          } else {
+            this.ctx.fillStyle = '#606060'; // Medium gray for no upgrades
+          }
+          
+          if (fillWidth > 0) {
+            this.drawRoundedRect(barX, barY, fillWidth, barHeight, borderRadius);
+            this.ctx.fill();
+          }
+          
+          // Border
+          this.ctx.strokeStyle = '#404040'; // Dark gray border
+          this.ctx.lineWidth = 2;
+          this.drawRoundedRect(barX, barY, barWidth, barHeight, borderRadius);
+          this.ctx.stroke();
+          
+          // Text inside the bar
+          this.ctx.fillStyle = '#FFFFFF';
+          this.ctx.font = 'bold 12px Arial';
+          
+          // Center: Stat name
+          const centerText = `${statNames[statKey]}`;
+          const centerTextWidth = this.ctx.measureText(centerText).width;
+          this.ctx.fillText(centerText, barX + (barWidth - centerTextWidth) / 2, barY + 14);
+          
+          // Right side: Cost or MAX (inside bar)
+          let rightText;
+          if (level < maxLevel) {
+            rightText = `$${cost}`;
+            this.ctx.fillStyle = '#FFFFFF';
+          } else {
+            rightText = 'MAX';
+            this.ctx.fillStyle = '#FFFFFF';
+          }
+          const rightTextWidth = this.ctx.measureText(rightText).width;
+          this.ctx.fillText(rightText, barX + barWidth - rightTextWidth - 5, barY + 14);
+          
+          // Key number to the right of the bar (white)
+          this.ctx.fillStyle = '#FFFFFF';
+          this.ctx.font = 'bold 14px Arial';
+          this.ctx.fillText(keyNumber, barX + barWidth + 10, barY + 14);
+          
+          yOffset += 25; // Spacing between individual bars with padding
+        }
+      });
+      
+      // Instructions
+      this.ctx.fillStyle = '#B0B0B0';
+      this.ctx.font = '11px Arial';
+      this.ctx.fillText('Press 1-8 to upgrade stats', panelX, panelY + yOffset + 10);
+    } else {
+      this.ctx.fillStyle = '#B0B0B0';
+      this.ctx.font = '12px Arial';
+      this.ctx.fillText('No stat upgrade data available', panelX, panelY + 70);
+    }
   }
 
   drawLeaderboard() {
@@ -1130,11 +1316,12 @@ drawPlayer(player) {
     const y = 10;
     
     // Background
-    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-    this.ctx.fillRect(x, y, leaderboardWidth, leaderboardHeight);
+    this.ctx.fillStyle = 'rgba(64, 64, 64, 0.8)';
+    this.drawRoundedRect(x, y, leaderboardWidth, leaderboardHeight, 5);
+    this.ctx.fill();
     
     // Title
-    this.ctx.fillStyle = '#4ECDC4';
+    this.ctx.fillStyle = '#FFFFFF';
     this.ctx.font = 'bold 16px Arial';
     this.ctx.textAlign = 'left';
     this.ctx.fillText('Leaderboard', x + 10, y + 20);
@@ -1143,7 +1330,7 @@ drawPlayer(player) {
     this.ctx.font = '14px Arial';
     sortedPlayers.forEach((player, index) => {
       const isMe = player.id === this.myPlayerId;
-      this.ctx.fillStyle = isMe ? '#FFD700' : '#ffffff';
+      this.ctx.fillStyle = isMe ? '#FFFFFF' : '#B0B0B0';
       
       const rank = index + 1;
       const name = player.name || `Player ${player.id}`;
@@ -1163,11 +1350,11 @@ drawPlayer(player) {
     const y = this.screenHeight - controlsHeight - 10;
     
     // Background
-    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    this.ctx.fillStyle = 'rgba(64, 64, 64, 0.7)';
     this.ctx.fillRect(x, y, controlsWidth, controlsHeight);
     
     // Controls text
-    this.ctx.fillStyle = '#ffffff';
+    this.ctx.fillStyle = '#FFFFFF';
     this.ctx.font = '14px Arial';
     this.ctx.textAlign = 'left';
     
@@ -1190,11 +1377,11 @@ drawPlayer(player) {
     const minimapY = this.screenHeight - minimapSize - 20;
     
     // Background
-    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+    this.ctx.fillStyle = 'rgba(64, 64, 64, 0.8)';
     this.ctx.fillRect(minimapX, minimapY, minimapSize, minimapSize);
     
     // Border
-    this.ctx.strokeStyle = '#4ECDC4';
+    this.ctx.strokeStyle = '#FFFFFF';
     this.ctx.lineWidth = 2;
     this.ctx.strokeRect(minimapX, minimapY, minimapSize, minimapSize);
     
@@ -1208,7 +1395,7 @@ drawPlayer(player) {
       const dotY = minimapY + (player.y * scaleY);
       const dotSize = Math.max(2, player.size * scaleX * 0.5);
       
-      this.ctx.fillStyle = player.id === this.myPlayerId ? '#FFD700' : '#4ECDC4';
+      this.ctx.fillStyle = player.id === this.myPlayerId ? '#FFFFFF' : '#B0B0B0';
       this.ctx.beginPath();
       this.ctx.arc(dotX, dotY, dotSize, 0, Math.PI * 2);
       this.ctx.fill();
@@ -1235,21 +1422,25 @@ drawPlayer(player) {
     const barX = (this.screenWidth - barWidth) / 2;
     const barY = this.screenHeight - 60;
     
-    // Background
-    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-    this.ctx.fillRect(barX - 10, barY - 10, barWidth + 20, barHeight + 20);
-    
     // Progress bar background
-    this.ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
-    this.ctx.fillRect(barX, barY, barWidth, barHeight);
+    this.ctx.fillStyle = '#404040'; // Dark gray background
+    this.drawRoundedRect(barX, barY, barWidth, barHeight, 5);
+    this.ctx.fill();
     
     // Progress bar fill
     const progress = this.getExperienceProgress(player);
-    this.ctx.fillStyle = '#4ECDC4';
-    this.ctx.fillRect(barX, barY, barWidth * progress, barHeight);
+    this.ctx.fillStyle = '#B0B0B0';
+    this.drawRoundedRect(barX, barY, barWidth * progress, barHeight, 5);
+    this.ctx.fill();
+    
+    // Progress bar border
+    this.ctx.strokeStyle = '#404040'; // Dark gray border
+    this.ctx.lineWidth = 2;
+    this.drawRoundedRect(barX, barY, barWidth, barHeight, 5);
+    this.ctx.stroke();
     
     // Text
-    this.ctx.fillStyle = '#ffffff';
+    this.ctx.fillStyle = '#FFFFFF';
     this.ctx.font = 'bold 16px Arial';
     this.ctx.textAlign = 'center';
     this.ctx.fillText(`Level ${player.level || 1}`, this.screenWidth / 2, barY - 15);
@@ -1263,7 +1454,7 @@ drawPlayer(player) {
     
     // Available upgrades indicator
     if (player.availableUpgrades > 0) {
-      this.ctx.fillStyle = '#FFD700';
+      this.ctx.fillStyle = '#FFFFFF';
       this.ctx.font = 'bold 18px Arial';
       this.ctx.fillText(`${player.availableUpgrades} Upgrade${player.availableUpgrades > 1 ? 's' : ''} Available!`, this.screenWidth / 2, barY - 40);
     }
@@ -1305,16 +1496,18 @@ drawPlayer(player) {
       buttonPositions[type] = x;
       
       // Button background
-      this.ctx.fillStyle = this.upgradeUI.selectedUpgradeType === type ? '#4ECDC4' : 'rgba(0, 0, 0, 0.8)';
-      this.ctx.fillRect(x, buttonY, buttonWidth, buttonHeight);
+      this.ctx.fillStyle = this.upgradeUI.selectedUpgradeType === type ? '#B0B0B0' : 'rgba(64, 64, 64, 0.8)';
+      this.drawRoundedRect(x, buttonY, buttonWidth, buttonHeight, 5);
+      this.ctx.fill();
       
       // Button border
-      this.ctx.strokeStyle = '#ffffff';
+      this.ctx.strokeStyle = '#FFFFFF';
       this.ctx.lineWidth = 2;
-      this.ctx.strokeRect(x, buttonY, buttonWidth, buttonHeight);
+      this.drawRoundedRect(x, buttonY, buttonWidth, buttonHeight, 5);
+      this.ctx.stroke();
       
       // Button text
-      this.ctx.fillStyle = '#ffffff';
+      this.ctx.fillStyle = '#FFFFFF';
       this.ctx.font = 'bold 16px Arial';
       this.ctx.textAlign = 'center';
       this.ctx.fillText(type.toUpperCase(), x + buttonWidth / 2, buttonY + buttonHeight / 2 + 6);
@@ -1357,16 +1550,18 @@ drawPlayer(player) {
       });
       
       // Option background
-      this.ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
-      this.ctx.fillRect(optionsX, y, optionWidth, optionHeight);
+      this.ctx.fillStyle = 'rgba(64, 64, 64, 0.9)';
+      this.drawRoundedRect(optionsX, y, optionWidth, optionHeight, 5);
+      this.ctx.fill();
       
       // Option border
-      this.ctx.strokeStyle = '#4ECDC4';
+      this.ctx.strokeStyle = '#B0B0B0';
       this.ctx.lineWidth = 2;
-      this.ctx.strokeRect(optionsX, y, optionWidth, optionHeight);
+      this.drawRoundedRect(optionsX, y, optionWidth, optionHeight, 5);
+      this.ctx.stroke();
       
       // Option text
-      this.ctx.fillStyle = '#ffffff';
+      this.ctx.fillStyle = '#FFFFFF';
       this.ctx.font = 'bold 14px Arial';
       this.ctx.textAlign = 'center';
       this.ctx.fillText(option.name, optionsX + optionWidth / 2, y + optionHeight / 2 + 5);
