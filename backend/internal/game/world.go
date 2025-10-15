@@ -515,10 +515,10 @@ func (w *World) HandleInput(clientID uint32, input InputMsg) {
 
 	switch input.Type {
 	case "profile":
-		if sanitizedName := SanitizePlayerName(input.ProfileName); sanitizedName != "" {
+		if sanitizedName := SanitizePlayerName(input.PlayerName); sanitizedName != "" {
 			client.Player.Name = sanitizedName
 		}
-		if sanitizedColor := SanitizePlayerColor(input.ProfileColor); sanitizedColor != "" {
+		if sanitizedColor := SanitizePlayerColor(input.PlayerColor); sanitizedColor != "" {
 			client.Player.Color = sanitizedColor
 		}
 	default:

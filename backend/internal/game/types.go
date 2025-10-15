@@ -59,8 +59,8 @@ type InputMsg struct {
 	UpgradeChoice string `json:"upgradeChoice"` // Specific upgrade ID/name
 	// Stat upgrade inputs
 	StatUpgradeType string `json:"statUpgradeType"` // Which stat to upgrade
-	ProfileName     string `json:"profileName"`
-	ProfileColor    string `json:"profileColor"`
+	PlayerName      string `json:"playerName"`
+	PlayerColor     string `json:"playerColor"`
 	Mouse           struct {
 		X float32 `json:"x"`
 		Y float32 `json:"y"`
