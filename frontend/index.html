@@ -21,6 +21,10 @@
       flex-direction: column;
     }
     
+    body.has-launched #hud {
+      display: none;
+    }
+    
     #gameContainer {
       flex: 1;
       display: flex;
@@ -37,88 +41,302 @@
       width: 100vw;
       height: 100vh;
     }
-    
-    #controls {
-      position: fixed;
-      top: 20px;
-      left: 20px;
-      color: #ffffff;
-      background: rgba(0, 0, 0, 0.8);
-      padding: 15px;
-      border-radius: 10px;
-      font-size: 14px;
-      z-index: 1000;
-      backdrop-filter: blur(5px);
-    }
-    
-    #controls h3 {
-      margin-bottom: 10px;
-      color: #4ECDC4;
-    }
-    
-    #controls p {
-      margin: 5px 0;
-    }
-    
-    #gameInfo {
+
+    #hud {
       position: fixed;
       top: 20px;
       right: 20px;
-      color: #ffffff;
-      background: rgba(0, 0, 0, 0.8);
-      padding: 15px;
-      border-radius: 10px;
-      text-align: right;
-      z-index: 1000;
-      backdrop-filter: blur(5px);
+      display: flex;
+      gap: 12px;
+      z-index: 1500;
     }
-    
+
+    .status-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px;
+      border-radius: 999px;
+      background: rgba(0, 0, 0, 0.75);
+      box-shadow: 0 12px 24px rgba(0, 0, 0, 0.3);
+      color: #ffffff;
+      font-size: 14px;
+      letter-spacing: 0.02em;
+    }
+
     .status-indicator {
       display: inline-block;
       width: 10px;
       height: 10px;
       border-radius: 50%;
-      margin-right: 5px;
+      border: 2px solid rgba(255, 255, 255, 0.5);
     }
-    
+
     .connected {
       background-color: #4ECDC4;
     }
-    
+
     .disconnected {
       background-color: #FF6B6B;
     }
+
+    #startScreen {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at top, rgba(19, 62, 135, 0.45), rgba(19, 62, 135, 0.92));
+      backdrop-filter: blur(8px);
+      z-index: 2000;
+      transition: opacity 200ms ease, visibility 200ms ease;
+    }
+
+    #startScreen.hidden {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    .start-card {
+      width: min(460px, 92vw);
+      padding: 28px 36px;
+      border-radius: 24px;
+      background: linear-gradient(165deg, rgba(203, 220, 235, 0.98), rgba(243, 243, 224, 0.92));
+      box-shadow: 0 32px 52px rgba(13, 31, 68, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.45);
+      text-align: center;
+      border: 1px solid rgba(96, 139, 193, 0.35);
+    }
+
+    .launch-logo {
+      width: 100%;
+      max-width: 460px;
+      height: auto;
+      margin: 0 auto 10px auto;
+      display: block;
+      max-height: 320px;
+      filter: drop-shadow(0 18px 36px rgba(19, 62, 135, 0.5));
+    }
+
+    .tagline {
+      margin-top: 6px;
+      margin-bottom: 30px;
+      font-size: 16px;
+      color: #133E87;
+      letter-spacing: 0.04em;
+      font-weight: 600;
+    }
+
+    #startForm {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .input-label {
+      align-self: flex-start;
+      margin-bottom: 8px;
+      font-size: 12px;
+      letter-spacing: 0.18em;
+      color: rgba(19, 62, 135, 0.65);
+      text-transform: uppercase;
+    }
+
+    #playerName {
+      width: 100%;
+      padding: 14px 16px;
+      border-radius: 12px;
+      border: 1px solid rgba(96, 139, 193, 0.35);
+      background: rgba(203, 220, 235, 0.75);
+      color: #133E87;
+      font-size: 16px;
+      outline: none;
+      transition: border-color 150ms ease, box-shadow 150ms ease;
+    }
+
+    #playerName:focus {
+      border-color: rgba(19, 62, 135, 0.65);
+      box-shadow: 0 0 0 2px rgba(19, 62, 135, 0.2);
+    }
+
+    .color-picker-row {
+      text-align: left;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .color-picker-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .color-value {
+      font-size: 12px;
+      letter-spacing: 0.12em;
+      color: rgba(19, 62, 135, 0.75);
+      text-transform: uppercase;
+    }
+
+    .color-controls {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    #playerColor {
+      width: 64px;
+      height: 48px;
+      border: none;
+      border-radius: 12px;
+      padding: 0;
+      background: none;
+      cursor: pointer;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.35);
+    }
+
+    .color-swatches {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .color-swatch {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border: 2px solid rgba(96, 139, 193, 0.4);
+      background: var(--swatch-color);
+      cursor: pointer;
+      transition: transform 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
+      box-shadow: 0 10px 26px rgba(19, 62, 135, 0.25);
+    }
+
+    .color-swatch:hover,
+    .color-swatch.active {
+      transform: translateY(-2px);
+      border-color: rgba(19, 62, 135, 0.75);
+      box-shadow: 0 14px 32px rgba(19, 62, 135, 0.22);
+    }
+
+    .start-actions {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .play-button {
+      flex: 1 1 180px;
+      padding: 16px 20px;
+      border: none;
+      border-radius: 12px;
+      background: linear-gradient(140deg, #133E87, #608BC1);
+      color: #F3F3E0;
+      font-size: 18px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+      cursor: pointer;
+      transition: transform 160ms ease, box-shadow 160ms ease;
+      box-shadow: 0 18px 32px rgba(19, 62, 135, 0.35);
+    }
+
+    .play-button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 24px 40px rgba(19, 62, 135, 0.45);
+    }
+
+    .play-button:disabled {
+      opacity: 0.65;
+      cursor: wait;
+      transform: none;
+      box-shadow: 0 16px 32px rgba(19, 62, 135, 0.25);
+    }
+
+    .randomize-button {
+      padding: 12px 16px;
+      border-radius: 10px;
+      border: 1px solid rgba(96, 139, 193, 0.45);
+      background: rgba(203, 220, 235, 0.45);
+      color: #133E87;
+      font-size: 14px;
+      letter-spacing: 0.08em;
+      cursor: pointer;
+      transition: background 150ms ease, color 150ms ease, transform 150ms ease;
+    }
+
+    .randomize-button:hover {
+      background: rgba(96, 139, 193, 0.45);
+      color: #F3F3E0;
+      transform: translateY(-1px);
+    }
+
+    .start-help {
+      margin-top: 26px;
+      font-size: 13px;
+      letter-spacing: 0.08em;
+      color: rgba(19, 62, 135, 0.65);
+      text-transform: uppercase;
+    }
     
     @media (max-width: 850px) {
-      #controls, #gameInfo {
+      .start-card {
+        width: min(420px, 94vw);
+        padding: 26px 24px;
+      }
+      .launch-logo {
+        width: 100%;
+        max-width: 380px;
+      }
+      .tagline {
+        font-size: 14px;
+      }
+      .start-help {
         font-size: 12px;
-        padding: 10px;
       }
     }
   </style>
 </head>
 <body>
   <div id="gameContainer">
-    <!--
-    <div id="controls">
-      <h3>Controls</h3>
-      <p><strong>WASD</strong> or <strong>Arrow Keys</strong> - Move</p>
-      <p><strong>Mouse</strong> - Aim</p>
-      <p><strong>F11</strong> - Toggle Fullscreen</p>
-    </div>
-    
-    <div id="gameInfo">
-      <div id="connectionStatus">
-        <span class="status-indicator disconnected"></span>
-        <span>Connecting...</span>
-      </div>
-      <div id="serverInfo">
-        <p>Server: localhost:8080</p>
-      </div>
-    </div>
-    -->
-    
     <canvas id="game"></canvas>
+    <div id="startScreen">
+      <div class="start-card">
+        <img src="/goblons_launch.png" class="launch-logo" alt="Goblons Launch Logo">
+        <p class="tagline">Chart a course, rally your fleet, and seize the sector.</p>
+        <form id="startForm" autocomplete="off">
+          <div>
+            <label class="input-label" for="playerName">Name</label>
+            <input type="text" id="playerName" maxlength="16" placeholder="Captain Nova" autocomplete="off" required autofocus />
+          </div>
+          <div class="color-picker-row">
+            <div class="color-picker-header">
+              <label class="input-label" for="playerColor">Hull Color</label>
+              <span class="color-value" id="colorPreviewValue">#608BC1</span>
+            </div>
+            <div class="color-controls">
+              <input type="color" id="playerColor" value="#608BC1" aria-label="Choose hull color" />
+              <div class="color-swatches" id="presetColors"></div>
+            </div>
+          </div>
+          <div class="start-actions">
+            <button type="submit" class="play-button">Launch</button>
+            <button type="button" class="randomize-button" id="randomizeName">Random Name</button>
+          </div>
+        </form>
+        <p class="start-help">WASD to steer • Mouse to aim • F11 for fullscreen</p>
+      </div>
+    </div>
+  </div>
+  <div id="hud">
+    <div id="connectionStatus" class="status-badge">
+      <span class="status-indicator disconnected"></span>
+      <span>Offline</span>
+    </div>
   </div>
   
   <script src="client.js"></script>

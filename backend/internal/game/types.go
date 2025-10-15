@@ -2,8 +2,11 @@ package game
 
 import (
 	"math"
+	"regexp"
+	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/gorilla/websocket"
 )
@@ -21,6 +24,10 @@ const (
 	StatUpgradeTurnSpeed    StatUpgradeType = "turnSpeed"    // Turn rate
 	StatUpgradeBodyDamage   StatUpgradeType = "bodyDamage"   // Collision damage
 )
+
+const maxPlayerNameLength = 16
+
+var colorHexPattern = regexp.MustCompile(`^#?([0-9a-fA-F]{6})$`)
 
 // StatUpgrade represents a single stat upgrade level
 type StatUpgrade struct {
@@ -52,6 +59,8 @@ type InputMsg struct {
 	UpgradeChoice string `json:"upgradeChoice"` // Specific upgrade ID/name
 	// Stat upgrade inputs
 	StatUpgradeType string `json:"statUpgradeType"` // Which stat to upgrade
+	ProfileName     string `json:"profileName"`
+	ProfileColor    string `json:"profileColor"`
 	Mouse           struct {
 		X float32 `json:"x"`
 		Y float32 `json:"y"`
@@ -240,6 +249,69 @@ func generateRandomColor() string {
 func generateRandomName() string {
 	names := []string{"Pirate", "Buccaneer", "Sailor", "Captain", "Admiral", "Navigator", "Corsair", "Raider"}
 	return names[int(time.Now().UnixNano())%len(names)]
+}
+
+// SanitizePlayerName cleans and bounds a requested player name.
+func SanitizePlayerName(input string) string {
+	trimmed := strings.TrimSpace(input)
+	if trimmed == "" {
+		return ""
+	}
+
+	var builder strings.Builder
+	builder.Grow(len(trimmed))
+
+	count := 0
+	lastWasSpace := false
+
+	for _, r := range trimmed {
+		if count >= maxPlayerNameLength {
+			break
+		}
+
+		switch {
+		case unicode.IsLetter(r) || unicode.IsDigit(r):
+			builder.WriteRune(r)
+			count++
+			lastWasSpace = false
+		case r == '\'' || r == '-':
+			if builder.Len() == 0 || lastWasSpace {
+				continue
+			}
+			builder.WriteRune(r)
+			count++
+			lastWasSpace = false
+		case unicode.IsSpace(r):
+			if !lastWasSpace && builder.Len() > 0 {
+				builder.WriteRune(' ')
+				count++
+				lastWasSpace = true
+			}
+		default:
+			continue
+		}
+	}
+
+	result := strings.TrimSpace(builder.String())
+	if result == "" {
+		return ""
+	}
+
+	return result
+}
+
+// SanitizePlayerColor validates and normalises a requested hull colour.
+func SanitizePlayerColor(input string) string {
+	if input == "" {
+		return ""
+	}
+
+	match := colorHexPattern.FindStringSubmatch(strings.TrimSpace(input))
+	if len(match) != 2 {
+		return ""
+	}
+
+	return "#" + strings.ToUpper(match[1])
 }
 
 // GetExperienceRequiredForLevel returns the experience needed to reach a specific level
