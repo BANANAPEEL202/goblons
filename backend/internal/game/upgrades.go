@@ -586,7 +586,7 @@ func GetStatUpgradeEffects(player *Player) map[string]float32 {
 
 	// Auto Repairs effects
 	repairLevel := player.StatUpgrades[StatUpgradeAutoRepairs].Level
-	effects["healthRegen"] = float32(repairLevel) * 1 // 1.5 HP/s per level
+	effects["healthRegen"] = float32(repairLevel) * 1
 
 	// Cannon Range effects
 	rangeLevel := player.StatUpgrades[StatUpgradeCannonRange].Level

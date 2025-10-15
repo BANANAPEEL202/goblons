@@ -2,6 +2,7 @@ package game
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"math"
 	"math/rand"
@@ -307,24 +308,20 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 	}
 
 	// Handle health regeneration from auto repairs upgrade
-	if player.StatUpgrades != nil {
-		now := time.Now()
-		if autoRepairs, exists := player.StatUpgrades[StatUpgradeAutoRepairs]; exists && autoRepairs.Level > 0 {
-			// Regenerate health based on time elapsed
-			if !player.LastRegenTime.IsZero() {
-				elapsedSeconds := float32(now.Sub(player.LastRegenTime).Seconds())
-				regenRate := float32(autoRepairs.Level) * 1.5 // 1.5 HP/s per level
-				healthToRegen := int(elapsedSeconds * regenRate)
-
-				if healthToRegen > 0 && player.Health < player.MaxHealth {
-					player.Health += healthToRegen
-					if player.Health > player.MaxHealth {
-						player.Health = player.MaxHealth
-					}
-				}
+	regenRate := statEffects["healthRegen"]
+	// Regenerate health based on time elapsed
+	elapsedSeconds := float32(now.Sub(player.LastRegenTime).Seconds())
+	if elapsedSeconds >= 0.2 {
+		healthToRegen := int(elapsedSeconds * regenRate)
+		if healthToRegen > 0 && player.Health < player.MaxHealth {
+			fmt.Println("Health to regen:", healthToRegen, "Elapsed seconds:", elapsedSeconds, "Regen rate:", regenRate) // --- IGNORE ---w
+			player.Health += healthToRegen
+			if player.Health > player.MaxHealth {
+				player.Health = player.MaxHealth
 			}
 			player.LastRegenTime = now
 		}
+
 	}
 
 	// Keep player within world boundaries
@@ -374,6 +371,7 @@ func (w *World) handleRespawns() {
 			// Respawn the player
 			player.Health = player.MaxHealth
 			player.State = StateAlive
+			player.LastRegenTime = now // Reset health regen timer for respawned player
 			w.spawnPlayer(player)
 			log.Printf("Player %d (%s) respawned", player.ID, player.Name)
 		}
