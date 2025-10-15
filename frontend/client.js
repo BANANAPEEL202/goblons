@@ -1,9 +1,16 @@
 // Game constants (should match backend)
 const WorldWidth = 2000.0;
 const WorldHeight = 2000.0;
+const PRESET_COLORS = ['#FF0040', '#00FF80', '#0080FF', '#FF8000', '#8000FF'];
+const NAME_POOL = ['Pirate', 'Buccaneer', 'Sailor', 'Captain', 'Admiral', 'Navigator', 'Corsair', 'Raider'];
 
 class GameClient {
-  constructor() {
+  constructor(options = {}) {
+    this.playerConfig = {
+      name: sanitizePlayerName(options.playerName),
+      color: sanitizeHexColor(options.playerColor),
+    };
+    this.autoConnect = options.autoConnect !== false;
     this.canvas = document.getElementById('game');
     this.ctx = this.canvas.getContext('2d');
     this.socket = null;
@@ -66,6 +73,9 @@ class GameClient {
     // Client-side prediction
     this.predictedPlayerPos = { x: 0, y: 0 };
     this.lastPredictionUpdate = Date.now();
+
+    this.controlsLocked = true;
+    this.pendingConnectConfig = null;
     
     this.resizeCanvas();
     this.init();
@@ -88,7 +98,9 @@ class GameClient {
 
   init() {
     this.setupEventListeners();
-    this.connect();
+    if (this.autoConnect) {
+      this.connect();
+    }
     this.startGameLoop();
   }
 
@@ -129,6 +141,10 @@ class GameClient {
     
     // Mouse input
     this.canvas.addEventListener('mousemove', (e) => {
+      if (this.controlsLocked) {
+        return;
+      }
+
       const rect = this.canvas.getBoundingClientRect();
       const screenX = e.clientX - rect.left;
       const screenY = e.clientY - rect.top;
@@ -147,6 +163,10 @@ class GameClient {
     
     // Mouse click handling for upgrade UI
     this.canvas.addEventListener('click', (e) => {
+      if (this.controlsLocked) {
+        return;
+      }
+
       const rect = this.canvas.getBoundingClientRect();
       const screenX = e.clientX - rect.left;
       const screenY = e.clientY - rect.top;
@@ -176,14 +196,72 @@ class GameClient {
     }
   }
 
-  connect() {
+  connect(newConfig = {}, options = {}) {
+    if (newConfig.playerName !== undefined || newConfig.playerColor !== undefined) {
+      const updatedName =
+        newConfig.playerName !== undefined ? sanitizePlayerName(newConfig.playerName) : this.playerConfig.name;
+      const updatedColor =
+        newConfig.playerColor !== undefined ? sanitizeHexColor(newConfig.playerColor) : this.playerConfig.color;
+      this.playerConfig = {
+        name: updatedName,
+        color: updatedColor,
+      };
+    }
+
+    const isActiveSocket =
+      this.socket &&
+      (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING);
+
+    if (isActiveSocket) {
+      if (options.force === true) {
+        this.pendingConnectConfig = { ...this.playerConfig };
+        try {
+          this.socket.close();
+        } catch (err) {
+          console.error('Error closing socket before reconnect:', err);
+          this.socket = null;
+          this.connect(this.pendingConnectConfig || {}, {});
+        }
+      } else {
+        // Already connected; nothing more to do.
+      }
+      return;
+    }
+
+    this.updateConnectionStatus(false);
+
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    this.socket = new WebSocket(`${protocol}//${location.host}/ws`);
+    const params = new URLSearchParams();
+
+    if (this.playerConfig.name) {
+      params.set('name', this.playerConfig.name);
+    }
+    if (this.playerConfig.color) {
+      params.set('color', this.playerConfig.color);
+    }
+
+    let wsUrl = `${protocol}//${location.host}/ws`;
+    const query = params.toString();
+    if (query) {
+      wsUrl += `?${query}`;
+    }
+
+    try {
+      this.socket = new WebSocket(wsUrl);
+    } catch (err) {
+      console.error('WebSocket creation failed:', err);
+      setTimeout(() => this.connect(), 3000);
+      return;
+    }
     
     this.socket.onopen = () => {
       console.log('Connected to server');
       this.isConnected = true;
+      this.pendingConnectConfig = null;
       this.updateConnectionStatus(true);
+      if (!this.controlsLocked) {
+        this.sendInput();
+      }
     };
     
     this.socket.onmessage = (event) => {
@@ -194,9 +272,14 @@ class GameClient {
     this.socket.onclose = () => {
       console.log('Disconnected from server');
       this.isConnected = false;
+      this.socket = null;
       this.updateConnectionStatus(false);
-      // Try to reconnect after 3 seconds
-      setTimeout(() => this.connect(), 3000);
+      const reconnectConfig = this.pendingConnectConfig;
+      this.pendingConnectConfig = null;
+      const delay = reconnectConfig ? 150 : 3000;
+      setTimeout(() => {
+        this.connect(reconnectConfig || {});
+      }, delay);
     };
     
     this.socket.onerror = (error) => {
@@ -310,6 +393,10 @@ class GameClient {
   }
 
   handleKeyDown(e) {
+    if (this.controlsLocked) {
+      return;
+    }
+
     let inputChanged = false;
     
     if (e.key === 'w' || e.key === 'W' || e.key === 'ArrowUp') {
@@ -403,6 +490,10 @@ class GameClient {
   }
 
   handleKeyUp(e) {
+    if (this.controlsLocked) {
+      return;
+    }
+
     let inputChanged = false;
     
     if (e.key === 'w' || e.key === 'W' || e.key === 'ArrowUp') {
@@ -497,6 +588,9 @@ class GameClient {
   }
 
   handleUpgradeUIClick(screenX, screenY) {
+    if (this.controlsLocked) {
+      return;
+    }
     if (!this.gameState.myPlayer || this.gameState.myPlayer.availableUpgrades <= 0 || this.upgradeUI.pendingUpgrade) return;
     // First check if clicking on upgrade type buttons
     const availableTypes = [];
@@ -642,9 +736,13 @@ class GameClient {
 
 
   sendInput() {
-    if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-      this.socket.send(JSON.stringify(this.input));
+    if (this.controlsLocked) {
+      return;
     }
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+      return;
+    }
+    this.socket.send(JSON.stringify(this.input));
   }
 
   updateClientPrediction() {
@@ -1026,6 +1124,20 @@ drawPlayer(player) {
   }
 
   ctx.restore();
+  
+  // Draw player name above the ship
+  const displayName = (player.name && player.name.trim()) ? player.name.trim() : `Player ${player.id}`;
+  const labelY = screenY - (shaftWidth / 2) - 20;
+
+  this.ctx.save();
+  this.ctx.font = 'bold 14px Arial';
+  this.ctx.textAlign = 'center';
+  this.ctx.lineWidth = 3;
+  this.ctx.strokeStyle = 'rgba(15, 15, 35, 0.65)';
+  this.ctx.fillStyle = player.id === this.myPlayerId ? '#FFFFFF' : '#D7D7D7';
+  this.ctx.strokeText(displayName, screenX, labelY);
+  this.ctx.fillText(displayName, screenX, labelY);
+  this.ctx.restore();
   
   // Draw health bar above the ship
   this.drawHealthBar(player, screenX, screenY);
@@ -1769,15 +1881,21 @@ drawPlayer(player) {
 
   updateConnectionStatus(connected) {
     const statusElement = document.querySelector('#connectionStatus');
+    if (!statusElement) {
+      return;
+    }
     const indicator = statusElement.querySelector('.status-indicator');
     const text = statusElement.querySelector('span:last-child');
+    if (!indicator || !text) {
+      return;
+    }
     
     if (connected) {
       indicator.className = 'status-indicator connected';
       text.textContent = 'Connected';
     } else {
       indicator.className = 'status-indicator disconnected';
-      text.textContent = 'Reconnecting...';
+      text.textContent = 'Connecting...';
     }
   }
 
@@ -1788,11 +1906,251 @@ drawPlayer(player) {
     };
     gameLoop();
   }
+
+  applyProfile(playerName, playerColor) {
+    let updated = false;
+
+    const sanitizedName = sanitizePlayerName(playerName);
+    if (sanitizedName && sanitizedName !== this.playerConfig.name) {
+      this.playerConfig.name = sanitizedName;
+      if (this.gameState.myPlayer) {
+        this.gameState.myPlayer.name = sanitizedName;
+      }
+      updated = true;
+    }
+
+    const sanitizedColor = sanitizeHexColor(playerColor);
+    if (sanitizedColor && sanitizedColor !== this.playerConfig.color) {
+      this.playerConfig.color = sanitizedColor;
+      if (this.gameState.myPlayer) {
+        this.gameState.myPlayer.color = sanitizedColor;
+      }
+      updated = true;
+    }
+
+    if (updated || !this.socket) {
+      this.pendingConnectConfig = { ...this.playerConfig };
+      this.connect(
+        { playerName: this.playerConfig.name, playerColor: this.playerConfig.color },
+        { force: true }
+      );
+    }
+  }
+
+  setControlsLocked(locked) {
+    this.controlsLocked = Boolean(locked);
+    if (this.controlsLocked) {
+      this.clearActiveInputs();
+      // send one last update that all inputs are cleared
+      if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+        this.socket.send(JSON.stringify(this.input));
+      }
+    } else {
+      this.sendInput();
+    }
+  }
+
+  clearActiveInputs() {
+    this.input.up = false;
+    this.input.down = false;
+    this.input.left = false;
+    this.input.right = false;
+    this.input.shootLeft = false;
+    this.input.shootRight = false;
+    this.input.upgradeCannons = false;
+    this.input.downgradeCannons = false;
+    this.input.upgradeScatter = false;
+    this.input.downgradeScatter = false;
+    this.input.upgradeTurrets = false;
+    this.input.downgradeTurrets = false;
+    this.input.debugLevelUp = false;
+    this.input.selectUpgrade = '';
+    this.input.upgradeChoice = '';
+    this.input.statUpgradeType = '';
+  }
 }
 
-// Start the game when the page loads
-window.addEventListener('load', () => {
-  new GameClient();
-});
+function sanitizePlayerName(name) {
+  if (!name || typeof name !== 'string') {
+    return '';
+  }
+  const cleaned = name.trim().replace(/[^a-zA-Z0-9\s'-]/g, '');
+  return cleaned.slice(0, 16).trim();
+}
 
-// Game client is now initialized in the GameClient class above
+function sanitizeHexColor(color) {
+  if (!color || typeof color !== 'string') {
+    return '';
+  }
+  const match = /^#?([0-9a-fA-F]{6})$/.exec(color.trim());
+  return match ? `#${match[1].toUpperCase()}` : '';
+}
+
+function generateRandomName() {
+  const base = NAME_POOL[Math.floor(Math.random() * NAME_POOL.length)];
+  const suffix = Math.floor(100 + Math.random() * 900);
+  return `${base} ${suffix}`;
+}
+
+class StartScreen {
+  constructor(clientInstance) {
+    this.client = clientInstance;
+    this.element = document.getElementById('startScreen');
+    if (!this.element) {
+      if (this.client) {
+        this.client.setControlsLocked(false);
+      }
+      return;
+    }
+
+    document.body.classList.remove('has-launched');
+
+    this.form = document.getElementById('startForm');
+    this.nameInput = document.getElementById('playerName');
+    this.colorInput = document.getElementById('playerColor');
+    this.colorPreview = document.getElementById('colorPreviewValue');
+    this.swatchContainer = document.getElementById('presetColors');
+    this.randomButton = document.getElementById('randomizeName');
+    this.playButton = this.form ? this.form.querySelector('.play-button') : null;
+    this.activeSwatch = null;
+    this.hasLaunched = false;
+
+    if (this.client) {
+      this.client.setControlsLocked(true);
+    }
+
+    this.populateSwatches();
+    const initialColor = (this.client && this.client.playerConfig.color) || (this.colorInput ? this.colorInput.value : PRESET_COLORS[2]);
+    const initialName = (this.client && this.client.playerConfig.name) || (this.nameInput ? this.nameInput.value : '');
+
+    const sanitizedColor = this.applyColor(initialColor);
+    const sanitizedName = this.applyName(initialName);
+    if (this.client) {
+      this.client.applyProfile(sanitizedName, sanitizedColor);
+    }
+    this.registerEvents();
+  }
+
+  populateSwatches() {
+    if (!this.swatchContainer) {
+      return;
+    }
+
+    this.swatchContainer.innerHTML = '';
+    PRESET_COLORS.forEach((hex) => {
+      const sanitized = sanitizeHexColor(hex);
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'color-swatch';
+      button.dataset.color = sanitized;
+      button.style.setProperty('--swatch-color', sanitized);
+      button.setAttribute('aria-label', `Use ${sanitized} hull`);
+      button.addEventListener('click', () => {
+        this.applyColor(sanitized);
+      });
+      this.swatchContainer.appendChild(button);
+    });
+  }
+
+  registerEvents() {
+    if (this.form) {
+      this.form.addEventListener('submit', (event) => {
+        event.preventDefault();
+        this.launchGame();
+      });
+    }
+
+    if (this.colorInput) {
+      this.colorInput.addEventListener('input', (event) => {
+        this.applyColor(event.target.value);
+      });
+    }
+
+    if (this.nameInput) {
+      this.nameInput.addEventListener('blur', () => {
+        this.applyName(this.nameInput.value);
+      });
+    }
+
+    if (this.randomButton) {
+      this.randomButton.addEventListener('click', () => {
+        const randomName = generateRandomName();
+        this.applyName(randomName);
+        if (this.nameInput) {
+          this.nameInput.focus();
+          this.nameInput.select();
+        }
+      });
+    }
+  }
+
+  applyName(value) {
+    const sanitized = sanitizePlayerName(value) || generateRandomName();
+    if (this.nameInput) {
+      this.nameInput.value = sanitized;
+    }
+    return sanitized;
+  }
+
+  applyColor(value) {
+    const sanitized = sanitizeHexColor(value) || sanitizeHexColor(PRESET_COLORS[2]);
+    if (this.colorInput) {
+      this.colorInput.value = sanitized;
+    }
+    if (this.colorPreview) {
+      this.colorPreview.textContent = sanitized;
+    }
+    if (this.swatchContainer) {
+      this.swatchContainer.querySelectorAll('.color-swatch').forEach((button) => {
+        if (button.dataset.color === sanitized) {
+          button.classList.add('active');
+          this.activeSwatch = button;
+        } else {
+          button.classList.remove('active');
+        }
+      });
+    }
+    return sanitized;
+  }
+
+  launchGame() {
+    if (this.hasLaunched) {
+      return;
+    }
+
+    const chosenName = this.applyName(this.nameInput ? this.nameInput.value : '');
+    const chosenColor = this.applyColor(this.colorInput ? this.colorInput.value : PRESET_COLORS[2]);
+
+    if (this.playButton) {
+      this.playButton.disabled = true;
+      this.playButton.textContent = 'Launching...';
+    }
+
+    const statusIndicator = document.querySelector('#connectionStatus .status-indicator');
+    const statusText = document.querySelector('#connectionStatus span:last-child');
+    if (statusIndicator && statusText) {
+      statusIndicator.className = 'status-indicator disconnected';
+      statusText.textContent = 'Connecting...';
+    }
+
+    this.hasLaunched = true;
+    this.element.classList.add('hidden');
+    document.body.classList.add('has-launched');
+
+    if (this.client) {
+      this.client.applyProfile(chosenName, chosenColor);
+      this.client.setControlsLocked(false);
+    } else {
+      window.goblonsClient = new GameClient({
+        playerName: chosenName,
+        playerColor: chosenColor,
+      });
+    }
+  }
+}
+
+window.addEventListener('load', () => {
+  const client = new GameClient({ autoConnect: false });
+  window.goblonsClient = client;
+  window.goblonsIntro = new StartScreen(client);
+});

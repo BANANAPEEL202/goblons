@@ -503,12 +503,27 @@ func (w *World) sendAvailableUpgrades(client *Client) {
 
 // HandleInput processes input from a client
 func (w *World) HandleInput(clientID uint32, input InputMsg) {
-	if client, exists := w.GetClient(clientID); exists {
-		client.mu.Lock()
-		client.Input = input
-		client.LastSeen = time.Now()
-		client.mu.Unlock()
+	client, exists := w.GetClient(clientID)
+	if !exists {
+		return
 	}
+
+	client.mu.Lock()
+	defer client.mu.Unlock()
+
+	switch input.Type {
+	case "profile":
+		if sanitizedName := SanitizePlayerName(input.PlayerName); sanitizedName != "" {
+			client.Player.Name = sanitizedName
+		}
+		if sanitizedColor := SanitizePlayerColor(input.PlayerColor); sanitizedColor != "" {
+			client.Player.Color = sanitizedColor
+		}
+	default:
+		client.Input = input
+	}
+
+	client.LastSeen = time.Now()
 }
 
 // keepPlayerInBounds ensures a player stays within the world boundaries

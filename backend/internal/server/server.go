@@ -54,6 +54,16 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	// Create new client
 	client := game.NewClient(0, conn) // ID will be assigned by world
+
+	// Apply any requested cosmetics before joining the world
+	query := r.URL.Query()
+	if requestedName := game.SanitizePlayerName(query.Get("name")); requestedName != "" {
+		client.Player.Name = requestedName
+	}
+	if requestedColor := game.SanitizePlayerColor(query.Get("color")); requestedColor != "" {
+		client.Player.Color = requestedColor
+	}
+
 	s.world.AddClient(client)
 
 	// Start client goroutines
