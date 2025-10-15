@@ -1,6 +1,7 @@
 package game
 
 import (
+	"log"
 	"math"
 	"math/rand"
 	"time"
@@ -98,8 +99,13 @@ func (gm *GameMechanics) GetShipBoundingBox(player *Player) BoundingBox {
 
 // handlePlayerCollision handles what happens when two players collide
 func (gm *GameMechanics) handlePlayerCollision(player1, player2 *Player) {
+	now := time.Now()
+
 	// Ships push against each other when they collide
 	gm.pushShipsApart(player1, player2)
+
+	// Apply collision damage if enough time has passed since last collision damage
+	gm.applyCollisionDamage(player1, player2, now)
 }
 
 // pushShipsApart pushes two colliding ships apart based on their bounding boxes
@@ -176,6 +182,81 @@ func (gm *GameMechanics) pushShipsApart(p1, p2 *Player) {
 	gm.world.keepPlayerInBounds(p2)
 }
 
+// applyCollisionDamage handles collision damage between two players
+func (gm *GameMechanics) applyCollisionDamage(player1, player2 *Player, now time.Time) {
+	cooldown := time.Duration(CollisionCooldown * float32(time.Second))
+
+	// Check if enough time has passed since last collision damage for player1
+	if now.Sub(player1.LastCollisionDamage) >= cooldown {
+		// Get body damage stats for player1
+		effects1 := GetStatUpgradeEffects(player1)
+
+		// Calculate damage from player1 to player2
+		damageToPlayer2 := BaseCollisionDamage + int(effects1["bodyDamage"])
+		if damageToPlayer2 > 0 {
+			player2.Health -= damageToPlayer2
+
+			// Check if player2 died from collision damage
+			if player2.Health <= 0 {
+				gm.handlePlayerKilledByCollision(player2, player1, now)
+			}
+		}
+
+		player1.LastCollisionDamage = now
+	}
+
+	// Check if enough time has passed since last collision damage for player2
+	if now.Sub(player2.LastCollisionDamage) >= cooldown {
+		// Get body damage stats for player2
+		effects2 := GetStatUpgradeEffects(player2)
+
+		// Calculate damage from player2 to player1
+		damageToPlayer1 := BaseCollisionDamage + int(effects2["bodyDamage"])
+		if damageToPlayer1 > 0 {
+			player1.Health -= damageToPlayer1
+
+			// Check if player1 died from collision damage
+			if player1.Health <= 0 {
+				gm.handlePlayerKilledByCollision(player1, player2, now)
+			}
+		}
+
+		player2.LastCollisionDamage = now
+	}
+}
+
+// handlePlayerKilledByCollision handles when a player is killed by collision damage
+func (gm *GameMechanics) handlePlayerKilledByCollision(victim, killer *Player, now time.Time) {
+	victim.Health = 0
+	victim.State = StateDead
+	victim.RespawnTime = now.Add(time.Duration(RespawnDelay) * time.Second)
+
+	log.Printf("Player %d (%s) was killed by collision damage from Player %d (%s)",
+		victim.ID, victim.Name, killer.ID, killer.Name)
+
+	// Handle kill rewards and victim penalties (same as bullet kills)
+	// Calculate rewards from victim (half their resources)
+	xpReward := victim.Experience / 2
+	coinReward := victim.Coins / 2
+
+	// Cap coin reward at 2000
+	if coinReward > 2000 {
+		coinReward = 2000
+	}
+
+	// Award to killer
+	killer.AddExperience(xpReward)
+	killer.Score += xpReward // Also add to score for leaderboard
+	killer.Coins += coinReward
+
+	// Victim loses half their resources
+	victim.Experience = victim.Experience / 2
+	victim.Coins = victim.Coins / 2
+
+	log.Printf("Player %d gained %d XP and %d coins for collision kill against Player %d (victim lost %d XP and %d coins)",
+		killer.ID, xpReward, coinReward, victim.ID, victim.Experience, victim.Coins)
+}
+
 // separatePlayers pushes two overlapping players apart (legacy function for backward compatibility)
 func (gm *GameMechanics) separatePlayers(player1, player2 *Player) {
 	// Redirect to the new push function
@@ -202,7 +283,8 @@ func (gm *GameMechanics) respawnPlayer(player *Player) {
 	}
 
 	player.State = StateAlive
-	player.LastRegenTime = time.Now() // Reset health regen timer for respawned player
+	player.LastRegenTime = time.Now()       // Reset health regen timer for respawned player
+	player.LastCollisionDamage = time.Now() // Reset collision damage timer for respawned player
 }
 
 // isLocationSafe checks if a location is safe for spawning (no other players nearby)

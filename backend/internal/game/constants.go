@@ -53,7 +53,9 @@ const (
 
 // Combat constants
 const (
-	RespawnDelay = 0.0 // Seconds to wait before respawning
+	RespawnDelay        = 0.0 // Seconds to wait before respawning
+	BaseCollisionDamage = 5   // Base damage dealt per collision
+	CollisionCooldown   = 0.2 // Seconds between collision damage ticks
 )
 
 // Item constants
