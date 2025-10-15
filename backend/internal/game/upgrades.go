@@ -389,8 +389,6 @@ func NewTopUpgradeTree() *ShipUpgrade {
 	machineGunTurret1.NextUpgrades = []*ShipUpgrade{machineGunTurret2}
 	machineGunTurret2.NextUpgrades = []*ShipUpgrade{machineGunTurret3}
 
-	root = machineGunTurret3
-
 	return root
 }
 
