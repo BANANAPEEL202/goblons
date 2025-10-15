@@ -982,6 +982,89 @@ drawPlayer(player) {
   ctx.translate(screenX, screenY);
   ctx.rotate(angle);
 
+  // --- Draw cannons and turrets first (under the ship) ---
+  ctx.fillStyle = '#666';
+  ctx.strokeStyle = '#333';
+  ctx.lineWidth = 2;
+
+  // Draw side cannons from modular system
+  if (player.shipConfig && player.shipConfig.sideUpgrade && player.shipConfig.sideUpgrade.cannons) {
+    for (const cannon of player.shipConfig.sideUpgrade.cannons) {
+      // Backend provides relative positions, draw cannon centered on that position
+      let centerX = cannon.position.x;
+      let centerY = cannon.position.y;
+      
+      // Calculate recoil animation offset
+      if (cannon.recoilTime) {
+        const timeSinceFire = Date.now() - new Date(cannon.recoilTime).getTime();
+        const recoilDuration = 400; // 200ms recoil animation
+        
+        if (timeSinceFire < recoilDuration) {
+          const progress = timeSinceFire / recoilDuration;
+          // Ease-out animation: starts fast, slows down
+          const easeOut = 1 - Math.pow(1 - progress, 3);
+          const recoilDistance = 8; // Maximum recoil distance in pixels
+          
+          // Calculate recoil offset (side cannons recoil horizontally inward)
+          const recoilOffset = recoilDistance * (1 - easeOut);
+          // Side cannons recoil perpendicular to ship side (toward ship centerline)
+          // Determine if cannon is on left or right side and recoil accordingly
+          if (centerY > 0) {
+            // Right side cannon - recoil leftward (negative Y)
+            centerY -= recoilOffset;
+          } else {
+            // Left side cannon - recoil rightward (positive Y)
+            centerY += recoilOffset;
+          }
+        }
+      }
+      
+      if (cannon.type === 'scatter') {
+        // Draw scatter cannon as a trapezoid with wider base facing away from ship
+        const baseWidth = gunWidth * 2;   // Narrower base (along ship side)
+        const muzzleWidth = gunWidth * 3;  // Wider muzzle (facing outward)
+        
+        // Determine if this is a left or right side cannon based on Y position
+        const isRightSide = centerY > 0;
+        
+        ctx.beginPath();
+        if (isRightSide) {
+          // Right side cannon - trapezoid with muzzle facing away from ship (positive Y)
+          // Back-inner corner (narrow end, closer to ship center)
+          ctx.moveTo(centerX - baseWidth/2, centerY - gunWidth/2);
+          // Front-inner corner (narrow end)
+          ctx.lineTo(centerX + baseWidth/2, centerY - gunWidth/2);
+          // Front-outer corner (wide end, muzzle)
+          ctx.lineTo(centerX + muzzleWidth/2, centerY + gunWidth/2);
+          // Back-outer corner (wide end)
+          ctx.lineTo(centerX - muzzleWidth/2, centerY + gunWidth/2);
+        } else {
+          // Left side cannon - trapezoid with muzzle facing away from ship (negative Y)
+          // Back-inner corner (narrow end, closer to ship center)
+          ctx.moveTo(centerX - baseWidth/2, centerY + gunWidth/2);
+          // Front-inner corner (narrow end)
+          ctx.lineTo(centerX + baseWidth/2, centerY + gunWidth/2);
+          // Front-outer corner (wide end, muzzle)
+          ctx.lineTo(centerX + muzzleWidth/2, centerY - gunWidth/2);
+          // Back-outer corner (wide end)
+          ctx.lineTo(centerX - muzzleWidth/2, centerY - gunWidth/2);
+        }
+        // Close the shape
+        ctx.closePath();
+        ctx.fill();
+        
+        // Add stroke for better visibility
+        ctx.strokeStyle = '#333';
+        ctx.stroke();
+      } else {
+        // Draw regular cannon as rectangle
+        const x = centerX - gunLength / 2; // Convert center to top-left for fillRect
+        const y = centerY - gunWidth / 2;  // Convert center to top-left for fillRect
+        ctx.fillRect(x, y, gunLength, gunWidth);
+        ctx.strokeRect(x, y, gunLength, gunWidth);
+      }
+    }
+  }
 
   // --- Draw Ram upgrade (gray triangle on front) ---
   if (player.shipConfig && player.shipConfig.frontUpgrade && player.shipConfig.frontUpgrade.name === "Ram") {
@@ -1042,62 +1125,6 @@ drawPlayer(player) {
 
   // --- Draw cannons using new modular system ---
   ctx.fillStyle = '#666';
-
-  // Draw side cannons from modular system
-  if (player.shipConfig && player.shipConfig.sideUpgrade && player.shipConfig.sideUpgrade.cannons) {
-    for (const cannon of player.shipConfig.sideUpgrade.cannons) {
-      // Backend provides relative positions, draw cannon centered on that position
-      const centerX = cannon.position.x;
-      const centerY = cannon.position.y;
-      
-      if (cannon.type === 'scatter') {
-        // Draw scatter cannon as a trapezoid with wider base facing away from ship
-        const baseWidth = gunWidth * 2;   // Narrower base (along ship side)
-        const muzzleWidth = gunWidth * 3;  // Wider muzzle (facing outward)
-        
-        // Determine if this is a left or right side cannon based on Y position
-        const isRightSide = centerY > 0;
-        
-        ctx.beginPath();
-        if (isRightSide) {
-          // Right side cannon - trapezoid with muzzle facing away from ship (positive Y)
-          // Back-inner corner (narrow end, closer to ship center)
-          ctx.moveTo(centerX - baseWidth/2, centerY - gunWidth/2);
-          // Front-inner corner (narrow end)
-          ctx.lineTo(centerX + baseWidth/2, centerY - gunWidth/2);
-          // Front-outer corner (wide end, muzzle)
-          ctx.lineTo(centerX + muzzleWidth/2, centerY + gunWidth/2);
-          // Back-outer corner (wide end)
-          ctx.lineTo(centerX - muzzleWidth/2, centerY + gunWidth/2);
-        } else {
-          // Left side cannon - trapezoid with muzzle facing away from ship (negative Y)
-          // Back-inner corner (narrow end, closer to ship center)
-          ctx.moveTo(centerX - baseWidth/2, centerY + gunWidth/2);
-          // Front-inner corner (narrow end)
-          ctx.lineTo(centerX + baseWidth/2, centerY + gunWidth/2);
-          // Front-outer corner (wide end, muzzle)
-          ctx.lineTo(centerX + muzzleWidth/2, centerY - gunWidth/2);
-          // Back-outer corner (wide end)
-          ctx.lineTo(centerX - muzzleWidth/2, centerY - gunWidth/2);
-        }
-        // Close the shape
-        ctx.closePath();
-        ctx.fill();
-        
-        // Add stroke for better visibility
-        ctx.strokeStyle = '#333';
-        ctx.stroke();
-      } else {
-        // Draw regular cannon as rectangle
-        const x = centerX - gunLength / 2; // Convert center to top-left for fillRect
-        const y = centerY - gunWidth / 2;  // Convert center to top-left for fillRect
-        ctx.fillRect(x, y, gunLength, gunWidth);
-        ctx.strokeRect(x, y, gunLength, gunWidth);
-
-      }
-    }
-  }
-
   // --- Draw turrets using new modular system ---
   if (player.shipConfig && player.shipConfig.topUpgrade && player.shipConfig.topUpgrade.turrets) {
     for (const turret of player.shipConfig.topUpgrade.turrets) {
@@ -1113,21 +1140,42 @@ drawPlayer(player) {
       ctx.rotate(turret.angle - angle);
       ctx.fillStyle = '#666';
       
+      // Calculate recoil offset for turret barrels
+      let recoilOffset = 0;
+      if (turret.recoilTime) {
+        const timeSinceFire = Date.now() - new Date(turret.recoilTime).getTime();
+        const recoilDuration = 200; // 200ms recoil animation
+        
+        if (timeSinceFire < recoilDuration) {
+          const progress = timeSinceFire / recoilDuration;
+          // Ease-out animation: starts fast, slows down
+          const easeOut = 1 - Math.pow(1 - progress, 3);
+          const recoilDistance = 6; // Maximum recoil distance in pixels
+          recoilOffset = -recoilDistance * (1 - easeOut); // Negative for backward recoil
+        }
+      }
+      
       if (turret.type === 'machine_gun_turret' && turret.cannons && turret.cannons.length >= 2) {
-        // Draw two parallel barrels for machine gun turret
+        // Draw two parallel barrels for machine gun turret with alternating recoil
         const barrelSeparation = barrelWidth;
+        const numCannons = turret.cannons.length;
         
-        // Left barrel
-        ctx.fillRect(0, -barrelSeparation/2 - barrelWidth/2, barrelLength, barrelWidth);
-        ctx.strokeRect(0, -barrelSeparation/2 - barrelWidth/2, barrelLength, barrelWidth);
+        // Determine which cannon just fired (previous to nextCannonIndex)
+        const lastFiredIndex = (turret.nextCannonIndex - 1 + numCannons) % numCannons;
         
-        // Right barrel
-        ctx.fillRect(0, barrelSeparation/2 - barrelWidth/2, barrelLength, barrelWidth);
-        ctx.strokeRect(0, barrelSeparation/2 - barrelWidth/2, barrelLength, barrelWidth);
+        // Left barrel (cannon index 0)
+        const leftRecoil = (lastFiredIndex === 0) ? recoilOffset : 0;
+        ctx.fillRect(leftRecoil, -barrelSeparation/2 - barrelWidth/2, barrelLength, barrelWidth);
+        ctx.strokeRect(leftRecoil, -barrelSeparation/2 - barrelWidth/2, barrelLength, barrelWidth);
+        
+        // Right barrel (cannon index 1)
+        const rightRecoil = (lastFiredIndex === 1) ? recoilOffset : 0;
+        ctx.fillRect(rightRecoil, barrelSeparation/2 - barrelWidth/2, barrelLength, barrelWidth);
+        ctx.strokeRect(rightRecoil, barrelSeparation/2 - barrelWidth/2, barrelLength, barrelWidth);
       } else {
         // Single barrel for regular turret
-        ctx.fillRect(0, -barrelWidth / 2, barrelLength, barrelWidth);
-        ctx.strokeRect(0, -barrelWidth / 2, barrelLength, barrelWidth);
+        ctx.fillRect(recoilOffset, -barrelWidth / 2, barrelLength, barrelWidth);
+        ctx.strokeRect(recoilOffset, -barrelWidth / 2, barrelLength, barrelWidth);
       }
       
       // Draw turret base (slightly larger for machine gun turrets)

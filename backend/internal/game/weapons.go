@@ -36,6 +36,7 @@ type Cannon struct {
 	Stats        CannonStats `json:"stats"`
 	LastFireTime time.Time   `json:"-"`
 	Type         WeaponType  `json:"type"`
+	RecoilTime   time.Time   `json:"recoilTime"` // When the cannon last fired (for recoil animation)
 }
 
 // CanFire checks if the cannon is ready to fire based on reload time
@@ -114,6 +115,7 @@ func (c *Cannon) Fire(world *World, player *Player, targetAngle float32, now tim
 	}
 
 	c.LastFireTime = now
+	c.RecoilTime = now
 	return bullets
 }
 
@@ -127,6 +129,7 @@ type Turret struct {
 	LastFireTime    time.Time  `json:"-"`
 	Type            WeaponType `json:"type"`
 	NextCannonIndex int        `json:"nextCannonIndex"` // For alternating fire
+	RecoilTime      time.Time  `json:"recoilTime"`      // When the turret last fired (for recoil animation)
 }
 
 // UpdateAiming updates the turret's angle to aim at target position
@@ -240,6 +243,7 @@ func (t *Turret) Fire(world *World, player *Player, now time.Time) []*Bullet {
 			// Move to next cannon for alternating fire
 			t.NextCannonIndex = (t.NextCannonIndex + 1) % len(t.Cannons)
 			t.LastFireTime = now
+			t.RecoilTime = now
 		}
 	} else {
 		// Regular turret: fire all cannons simultaneously
@@ -251,6 +255,7 @@ func (t *Turret) Fire(world *World, player *Player, now time.Time) []*Bullet {
 
 		if len(allBullets) > 0 {
 			t.LastFireTime = now
+			t.RecoilTime = now
 		}
 	}
 
