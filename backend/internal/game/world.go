@@ -564,10 +564,27 @@ func (w *World) updateBullets() {
 					player.RespawnTime = now.Add(time.Duration(RespawnDelay) * time.Second)
 					log.Printf("Player %d (%s) was killed by Player %d", playerID, player.Name, bullet.OwnerID)
 
-					// Award score and coins to shooter
+					// Handle kill rewards and victim penalties
 					if shooter, exists := w.players[bullet.OwnerID]; exists {
-						shooter.Score += 100
-						shooter.Coins += 50 // Award coins for kills
+						// Calculate rewards from victim (half their resources)
+						xpReward := min(player.Experience/2, 100)
+						coinReward := min(player.Coins/2, 200)
+
+						// Cap coin reward at 2000
+						if coinReward > 2000 {
+							coinReward = 2000
+						}
+
+						// Award to killer
+						shooter.AddExperience(xpReward)
+						shooter.Score += xpReward // Also add to score for leaderboard
+						shooter.Coins += coinReward
+
+						// Victim loses half their resources
+						player.Experience = player.Experience / 2
+						player.Coins = player.Coins / 2
+
+						log.Printf("Player %d gained %d XP and %d coins for killing Player %d (victim lost %d XP and %d coins)", bullet.OwnerID, xpReward, coinReward, playerID, player.Experience, player.Coins)
 					}
 				}
 
