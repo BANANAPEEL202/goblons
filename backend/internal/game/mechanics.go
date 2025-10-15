@@ -20,8 +20,12 @@ func (gm *GameMechanics) isFrontalRam(attacker, victim *Player) bool {
 	angleToVictim := math.Atan2(float64(dy), float64(dx))
 	// Attacker's facing angle
 	attackerAngle := float64(attacker.Angle)
-	// Difference between facing and direction to victim
-	angleDiff := math.Abs(normalizeAngle(angleToVictim - attackerAngle))
+	// Calculate the shortest angular distance between the two angles
+	angleDiff := math.Abs(angleToVictim - attackerAngle)
+	// Handle wraparound case (e.g., 350° vs 10° should be 20°, not 340°)
+	if angleDiff > math.Pi {
+		angleDiff = 2*math.Pi - angleDiff
+	}
 	// Consider frontal if within 45 degrees (pi/4)
 	return angleDiff < math.Pi/4
 }

@@ -619,7 +619,7 @@ func GetStatUpgradeEffects(player *Player) map[string]float32 {
 
 	// Cannon Damage effects
 	damageLevel := player.StatUpgrades[StatUpgradeCannonDamage].Level
-	effects["bulletDamage"] = float32(damageLevel) * 1 // 2.6 damage per level
+	effects["bulletDamage"] = float32(damageLevel) * 0.5
 
 	// Reload Speed effects
 	reloadLevel := player.StatUpgrades[StatUpgradeReloadSpeed].Level
