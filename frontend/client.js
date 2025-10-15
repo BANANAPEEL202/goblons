@@ -1,7 +1,7 @@
 // Game constants (should match backend)
 const WorldWidth = 2000.0;
 const WorldHeight = 2000.0;
-const PRESET_COLORS = ['#133E87', '#608BC1', '#CBDCEB', '#F3F3E0', '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4'];
+const PRESET_COLORS = ['#FF0040', '#00FF80', '#0080FF', '#FF8000', '#8000FF'];
 const NAME_POOL = ['Pirate', 'Buccaneer', 'Sailor', 'Captain', 'Admiral', 'Navigator', 'Corsair', 'Raider'];
 
 class GameClient {

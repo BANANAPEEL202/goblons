@@ -86,7 +86,6 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      background: radial-gradient(circle at top, rgba(19, 62, 135, 0.45), rgba(19, 62, 135, 0.92));
       backdrop-filter: blur(8px);
       z-index: 2000;
       transition: opacity 200ms ease, visibility 200ms ease;
@@ -102,8 +101,7 @@
       width: min(460px, 92vw);
       padding: 28px 36px;
       border-radius: 24px;
-      background: linear-gradient(165deg, rgba(203, 220, 235, 0.98), rgba(243, 243, 224, 0.92));
-      box-shadow: 0 32px 52px rgba(13, 31, 68, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.45);
+      background: rgba(203, 220, 235, 0.98);
       text-align: center;
       border: 1px solid rgba(96, 139, 193, 0.35);
     }
@@ -115,7 +113,6 @@
       margin: 0 auto 10px auto;
       display: block;
       max-height: 320px;
-      filter: drop-shadow(0 18px 36px rgba(19, 62, 135, 0.5));
     }
 
     .tagline {
@@ -234,7 +231,7 @@
       padding: 16px 20px;
       border: none;
       border-radius: 12px;
-      background: linear-gradient(140deg, #133E87, #608BC1);
+      background: #133E87;
       color: #F3F3E0;
       font-size: 18px;
       font-weight: 700;
@@ -242,7 +239,6 @@
       letter-spacing: 0.16em;
       cursor: pointer;
       transition: transform 160ms ease, box-shadow 160ms ease;
-      box-shadow: 0 18px 32px rgba(19, 62, 135, 0.35);
     }
 
     .play-button:hover {
@@ -324,7 +320,7 @@
             </div>
           </div>
           <div class="start-actions">
-            <button type="submit" class="play-button">Launch</button>
+            <button type="submit" class="play-button">Set Sail</button>
             <button type="button" class="randomize-button" id="randomizeName">Random Name</button>
           </div>
         </form>
