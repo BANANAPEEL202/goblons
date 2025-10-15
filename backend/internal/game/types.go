@@ -215,6 +215,7 @@ func NewPlayer(id uint32) *Player {
 		ShipConfig:        shipConfig,
 		Coins:             100000, // Starting coins
 		StatUpgrades:      make(map[StatUpgradeType]StatUpgrade),
+		LastRegenTime:     time.Now(), // Initialize health regen timer
 	}
 
 	// Initialize stat upgrades

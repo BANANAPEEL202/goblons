@@ -3,6 +3,7 @@ package game
 import (
 	"math"
 	"math/rand"
+	"time"
 )
 
 // GameMechanics handles specific game logic like combat, collecting, etc.
@@ -201,6 +202,7 @@ func (gm *GameMechanics) respawnPlayer(player *Player) {
 	}
 
 	player.State = StateAlive
+	player.LastRegenTime = time.Now() // Reset health regen timer for respawned player
 }
 
 // isLocationSafe checks if a location is safe for spawning (no other players nearby)
