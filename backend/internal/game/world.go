@@ -369,9 +369,13 @@ func (w *World) handleRespawns() {
 	for _, player := range w.players {
 		if player.State == StateDead && now.After(player.RespawnTime) {
 			// Respawn the player
+			player.Experience = 0
+			player.Coins = 0
+			player.Level = 1
 			player.Health = player.MaxHealth
 			player.State = StateAlive
-			player.LastRegenTime = now // Reset health regen timer for respawned player
+			player.LastRegenTime = now       // Reset health regen timer for respawned player
+			player.LastCollisionDamage = now // Reset collision damage timer for respawned player
 			w.spawnPlayer(player)
 			log.Printf("Player %d (%s) respawned", player.ID, player.Name)
 		}

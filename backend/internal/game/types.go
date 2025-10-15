@@ -101,9 +101,10 @@ type Player struct {
 	ShipConfig           ShipConfiguration `json:"shipConfig"` // New modular upgrade system
 
 	// Stat upgrades
-	Coins         int                             `json:"coins"`        // Currency for stat upgrades
-	StatUpgrades  map[StatUpgradeType]StatUpgrade `json:"statUpgrades"` // Applied stat upgrades
-	LastRegenTime time.Time                       `json:"-"`            // Last health regeneration time
+	Coins               int                             `json:"coins"`        // Currency for stat upgrades
+	StatUpgrades        map[StatUpgradeType]StatUpgrade `json:"statUpgrades"` // Applied stat upgrades
+	LastRegenTime       time.Time                       `json:"-"`            // Last health regeneration time
+	LastCollisionDamage time.Time                       `json:"-"`            // Last collision damage time
 }
 
 // GameItem represents collectible items in the game
@@ -210,21 +211,22 @@ func NewPlayer(id uint32) *Player {
 	}
 
 	player := &Player{
-		ID:                id,
-		X:                 WorldWidth / 2,
-		Y:                 WorldHeight / 2,
-		State:             StateAlive,
-		Health:            100,
-		MaxHealth:         100,
-		Color:             generateRandomColor(),
-		Name:              generateRandomName(),
-		Level:             1,
-		Experience:        0,
-		AvailableUpgrades: 0,
-		ShipConfig:        shipConfig,
-		Coins:             100000, // Starting coins
-		StatUpgrades:      make(map[StatUpgradeType]StatUpgrade),
-		LastRegenTime:     time.Now(), // Initialize health regen timer
+		ID:                  id,
+		X:                   WorldWidth / 2,
+		Y:                   WorldHeight / 2,
+		State:               StateAlive,
+		Health:              100,
+		MaxHealth:           100,
+		Color:               generateRandomColor(),
+		Name:                generateRandomName(),
+		Level:               1,
+		Experience:          0,
+		AvailableUpgrades:   0,
+		ShipConfig:          shipConfig,
+		Coins:               100000, // Starting coins
+		StatUpgrades:        make(map[StatUpgradeType]StatUpgrade),
+		LastRegenTime:       time.Now(), // Initialize health regen timer
+		LastCollisionDamage: time.Now(), // Initialize collision damage timer
 	}
 
 	// Initialize stat upgrades
