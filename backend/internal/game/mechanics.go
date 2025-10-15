@@ -12,6 +12,31 @@ type GameMechanics struct {
 	world *World
 }
 
+// isFrontalRam returns true if attacker is ramming the victim frontally
+func (gm *GameMechanics) isFrontalRam(attacker, victim *Player) bool {
+	// Calculate vector from attacker to victim
+	dx := victim.X - attacker.X
+	dy := victim.Y - attacker.Y
+	angleToVictim := math.Atan2(float64(dy), float64(dx))
+	// Attacker's facing angle
+	attackerAngle := float64(attacker.Angle)
+	// Difference between facing and direction to victim
+	angleDiff := math.Abs(normalizeAngle(angleToVictim - attackerAngle))
+	// Consider frontal if within 45 degrees (pi/4)
+	return angleDiff < math.Pi/4
+}
+
+// normalizeAngle normalizes angle to [0, 2*pi)
+func normalizeAngle(a float64) float64 {
+	for a < 0 {
+		a += 2 * math.Pi
+	}
+	for a >= 2*math.Pi {
+		a -= 2 * math.Pi
+	}
+	return a
+}
+
 // NewGameMechanics creates a new game mechanics handler
 func NewGameMechanics(world *World) *GameMechanics {
 	return &GameMechanics{world: world}
@@ -106,6 +131,22 @@ func (gm *GameMechanics) handlePlayerCollision(player1, player2 *Player) {
 
 	// Apply collision damage if enough time has passed since last collision damage
 	gm.applyCollisionDamage(player1, player2, now)
+
+	// Frontal ram logic
+	if gm.isFrontalRam(player1, player2) && player1.ShipConfig.FrontUpgrade != nil && player1.ShipConfig.FrontUpgrade.Name == "Ram" {
+		ramDamage := 10 // Base ram damage, can be made configurable/stat-based
+		player2.Health -= ramDamage
+		if player2.Health <= 0 {
+			gm.handlePlayerKilledByCollision(player2, player1, now)
+		}
+	}
+	if gm.isFrontalRam(player2, player1) && player2.ShipConfig.FrontUpgrade != nil && player2.ShipConfig.FrontUpgrade.Name == "Ram" {
+		ramDamage := 1
+		player1.Health -= ramDamage
+		if player1.Health <= 0 {
+			gm.handlePlayerKilledByCollision(player1, player2, now)
+		}
+	}
 }
 
 // pushShipsApart pushes two colliding ships apart based on their bounding boxes

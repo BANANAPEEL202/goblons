@@ -414,6 +414,31 @@ func NewSideUpgradeTree() *ShipUpgrade {
 	return root
 }
 
+func NewRamUpgrade() *ShipUpgrade {
+	return &ShipUpgrade{
+		Type:  UpgradeTypeFront,
+		Name:  "Ram",
+		Count: 1,
+		Effect: UpgradeEffect{
+			SpeedMultiplier:     0.97, // Slightly slower due to heavy ram
+			TurnRateMultiplier:  0.95,
+			ShipWidthMultiplier: 1.0,
+		},
+	}
+}
+
+func NewFrontUpgradeTree() *ShipUpgrade {
+	root := &ShipUpgrade{
+		Type: UpgradeTypeFront,
+		Name: "No Front Upgrades",
+	}
+
+	ram := NewRamUpgrade()
+	root.NextUpgrades = []*ShipUpgrade{ram}
+
+	return root
+}
+
 // GetAvailableUpgrades returns the next available upgrades for a given upgrade type
 func (sc *ShipConfiguration) GetAvailableUpgrades(upgradeType UpgradeType) []*ShipUpgrade {
 	var availableUpgrades []*ShipUpgrade
@@ -436,9 +461,9 @@ func (sc *ShipConfiguration) GetAvailableUpgrades(upgradeType UpgradeType) []*Sh
 		return sc.TopUpgrade.NextUpgrades
 
 	case UpgradeTypeFront:
-		if sc.FrontUpgrade == nil {
-			// TODO: Implement front upgrade tree when available
-			return []*ShipUpgrade{}
+		if sc.FrontUpgrade == nil || sc.FrontUpgrade.Name == "No Front Upgrades" {
+			root := NewFrontUpgradeTree()
+			return root.NextUpgrades
 		}
 		return sc.FrontUpgrade.NextUpgrades
 
@@ -610,7 +635,7 @@ func GetStatUpgradeEffects(player *Player) map[string]float32 {
 
 	// Body Damage effects
 	bodyLevel := player.StatUpgrades[StatUpgradeBodyDamage].Level
-	effects["bodyDamage"] = float32(bodyLevel) * 1
+	effects["bodyDamage"] = float32(bodyLevel) * 0.5
 
 	return effects
 }

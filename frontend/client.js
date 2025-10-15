@@ -884,12 +884,30 @@ drawPlayer(player) {
   ctx.translate(screenX, screenY);
   ctx.rotate(angle);
 
+
+  // --- Draw Ram upgrade (gray triangle on front) ---
+  if (player.shipConfig && player.shipConfig.frontUpgrade && player.shipConfig.frontUpgrade.name === "Ram") {
+    const ramLength = bowLength * 1;
+    const ramWidth = shaftWidth * 0.6;
+    
+    ctx.fillStyle = '#444'; // Gray color for ram
+    
+    ctx.beginPath();
+    ctx.moveTo(shaftLength / 2 + bowLength - 8 + ramLength, 0); // ram tip
+    ctx.lineTo(shaftLength / 2 + bowLength - 8, ramWidth / 2);  // ram base right
+    ctx.lineTo(shaftLength / 2 + bowLength - 8, -ramWidth / 2); // ram base left
+    ctx.closePath();
+    ctx.fill();
+  }
+
   ctx.fillStyle = color;
   ctx.strokeStyle = '#444';
   ctx.lineWidth = 3;
+  
 
   // --- Draw main hull ---
   ctx.beginPath();
+
   ctx.moveTo(shaftLength / 2 + bowLength, 0); // bow tip
 
   ctx.quadraticCurveTo(
@@ -922,6 +940,7 @@ drawPlayer(player) {
     ctx.strokeStyle = '#444';
     ctx.stroke();
   }
+  
 
   // --- Draw cannons using new modular system ---
   ctx.fillStyle = '#666';
