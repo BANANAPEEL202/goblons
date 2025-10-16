@@ -380,7 +380,6 @@ func NewTopUpgradeTree() *ShipUpgrade {
 	// Build the machine gun turret upgrade path: 1 -> 2
 	machineGunTurret1 := NewMachineGunTurrest(1)
 	machineGunTurret2 := NewMachineGunTurrest(2)
-	machineGunTurret3 := NewMachineGunTurrest(3) // Future expansion
 
 	// Link the upgrade paths
 	// From root, you can choose basic turret or machine gun turret
@@ -393,7 +392,6 @@ func NewTopUpgradeTree() *ShipUpgrade {
 
 	// machine gun path
 	machineGunTurret1.NextUpgrades = []*ShipUpgrade{machineGunTurret2}
-	machineGunTurret2.NextUpgrades = []*ShipUpgrade{machineGunTurret3}
 
 	return root
 }
@@ -671,7 +669,7 @@ func GetStatUpgradeEffects(player *Player) map[string]float32 {
 
 	// Cannon Damage effects
 	damageLevel := player.StatUpgrades[StatUpgradeCannonDamage].Level
-	effects["bulletDamage"] = float32(damageLevel) * 0.5
+	effects["bulletDamage"] = float32(damageLevel) * 0.4
 
 	// Reload Speed effects
 	reloadLevel := player.StatUpgrades[StatUpgradeReloadSpeed].Level
