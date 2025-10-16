@@ -662,7 +662,6 @@ class GameClient {
         }
       }
     }
-    return false;
   }
   
   selectUpgrade(upgradeType, upgradeId) {
@@ -1971,23 +1970,18 @@ drawPlayer(player) {
   
   // Helper functions
   getExperienceForLevel(level) {
-    // Exponential progression: each level requires 50% more experience than the previous
-    // Level 1 = 0, Level 2 = 100, Level 3 = 250, Level 4 = 475, etc.
+    // Progressive increment: each level requires 100 more XP than the previous level's increment
+    // Level 1 = 0, Level 2 = 100, Level 3 = 300, Level 4 = 600, Level 5 = 1000, etc.
     if (level <= 1) {
       return 0;
     }
     
     let totalExp = 0;
-    const baseExp = 100; // Experience needed to go from level 1 to 2
     
     for (let i = 2; i <= level; i++) {
-      if (i === 2) {
-        totalExp += baseExp;
-      } else {
-        // Each level requires 50% more than the previous level's requirement
-        const levelExp = Math.floor(baseExp * Math.pow(2, i - 2));
-        totalExp += levelExp;
-      }
+      // Level increment increases by 100 each level: 100, 200, 300, 400...
+      const levelIncrement = (i - 1) * 100;
+      totalExp += levelIncrement;
     }
     
     return totalExp;
@@ -2101,7 +2095,6 @@ drawPlayer(player) {
     this.input.upgradeChoice = '';
     this.input.statUpgradeType = '';
     this.input.toggleAutofire = false;
-    this.input.manualFire = false;
   }
 }
 

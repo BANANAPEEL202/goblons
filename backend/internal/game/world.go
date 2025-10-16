@@ -371,20 +371,58 @@ func (w *World) spawnPlayer(player *Player) {
 	player.State = StateAlive
 }
 
+// resetPlayerShipConfig resets a player's ship configuration to default
+func (w *World) resetPlayerShipConfig(player *Player) {
+	// Reset ship configuration to basic setup
+	shipLength := float32(PlayerSize) * 1.2
+	shipWidth := float32(PlayerSize) * 0.6
+
+	player.ShipConfig = ShipConfiguration{
+		SideUpgrade:  NewBasicSideCannons(1),
+		TopUpgrade:   NewBasicTurrets(0),
+		FrontUpgrade: nil,
+		RearUpgrade:  nil,
+		ShipLength:   shipLength,
+		ShipWidth:    shipWidth,
+		Size:         PlayerSize,
+	}
+
+	// Recalculate ship dimensions and positions
+	player.ShipConfig.CalculateShipDimensions()
+	player.ShipConfig.UpdateUpgradePositions()
+}
+
 // handleRespawns checks for dead players that need to respawn
 func (w *World) handleRespawns() {
 	now := time.Now()
 	for _, player := range w.players {
 		if player.State == StateDead && now.After(player.RespawnTime) {
-			// Respawn the player
+			// Respawn the player - reset all progress
 			player.Experience = 0
-			player.Coins = 0
+			player.Coins = 100000 // Reset to starting coins
 			player.Level = 1
+			player.AvailableUpgrades = 0
 			player.Health = player.MaxHealth
 			player.State = StateAlive
 			player.LastRegenTime = now       // Reset health regen timer for respawned player
 			player.LastCollisionDamage = now // Reset collision damage timer for respawned player
+
+			// Reset autofire to default enabled state
+			player.AutofireEnabled = true
+
+			// Reset ship configuration to default
+			w.resetPlayerShipConfig(player)
+
+			// Reset stat upgrades
+			InitializeStatUpgrades(player)
+
 			w.spawnPlayer(player)
+
+			// Send updated available upgrades to client
+			if client, exists := w.GetClient(player.ID); exists {
+				w.sendAvailableUpgrades(client)
+			}
+
 			log.Printf("Player %d (%s) respawned", player.ID, player.Name)
 		}
 	}
@@ -594,8 +632,8 @@ func (w *World) updateBullets() {
 					// Handle kill rewards and victim penalties
 					if shooter, exists := w.players[bullet.OwnerID]; exists {
 						// Calculate rewards from victim (half their resources)
-						xpReward := min(player.Experience/2, 100)
-						coinReward := min(player.Coins/2, 200)
+						xpReward := max(player.Experience/2, 100)
+						coinReward := max(player.Coins/2, 200)
 
 						// Cap coin reward at 2000
 						if coinReward > 2000 {
