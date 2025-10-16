@@ -1019,7 +1019,46 @@ drawPlayer(player) {
         }
       }
       
-      if (cannon.type === 'scatter') {
+      if (cannon.type === 'row') {
+        // Draw rowing oar as animated thin gray rectangle
+        ctx.fillStyle = '#666'; // Gray color for oars
+        ctx.strokeStyle = '#333'; // Darker gray for outline
+        
+        // Animation timing
+        const time = Date.now() / 1000; // Convert to seconds
+        
+        // Calculate ship's current speed
+        const shipSpeed = Math.sqrt(player.velX * player.velX + player.velY * player.velY);
+        
+        const rowSpeed = 1.0
+
+        const maxAngle = Math.PI / 6; // 30 degrees max rowing angle
+        
+        // Calculate rowing angle (sinusoidal motion)
+        const rowAngle = Math.sin(time * rowSpeed * Math.PI * 2) * maxAngle;
+        
+        // Determine if this is a right or left side oar
+        const isRightSide = centerY > 0;
+        const appliedRowAngle = isRightSide ? rowAngle : -rowAngle;
+        
+        // Make oars thinner than cannons
+        const oarLength = gunLength*1.2;
+        const oarWidth = gunWidth; // Half the width of regular cannons
+        
+        ctx.save();
+        ctx.translate(centerX, centerY);
+        // Base rotation: 90 degrees to make oars perpendicular to ship side
+        // Then add rowing animation on top
+        ctx.rotate(Math.PI / 2 + appliedRowAngle);
+        
+        // Draw thin oar rectangle
+        const x = -oarLength / 2;
+        const y = -oarWidth / 2;
+        ctx.fillRect(x, y, oarLength, oarWidth);
+        ctx.strokeRect(x, y, oarLength, oarWidth);
+        
+        ctx.restore();
+      } else if (cannon.type === 'scatter') {
         // Draw scatter cannon as a trapezoid with wider base facing away from ship
         const baseWidth = gunWidth * 2;   // Narrower base (along ship side)
         const muzzleWidth = gunWidth * 3;  // Wider muzzle (facing outward)
@@ -1111,6 +1150,8 @@ drawPlayer(player) {
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
+
+
 
   // --- Center circle ---
   if (player.shipConfig && player.shipConfig.topUpgrade && player.shipConfig.topUpgrade.turrets && player.shipConfig.topUpgrade.turrets.length == 0) {

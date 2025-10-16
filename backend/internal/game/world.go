@@ -140,6 +140,7 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 
 	// Get stat upgrade effects for movement calculations
 	statEffects := GetStatUpgradeEffects(player)
+	upgradeEffects := player.ShipConfig.GetTotalUpgradeEffects()
 
 	// Handle thrust (W/S keys) - this affects speed, not direction
 	var thrustForce float32 = 0
@@ -159,7 +160,7 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 	}
 
 	// Calculate max speed with move speed upgrade and hull strength reduction
-	maxSpeed := BaseShipMaxSpeed + statEffects["moveSpeedBonus"] - (BaseShipMaxSpeed * statEffects["speedReduction"])
+	maxSpeed := (BaseShipMaxSpeed+statEffects["moveSpeedBonus"])*upgradeEffects.SpeedMultiplier - (BaseShipMaxSpeed * statEffects["speedReduction"])
 	speed := min(float32(math.Sqrt(float64(player.VelX*player.VelX+player.VelY*player.VelY))), maxSpeed)
 
 	// Scale turn speed based on current speed and ship length
@@ -684,9 +685,13 @@ func (w *World) fireSideUpgrade(player *Player, now time.Time) bool {
 	fired := false
 	cannonCount := len(upgrade.Cannons) / 2 // Half are left, half are right
 
-	// Fire left side cannons
+	// Fire left side cannons (skip rowing oars)
 	for i := 0; i < cannonCount; i++ {
 		cannon := upgrade.Cannons[i] // Use pointer to modify original cannon
+		// Skip rowing oars - they don't fire bullets
+		if cannon.Type == WeaponTypeRow {
+			continue
+		}
 		// Calculate left side angle: ship angle + 90 degrees (π/2)
 		leftAngle := player.Angle + float32(math.Pi/2)
 		bullets := cannon.Fire(w, player, leftAngle, now)
@@ -696,9 +701,13 @@ func (w *World) fireSideUpgrade(player *Player, now time.Time) bool {
 		}
 	}
 
-	// Fire right side cannons
+	// Fire right side cannons (skip rowing oars)
 	for i := cannonCount; i < len(upgrade.Cannons); i++ {
 		cannon := upgrade.Cannons[i] // Use pointer to modify original cannon
+		// Skip rowing oars - they don't fire bullets
+		if cannon.Type == WeaponTypeRow {
+			continue
+		}
 		// Calculate right side angle: ship angle - 90 degrees (-π/2)
 		rightAngle := player.Angle - float32(math.Pi/2)
 		bullets := cannon.Fire(w, player, rightAngle, now)
