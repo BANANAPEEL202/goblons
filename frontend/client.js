@@ -39,6 +39,8 @@ class GameClient {
       selectUpgrade: '',
       upgradeChoice: '',
       statUpgradeType: '',
+      toggleAutofire: false,
+      manualFire: false,
       mouse: { x: 0, y: 0 }
     };
     
@@ -161,7 +163,7 @@ class GameClient {
       this.sendInput();
     });
     
-    // Mouse click handling for upgrade UI
+    // Mouse click handling for upgrade UI and manual firing
     this.canvas.addEventListener('click', (e) => {
       if (this.controlsLocked) {
         return;
@@ -171,7 +173,18 @@ class GameClient {
       const screenX = e.clientX - rect.left;
       const screenY = e.clientY - rect.top;
       
-      this.handleUpgradeUIClick(screenX, screenY);
+      // Try to handle upgrade UI click first
+      const handledByUI = this.handleUpgradeUIClick(screenX, screenY);
+      
+      // If not handled by UI, trigger manual fire
+      if (!handledByUI) {
+        this.input.manualFire = true;
+        this.sendInput();
+        // Clear the flag after a short delay
+        setTimeout(() => {
+          this.input.manualFire = false;
+        }, 50);
+      }
     });
 
     // Handle window resize
@@ -477,6 +490,11 @@ class GameClient {
         inputChanged = true;
       }
     }
+    if (e.key === 'r' || e.key === 'R') {
+        this.input.toggleAutofire = !this.input.toggleAutofire;
+        inputChanged = true;
+      
+    }
     
     // Handle stat upgrade keys (1-8)
     if (e.key >= '1' && e.key <= '8') {
@@ -574,6 +592,12 @@ class GameClient {
         inputChanged = true;
       }
     }
+    if (e.key === 'r' || e.key === 'R') {
+      if (this.input.toggleAutofire) {
+        this.input.toggleAutofire = false;
+        inputChanged = true;
+      }
+    }
     
     if (inputChanged) {
       this.sendInput();
@@ -589,9 +613,9 @@ class GameClient {
 
   handleUpgradeUIClick(screenX, screenY) {
     if (this.controlsLocked) {
-      return;
+      return false;
     }
-    if (!this.gameState.myPlayer || this.gameState.myPlayer.availableUpgrades <= 0 || this.upgradeUI.pendingUpgrade) return;
+    if (!this.gameState.myPlayer || this.gameState.myPlayer.availableUpgrades <= 0 || this.upgradeUI.pendingUpgrade) return false;
     // First check if clicking on upgrade type buttons
     const availableTypes = [];
     const upgradeTypes = ['side', 'top', 'front', 'rear'];
@@ -619,7 +643,7 @@ class GameClient {
           } else {
             this.upgradeUI.selectedUpgradeType = type;
           }
-          return;
+          return true;
         }
       }
     }
@@ -633,11 +657,12 @@ class GameClient {
               screenY >= pos.y && screenY <= pos.y + pos.height) {
             // Select upgrade
             this.selectUpgrade(this.upgradeUI.selectedUpgradeType, pos.option.name);
-            return;
+            return true;
           }
         }
       }
     }
+    return false;
   }
   
   selectUpgrade(upgradeType, upgradeId) {
@@ -2075,6 +2100,8 @@ drawPlayer(player) {
     this.input.selectUpgrade = '';
     this.input.upgradeChoice = '';
     this.input.statUpgradeType = '';
+    this.input.toggleAutofire = false;
+    this.input.manualFire = false;
   }
 }
 
@@ -2254,6 +2281,38 @@ class StartScreen {
         playerColor: chosenColor,
       });
     }
+  }
+
+  drawAutofireStatus() {
+    if (!this.gameState.myPlayer) return;
+    
+    const player = this.gameState.myPlayer;
+    const autofireEnabled = player.autofireEnabled !== false; // Default to true if not set
+    
+    // Position at bottom center of screen
+    const x = this.canvas.width / 2;
+    const y = this.canvas.height - 30;
+    
+    this.ctx.save();
+    
+    // Draw background
+    this.ctx.fillStyle = autofireEnabled ? 'rgba(0, 255, 0, 0.3)' : 'rgba(255, 0, 0, 0.3)';
+    this.ctx.strokeStyle = autofireEnabled ? '#00ff00' : '#ff0000';
+    this.ctx.lineWidth = 2;
+    
+    const textWidth = 140;
+    const textHeight = 20;
+    
+    this.ctx.fillRect(x - textWidth/2, y - textHeight/2, textWidth, textHeight);
+    this.ctx.strokeRect(x - textWidth/2, y - textHeight/2, textWidth, textHeight);
+    
+    // Draw text
+    this.ctx.fillStyle = '#ffffff';
+    this.ctx.font = 'bold 14px Arial';
+    this.ctx.textAlign = 'center';
+    this.ctx.fillText(`Autofire: ${autofireEnabled ? 'ON' : 'OFF'} (R)`, x, y + 4);
+    
+    this.ctx.restore();
   }
 }
 

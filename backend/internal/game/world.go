@@ -210,7 +210,7 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 	// Update turret aiming and firing using modular system
 	now := time.Now()
 	w.updateModularTurretAiming(player, input)
-	w.fireModularUpgrades(player, now)
+	w.fireModularUpgrades(player, input, now)
 
 	// Handle ship upgrades - use new modular system
 	if input.UpgradeCannons {
@@ -306,6 +306,13 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 				player.ID, statUpgradeType, player.StatUpgrades[statUpgradeType].Level, player.Coins)
 		}
 		input.StatUpgradeType = "" // Clear input
+	}
+
+	// Handle autofire toggle
+	if input.ToggleAutofire {
+		player.AutofireEnabled = !player.AutofireEnabled
+		log.Printf("Player %d toggled autofire %s", player.ID, map[bool]string{true: "ON", false: "OFF"}[player.AutofireEnabled])
+		input.ToggleAutofire = false // Clear input
 	}
 
 	// Handle health regeneration from auto repairs upgrade
@@ -662,8 +669,16 @@ func (w *World) updateShipDimensions(player *Player) {
 }
 
 // fireModularUpgrades fires weapons based on upgrade categories with per-category cooldowns
-func (w *World) fireModularUpgrades(player *Player, now time.Time) {
-	// Fire side upgrades (cannons) if input is pressed and cooldown allows
+func (w *World) fireModularUpgrades(player *Player, input *InputMsg, now time.Time) {
+	// Fire if autofire is enabled OR if manual fire is triggered
+	if !player.AutofireEnabled && !input.ManualFire {
+		return
+	}
+
+	// Clear manual fire flag after processing
+	if input.ManualFire {
+		input.ManualFire = false
+	}
 
 	w.fireSideUpgrade(player, now)
 	w.fireTopUpgrade(player, now)

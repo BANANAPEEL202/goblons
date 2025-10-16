@@ -59,6 +59,10 @@ type InputMsg struct {
 	UpgradeChoice string `json:"upgradeChoice"` // Specific upgrade ID/name
 	// Stat upgrade inputs
 	StatUpgradeType string `json:"statUpgradeType"` // Which stat to upgrade
+	// Autofire toggle
+	ToggleAutofire  bool   `json:"toggleAutofire"` // Toggle autofire on/off
+	// Manual fire
+	ManualFire      bool   `json:"manualFire"`     // Fire once manually
 	PlayerName      string `json:"playerName"`
 	PlayerColor     string `json:"playerColor"`
 	Mouse           struct {
@@ -105,6 +109,8 @@ type Player struct {
 	StatUpgrades        map[StatUpgradeType]StatUpgrade `json:"statUpgrades"` // Applied stat upgrades
 	LastRegenTime       time.Time                       `json:"-"`            // Last health regeneration time
 	LastCollisionDamage time.Time                       `json:"-"`            // Last collision damage time
+	// Autofire toggle state
+	AutofireEnabled     bool                            `json:"autofireEnabled"` // Whether autofire is currently enabled
 }
 
 // GameItem represents collectible items in the game
@@ -227,6 +233,7 @@ func NewPlayer(id uint32) *Player {
 		StatUpgrades:        make(map[StatUpgradeType]StatUpgrade),
 		LastRegenTime:       time.Now(), // Initialize health regen timer
 		LastCollisionDamage: time.Now(), // Initialize collision damage timer
+		AutofireEnabled:     true,       // Start with autofire enabled
 	}
 
 	// Initialize stat upgrades
