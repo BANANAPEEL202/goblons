@@ -1,7 +1,6 @@
 package game
 
 import (
-	"math"
 	"regexp"
 	"strings"
 	"sync"
@@ -59,9 +58,12 @@ type InputMsg struct {
 	UpgradeChoice string `json:"upgradeChoice"` // Specific upgrade ID/name
 	// Stat upgrade inputs
 	StatUpgradeType string `json:"statUpgradeType"` // Which stat to upgrade
-	PlayerName      string `json:"playerName"`
-	PlayerColor     string `json:"playerColor"`
-	Mouse           struct {
+	// Autofire toggle
+	ToggleAutofire bool   `json:"toggleAutofire"` // Toggle autofire on/off
+	ManualFire     bool   `json:"manualFire"`     // Manual fire command
+	PlayerName     string `json:"playerName"`
+	PlayerColor    string `json:"playerColor"`
+	Mouse          struct {
 		X float32 `json:"x"`
 		Y float32 `json:"y"`
 	} `json:"mouse"`
@@ -105,6 +107,8 @@ type Player struct {
 	StatUpgrades        map[StatUpgradeType]StatUpgrade `json:"statUpgrades"` // Applied stat upgrades
 	LastRegenTime       time.Time                       `json:"-"`            // Last health regeneration time
 	LastCollisionDamage time.Time                       `json:"-"`            // Last collision damage time
+	// Autofire toggle state
+	AutofireEnabled bool `json:"autofireEnabled"` // Whether autofire is currently enabled
 }
 
 // GameItem represents collectible items in the game
@@ -319,23 +323,18 @@ func SanitizePlayerColor(input string) string {
 
 // GetExperienceRequiredForLevel returns the experience needed to reach a specific level
 func GetExperienceRequiredForLevel(level int) int {
-	// Exponential progression: each level requires 50% more experience than the previous
-	// Level 1 = 0, Level 2 = 100, Level 3 = 250, Level 4 = 475, etc.
+	// Progressive increment: each level requires 100 more XP than the previous level's increment
+	// Level 1 = 0, Level 2 = 100, Level 3 = 300, Level 4 = 600, Level 5 = 1000, etc.
 	if level <= 1 {
 		return 0
 	}
 
 	totalExp := 0
-	baseExp := 100 // Experience needed to go from level 1 to 2
 
 	for i := 2; i <= level; i++ {
-		if i == 2 {
-			totalExp += baseExp
-		} else {
-			// Each level requires 50% more than the previous level's requirement
-			levelExp := int(float64(baseExp) * math.Pow(2, float64(i-2)))
-			totalExp += levelExp
-		}
+		// Level increment increases by 100 each level: 100, 200, 300, 400...
+		levelIncrement := (i - 1) * 100
+		totalExp += levelIncrement
 	}
 
 	return totalExp

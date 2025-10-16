@@ -140,6 +140,7 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 
 	// Get stat upgrade effects for movement calculations
 	statEffects := GetStatUpgradeEffects(player)
+	upgradeEffects := player.ShipConfig.GetTotalUpgradeEffects()
 
 	// Handle thrust (W/S keys) - this affects speed, not direction
 	var thrustForce float32 = 0
@@ -159,7 +160,7 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 	}
 
 	// Calculate max speed with move speed upgrade and hull strength reduction
-	maxSpeed := BaseShipMaxSpeed + statEffects["moveSpeedBonus"] - (BaseShipMaxSpeed * statEffects["speedReduction"])
+	maxSpeed := (BaseShipMaxSpeed+statEffects["moveSpeedBonus"])*upgradeEffects.SpeedMultiplier - (BaseShipMaxSpeed * statEffects["speedReduction"])
 	speed := min(float32(math.Sqrt(float64(player.VelX*player.VelX+player.VelY*player.VelY))), maxSpeed)
 
 	// Scale turn speed based on current speed and ship length
@@ -209,7 +210,7 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 	// Update turret aiming and firing using modular system
 	now := time.Now()
 	w.updateModularTurretAiming(player, input)
-	w.fireModularUpgrades(player, now)
+	w.fireModularUpgrades(player, input, now)
 
 	// Handle ship upgrades - use new modular system
 	if input.UpgradeCannons {
@@ -307,6 +308,13 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 		input.StatUpgradeType = "" // Clear input
 	}
 
+	// Handle autofire toggle
+	if input.ToggleAutofire {
+		player.AutofireEnabled = !player.AutofireEnabled
+		log.Printf("Player %d toggled autofire %s", player.ID, map[bool]string{true: "ON", false: "OFF"}[player.AutofireEnabled])
+		input.ToggleAutofire = false // Clear input
+	}
+
 	// Handle health regeneration from auto repairs upgrade
 	regenRate := statEffects["healthRegen"]
 	// Regenerate health based on time elapsed
@@ -363,20 +371,58 @@ func (w *World) spawnPlayer(player *Player) {
 	player.State = StateAlive
 }
 
+// resetPlayerShipConfig resets a player's ship configuration to default
+func (w *World) resetPlayerShipConfig(player *Player) {
+	// Reset ship configuration to basic setup
+	shipLength := float32(PlayerSize) * 1.2
+	shipWidth := float32(PlayerSize) * 0.6
+
+	player.ShipConfig = ShipConfiguration{
+		SideUpgrade:  NewBasicSideCannons(1),
+		TopUpgrade:   NewBasicTurrets(0),
+		FrontUpgrade: nil,
+		RearUpgrade:  nil,
+		ShipLength:   shipLength,
+		ShipWidth:    shipWidth,
+		Size:         PlayerSize,
+	}
+
+	// Recalculate ship dimensions and positions
+	player.ShipConfig.CalculateShipDimensions()
+	player.ShipConfig.UpdateUpgradePositions()
+}
+
 // handleRespawns checks for dead players that need to respawn
 func (w *World) handleRespawns() {
 	now := time.Now()
 	for _, player := range w.players {
 		if player.State == StateDead && now.After(player.RespawnTime) {
-			// Respawn the player
+			// Respawn the player - reset all progress
 			player.Experience = 0
-			player.Coins = 0
+			player.Coins = 100000 // Reset to starting coins
 			player.Level = 1
+			player.AvailableUpgrades = 0
 			player.Health = player.MaxHealth
 			player.State = StateAlive
 			player.LastRegenTime = now       // Reset health regen timer for respawned player
 			player.LastCollisionDamage = now // Reset collision damage timer for respawned player
+
+			// Reset autofire to default enabled state
+			player.AutofireEnabled = true
+
+			// Reset ship configuration to default
+			w.resetPlayerShipConfig(player)
+
+			// Reset stat upgrades
+			InitializeStatUpgrades(player)
+
 			w.spawnPlayer(player)
+
+			// Send updated available upgrades to client
+			if client, exists := w.GetClient(player.ID); exists {
+				w.sendAvailableUpgrades(client)
+			}
+
 			log.Printf("Player %d (%s) respawned", player.ID, player.Name)
 		}
 	}
@@ -586,8 +632,8 @@ func (w *World) updateBullets() {
 					// Handle kill rewards and victim penalties
 					if shooter, exists := w.players[bullet.OwnerID]; exists {
 						// Calculate rewards from victim (half their resources)
-						xpReward := min(player.Experience/2, 100)
-						coinReward := min(player.Coins/2, 200)
+						xpReward := max(player.Experience/2, 100)
+						coinReward := max(player.Coins/2, 200)
 
 						// Cap coin reward at 2000
 						if coinReward > 2000 {
@@ -661,8 +707,16 @@ func (w *World) updateShipDimensions(player *Player) {
 }
 
 // fireModularUpgrades fires weapons based on upgrade categories with per-category cooldowns
-func (w *World) fireModularUpgrades(player *Player, now time.Time) {
-	// Fire side upgrades (cannons) if input is pressed and cooldown allows
+func (w *World) fireModularUpgrades(player *Player, input *InputMsg, now time.Time) {
+	// Fire if autofire is enabled OR if manual fire is triggered
+	if !player.AutofireEnabled && !input.ManualFire {
+		return
+	}
+
+	// Clear manual fire flag after processing
+	if input.ManualFire {
+		input.ManualFire = false
+	}
 
 	w.fireSideUpgrade(player, now)
 	w.fireTopUpgrade(player, now)
@@ -684,9 +738,13 @@ func (w *World) fireSideUpgrade(player *Player, now time.Time) bool {
 	fired := false
 	cannonCount := len(upgrade.Cannons) / 2 // Half are left, half are right
 
-	// Fire left side cannons
+	// Fire left side cannons (skip rowing oars)
 	for i := 0; i < cannonCount; i++ {
 		cannon := upgrade.Cannons[i] // Use pointer to modify original cannon
+		// Skip rowing oars - they don't fire bullets
+		if cannon.Type == WeaponTypeRow {
+			continue
+		}
 		// Calculate left side angle: ship angle + 90 degrees (π/2)
 		leftAngle := player.Angle + float32(math.Pi/2)
 		bullets := cannon.Fire(w, player, leftAngle, now)
@@ -696,9 +754,13 @@ func (w *World) fireSideUpgrade(player *Player, now time.Time) bool {
 		}
 	}
 
-	// Fire right side cannons
+	// Fire right side cannons (skip rowing oars)
 	for i := cannonCount; i < len(upgrade.Cannons); i++ {
 		cannon := upgrade.Cannons[i] // Use pointer to modify original cannon
+		// Skip rowing oars - they don't fire bullets
+		if cannon.Type == WeaponTypeRow {
+			continue
+		}
 		// Calculate right side angle: ship angle - 90 degrees (-π/2)
 		rightAngle := player.Angle - float32(math.Pi/2)
 		bullets := cannon.Fire(w, player, rightAngle, now)

@@ -49,7 +49,7 @@ type ShipConfiguration struct {
 }
 
 // GetTotalEffect calculates the combined effect of all upgrades
-func (sc *ShipConfiguration) GetTotalEffect() UpgradeEffect {
+func (sc *ShipConfiguration) GetTotalUpgradeEffects() UpgradeEffect {
 	effect := UpgradeEffect{
 		SpeedMultiplier:     1.0,
 		TurnRateMultiplier:  1.0,
@@ -61,9 +61,15 @@ func (sc *ShipConfiguration) GetTotalEffect() UpgradeEffect {
 
 	for _, upgrade := range upgrades {
 		if upgrade != nil {
-			effect.SpeedMultiplier *= upgrade.Effect.SpeedMultiplier
-			effect.TurnRateMultiplier *= upgrade.Effect.TurnRateMultiplier
-			effect.ShipWidthMultiplier *= upgrade.Effect.ShipWidthMultiplier
+			if upgrade.Effect.SpeedMultiplier != 0 {
+				effect.SpeedMultiplier *= upgrade.Effect.SpeedMultiplier
+			}
+			if upgrade.Effect.TurnRateMultiplier != 0 {
+				effect.TurnRateMultiplier *= upgrade.Effect.TurnRateMultiplier
+			}
+			if upgrade.Effect.ShipWidthMultiplier != 0 {
+				effect.ShipWidthMultiplier *= upgrade.Effect.ShipWidthMultiplier
+			}
 		}
 	}
 
@@ -87,7 +93,7 @@ func (sc *ShipConfiguration) GetUpgrade(upgradeType UpgradeType) *ShipUpgrade {
 
 func (sc *ShipConfiguration) UpdateUpgradePositions() {
 	sideUpgrade := sc.SideUpgrade
-	if sideUpgrade != nil {
+	if sideUpgrade != nil && len(sideUpgrade.Cannons) > 0 {
 		// Position side cannons evenly along the sides of the ship
 		cannonCount := sideUpgrade.Count // Number of cannons per side
 		gunLength := sc.ShipLength * 0.35
@@ -166,7 +172,7 @@ func (sc *ShipConfiguration) CalculateShipDimensions() {
 	baseLength := float32(size*1.2) * 0.5 // Base shaft length for 1 cannon
 	baseWidth := float32(size * 0.8)
 
-	upgradeEffects := sc.GetTotalEffect()
+	upgradeEffects := sc.GetTotalUpgradeEffects()
 
 	sideLength := baseLength
 	turretLength := baseLength
@@ -401,15 +407,63 @@ func NewSideUpgradeTree() *ShipUpgrade {
 	// Build the scatter cannon branch: 1 (from root)
 	scatter1 := NewScatterSideCannons(1)
 
+	// Build the rowing oars branch: 1 -> 2 -> 3
+	rowing1 := NewRowingUpgrade(1)
+	rowing2 := NewRowingUpgrade(2)
+	rowing3 := NewRowingUpgrade(3)
+
 	// Link the basic cannon chain
 	basic2.NextUpgrades = []*ShipUpgrade{basic3}
 	basic3.NextUpgrades = []*ShipUpgrade{basic4}
 
-	// Root has two paths: upgrade to 2 basic cannons OR switch to scatter cannons
+	// Link the rowing oars chain
+	rowing1.NextUpgrades = []*ShipUpgrade{rowing2}
+	rowing2.NextUpgrades = []*ShipUpgrade{rowing3}
+
+	// Root has three paths: upgrade to 2 basic cannons, switch to scatter cannons, or switch to rowing oars
 	root := NewBasicSideCannons(1)
-	root.NextUpgrades = []*ShipUpgrade{basic2, scatter1}
+	root.NextUpgrades = []*ShipUpgrade{basic2, scatter1, rowing1}
 
 	return root
+}
+
+func NewRowingUpgrade(oarCount int) *ShipUpgrade {
+	oarCount = int(math.Max(1, float64(oarCount))) // Ensure at least 1 oar per side
+
+	// Create rowing oars as cannons with WeaponTypeRow
+	oars := make([]*Cannon, oarCount*2)
+
+	// left side oars
+	for i := 0; i < oarCount; i++ {
+		oars[i] = &Cannon{
+			ID:    uint32(i + 1),
+			Angle: 0, // Relative angle - actual angle calculated during rowing
+			Stats: NewRowingOar(),
+			Type:  WeaponTypeRow,
+		}
+	}
+
+	// right side oars
+	for i := 0; i < oarCount; i++ {
+		oars[oarCount+i] = &Cannon{
+			ID:    uint32(oarCount + i + 1),
+			Angle: 0, // Relative angle - actual angle calculated during rowing
+			Stats: NewRowingOar(),
+			Type:  WeaponTypeRow,
+		}
+	}
+
+	return &ShipUpgrade{
+		Type:    UpgradeTypeSide,
+		Name:    "Rowing Oars",
+		Count:   oarCount,
+		Cannons: oars,
+		Effect: UpgradeEffect{
+			SpeedMultiplier:     1.1 + float32(oarCount)*0.05, // Increase speed based on oar count
+			TurnRateMultiplier:  0.9,
+			ShipWidthMultiplier: 1.0, // No effect on width
+		},
+	}
 }
 
 func NewRamUpgrade() *ShipUpgrade {
@@ -625,7 +679,7 @@ func GetStatUpgradeEffects(player *Player) map[string]float32 {
 
 	// Move Speed effects
 	moveLevel := player.StatUpgrades[StatUpgradeMoveSpeed].Level
-	effects["moveSpeedBonus"] = float32(moveLevel) * 0.05
+	effects["moveSpeedBonus"] = float32(moveLevel) * 0.03
 
 	// Turn Speed effects
 	turnLevel := player.StatUpgrades[StatUpgradeTurnSpeed].Level

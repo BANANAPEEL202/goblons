@@ -39,6 +39,8 @@ class GameClient {
       selectUpgrade: '',
       upgradeChoice: '',
       statUpgradeType: '',
+      toggleAutofire: false,
+      manualFire: false,
       mouse: { x: 0, y: 0 }
     };
     
@@ -161,7 +163,7 @@ class GameClient {
       this.sendInput();
     });
     
-    // Mouse click handling for upgrade UI
+    // Mouse click handling for upgrade UI and manual firing
     this.canvas.addEventListener('click', (e) => {
       if (this.controlsLocked) {
         return;
@@ -171,7 +173,18 @@ class GameClient {
       const screenX = e.clientX - rect.left;
       const screenY = e.clientY - rect.top;
       
-      this.handleUpgradeUIClick(screenX, screenY);
+      // Try to handle upgrade UI click first
+      const handledByUI = this.handleUpgradeUIClick(screenX, screenY);
+      
+      // If not handled by UI, trigger manual fire
+      if (!handledByUI) {
+        this.input.manualFire = true;
+        this.sendInput();
+        // Clear the flag after a short delay
+        setTimeout(() => {
+          this.input.manualFire = false;
+        }, 50);
+      }
     });
 
     // Handle window resize
@@ -477,6 +490,11 @@ class GameClient {
         inputChanged = true;
       }
     }
+    if (e.key === 'r' || e.key === 'R') {
+        this.input.toggleAutofire = !this.input.toggleAutofire;
+        inputChanged = true;
+      
+    }
     
     // Handle stat upgrade keys (1-8)
     if (e.key >= '1' && e.key <= '8') {
@@ -574,6 +592,12 @@ class GameClient {
         inputChanged = true;
       }
     }
+    if (e.key === 'r' || e.key === 'R') {
+      if (this.input.toggleAutofire) {
+        this.input.toggleAutofire = false;
+        inputChanged = true;
+      }
+    }
     
     if (inputChanged) {
       this.sendInput();
@@ -589,9 +613,9 @@ class GameClient {
 
   handleUpgradeUIClick(screenX, screenY) {
     if (this.controlsLocked) {
-      return;
+      return false;
     }
-    if (!this.gameState.myPlayer || this.gameState.myPlayer.availableUpgrades <= 0 || this.upgradeUI.pendingUpgrade) return;
+    if (!this.gameState.myPlayer || this.gameState.myPlayer.availableUpgrades <= 0 || this.upgradeUI.pendingUpgrade) return false;
     // First check if clicking on upgrade type buttons
     const availableTypes = [];
     const upgradeTypes = ['side', 'top', 'front', 'rear'];
@@ -619,7 +643,7 @@ class GameClient {
           } else {
             this.upgradeUI.selectedUpgradeType = type;
           }
-          return;
+          return true;
         }
       }
     }
@@ -633,7 +657,7 @@ class GameClient {
               screenY >= pos.y && screenY <= pos.y + pos.height) {
             // Select upgrade
             this.selectUpgrade(this.upgradeUI.selectedUpgradeType, pos.option.name);
-            return;
+            return true;
           }
         }
       }
@@ -982,6 +1006,128 @@ drawPlayer(player) {
   ctx.translate(screenX, screenY);
   ctx.rotate(angle);
 
+  // --- Draw cannons and turrets first (under the ship) ---
+  ctx.fillStyle = '#666';
+  ctx.strokeStyle = '#333';
+  ctx.lineWidth = 2;
+
+  // Draw side cannons from modular system
+  if (player.shipConfig && player.shipConfig.sideUpgrade && player.shipConfig.sideUpgrade.cannons) {
+    for (const cannon of player.shipConfig.sideUpgrade.cannons) {
+      // Backend provides relative positions, draw cannon centered on that position
+      let centerX = cannon.position.x;
+      let centerY = cannon.position.y;
+      
+      // Calculate recoil animation offset
+      if (cannon.recoilTime) {
+        const timeSinceFire = Date.now() - new Date(cannon.recoilTime).getTime();
+        const recoilDuration = 400; // 200ms recoil animation
+        
+        if (timeSinceFire < recoilDuration) {
+          const progress = timeSinceFire / recoilDuration;
+          // Ease-out animation: starts fast, slows down
+          const easeOut = 1 - Math.pow(1 - progress, 3);
+          const recoilDistance = 8; // Maximum recoil distance in pixels
+          
+          // Calculate recoil offset (side cannons recoil horizontally inward)
+          const recoilOffset = recoilDistance * (1 - easeOut);
+          // Side cannons recoil perpendicular to ship side (toward ship centerline)
+          // Determine if cannon is on left or right side and recoil accordingly
+          if (centerY > 0) {
+            // Right side cannon - recoil leftward (negative Y)
+            centerY -= recoilOffset;
+          } else {
+            // Left side cannon - recoil rightward (positive Y)
+            centerY += recoilOffset;
+          }
+        }
+      }
+      
+      if (cannon.type === 'row') {
+        // Draw rowing oar as animated thin gray rectangle
+        ctx.fillStyle = '#666'; // Gray color for oars
+        ctx.strokeStyle = '#333'; // Darker gray for outline
+        
+        // Animation timing
+        const time = Date.now() / 1000; // Convert to seconds
+        
+        // Calculate ship's current speed
+        const shipSpeed = Math.sqrt(player.velX * player.velX + player.velY * player.velY);
+        
+        const rowSpeed = 1.0
+
+        const maxAngle = Math.PI / 6; // 30 degrees max rowing angle
+        
+        // Calculate rowing angle (sinusoidal motion)
+        const rowAngle = Math.sin(time * rowSpeed * Math.PI * 2) * maxAngle;
+        
+        // Determine if this is a right or left side oar
+        const isRightSide = centerY > 0;
+        const appliedRowAngle = isRightSide ? rowAngle : -rowAngle;
+        
+        // Make oars thinner than cannons
+        const oarLength = gunLength*1.2;
+        const oarWidth = gunWidth; // Half the width of regular cannons
+        
+        ctx.save();
+        ctx.translate(centerX, centerY);
+        // Base rotation: 90 degrees to make oars perpendicular to ship side
+        // Then add rowing animation on top
+        ctx.rotate(Math.PI / 2 + appliedRowAngle);
+        
+        // Draw thin oar rectangle
+        const x = -oarLength / 2;
+        const y = -oarWidth / 2;
+        ctx.fillRect(x, y, oarLength, oarWidth);
+        ctx.strokeRect(x, y, oarLength, oarWidth);
+        
+        ctx.restore();
+      } else if (cannon.type === 'scatter') {
+        // Draw scatter cannon as a trapezoid with wider base facing away from ship
+        const baseWidth = gunWidth * 2;   // Narrower base (along ship side)
+        const muzzleWidth = gunWidth * 3;  // Wider muzzle (facing outward)
+        
+        // Determine if this is a left or right side cannon based on Y position
+        const isRightSide = centerY > 0;
+        
+        ctx.beginPath();
+        if (isRightSide) {
+          // Right side cannon - trapezoid with muzzle facing away from ship (positive Y)
+          // Back-inner corner (narrow end, closer to ship center)
+          ctx.moveTo(centerX - baseWidth/2, centerY - gunWidth/2);
+          // Front-inner corner (narrow end)
+          ctx.lineTo(centerX + baseWidth/2, centerY - gunWidth/2);
+          // Front-outer corner (wide end, muzzle)
+          ctx.lineTo(centerX + muzzleWidth/2, centerY + gunWidth/2);
+          // Back-outer corner (wide end)
+          ctx.lineTo(centerX - muzzleWidth/2, centerY + gunWidth/2);
+        } else {
+          // Left side cannon - trapezoid with muzzle facing away from ship (negative Y)
+          // Back-inner corner (narrow end, closer to ship center)
+          ctx.moveTo(centerX - baseWidth/2, centerY + gunWidth/2);
+          // Front-inner corner (narrow end)
+          ctx.lineTo(centerX + baseWidth/2, centerY + gunWidth/2);
+          // Front-outer corner (wide end, muzzle)
+          ctx.lineTo(centerX + muzzleWidth/2, centerY - gunWidth/2);
+          // Back-outer corner (wide end)
+          ctx.lineTo(centerX - muzzleWidth/2, centerY - gunWidth/2);
+        }
+        // Close the shape
+        ctx.closePath();
+        ctx.fill();
+        
+        // Add stroke for better visibility
+        ctx.strokeStyle = '#333';
+        ctx.stroke();
+      } else {
+        // Draw regular cannon as rectangle
+        const x = centerX - gunLength / 2; // Convert center to top-left for fillRect
+        const y = centerY - gunWidth / 2;  // Convert center to top-left for fillRect
+        ctx.fillRect(x, y, gunLength, gunWidth);
+        ctx.strokeRect(x, y, gunLength, gunWidth);
+      }
+    }
+  }
 
   // --- Draw Ram upgrade (gray triangle on front) ---
   if (player.shipConfig && player.shipConfig.frontUpgrade && player.shipConfig.frontUpgrade.name === "Ram") {
@@ -1029,6 +1175,8 @@ drawPlayer(player) {
   ctx.fill();
   ctx.stroke();
 
+
+
   // --- Center circle ---
   if (player.shipConfig && player.shipConfig.topUpgrade && player.shipConfig.topUpgrade.turrets && player.shipConfig.topUpgrade.turrets.length == 0) {
     ctx.beginPath();
@@ -1042,62 +1190,6 @@ drawPlayer(player) {
 
   // --- Draw cannons using new modular system ---
   ctx.fillStyle = '#666';
-
-  // Draw side cannons from modular system
-  if (player.shipConfig && player.shipConfig.sideUpgrade && player.shipConfig.sideUpgrade.cannons) {
-    for (const cannon of player.shipConfig.sideUpgrade.cannons) {
-      // Backend provides relative positions, draw cannon centered on that position
-      const centerX = cannon.position.x;
-      const centerY = cannon.position.y;
-      
-      if (cannon.type === 'scatter') {
-        // Draw scatter cannon as a trapezoid with wider base facing away from ship
-        const baseWidth = gunWidth * 2;   // Narrower base (along ship side)
-        const muzzleWidth = gunWidth * 3;  // Wider muzzle (facing outward)
-        
-        // Determine if this is a left or right side cannon based on Y position
-        const isRightSide = centerY > 0;
-        
-        ctx.beginPath();
-        if (isRightSide) {
-          // Right side cannon - trapezoid with muzzle facing away from ship (positive Y)
-          // Back-inner corner (narrow end, closer to ship center)
-          ctx.moveTo(centerX - baseWidth/2, centerY - gunWidth/2);
-          // Front-inner corner (narrow end)
-          ctx.lineTo(centerX + baseWidth/2, centerY - gunWidth/2);
-          // Front-outer corner (wide end, muzzle)
-          ctx.lineTo(centerX + muzzleWidth/2, centerY + gunWidth/2);
-          // Back-outer corner (wide end)
-          ctx.lineTo(centerX - muzzleWidth/2, centerY + gunWidth/2);
-        } else {
-          // Left side cannon - trapezoid with muzzle facing away from ship (negative Y)
-          // Back-inner corner (narrow end, closer to ship center)
-          ctx.moveTo(centerX - baseWidth/2, centerY + gunWidth/2);
-          // Front-inner corner (narrow end)
-          ctx.lineTo(centerX + baseWidth/2, centerY + gunWidth/2);
-          // Front-outer corner (wide end, muzzle)
-          ctx.lineTo(centerX + muzzleWidth/2, centerY - gunWidth/2);
-          // Back-outer corner (wide end)
-          ctx.lineTo(centerX - muzzleWidth/2, centerY - gunWidth/2);
-        }
-        // Close the shape
-        ctx.closePath();
-        ctx.fill();
-        
-        // Add stroke for better visibility
-        ctx.strokeStyle = '#333';
-        ctx.stroke();
-      } else {
-        // Draw regular cannon as rectangle
-        const x = centerX - gunLength / 2; // Convert center to top-left for fillRect
-        const y = centerY - gunWidth / 2;  // Convert center to top-left for fillRect
-        ctx.fillRect(x, y, gunLength, gunWidth);
-        ctx.strokeRect(x, y, gunLength, gunWidth);
-
-      }
-    }
-  }
-
   // --- Draw turrets using new modular system ---
   if (player.shipConfig && player.shipConfig.topUpgrade && player.shipConfig.topUpgrade.turrets) {
     for (const turret of player.shipConfig.topUpgrade.turrets) {
@@ -1113,21 +1205,42 @@ drawPlayer(player) {
       ctx.rotate(turret.angle - angle);
       ctx.fillStyle = '#666';
       
+      // Calculate recoil offset for turret barrels
+      let recoilOffset = 0;
+      if (turret.recoilTime) {
+        const timeSinceFire = Date.now() - new Date(turret.recoilTime).getTime();
+        const recoilDuration = 200; // 200ms recoil animation
+        
+        if (timeSinceFire < recoilDuration) {
+          const progress = timeSinceFire / recoilDuration;
+          // Ease-out animation: starts fast, slows down
+          const easeOut = 1 - Math.pow(1 - progress, 3);
+          const recoilDistance = 6; // Maximum recoil distance in pixels
+          recoilOffset = -recoilDistance * (1 - easeOut); // Negative for backward recoil
+        }
+      }
+      
       if (turret.type === 'machine_gun_turret' && turret.cannons && turret.cannons.length >= 2) {
-        // Draw two parallel barrels for machine gun turret
+        // Draw two parallel barrels for machine gun turret with alternating recoil
         const barrelSeparation = barrelWidth;
+        const numCannons = turret.cannons.length;
         
-        // Left barrel
-        ctx.fillRect(0, -barrelSeparation/2 - barrelWidth/2, barrelLength, barrelWidth);
-        ctx.strokeRect(0, -barrelSeparation/2 - barrelWidth/2, barrelLength, barrelWidth);
+        // Determine which cannon just fired (previous to nextCannonIndex)
+        const lastFiredIndex = (turret.nextCannonIndex - 1 + numCannons) % numCannons;
         
-        // Right barrel
-        ctx.fillRect(0, barrelSeparation/2 - barrelWidth/2, barrelLength, barrelWidth);
-        ctx.strokeRect(0, barrelSeparation/2 - barrelWidth/2, barrelLength, barrelWidth);
+        // Left barrel (cannon index 0)
+        const leftRecoil = (lastFiredIndex === 0) ? recoilOffset : 0;
+        ctx.fillRect(leftRecoil, -barrelSeparation/2 - barrelWidth/2, barrelLength, barrelWidth);
+        ctx.strokeRect(leftRecoil, -barrelSeparation/2 - barrelWidth/2, barrelLength, barrelWidth);
+        
+        // Right barrel (cannon index 1)
+        const rightRecoil = (lastFiredIndex === 1) ? recoilOffset : 0;
+        ctx.fillRect(rightRecoil, barrelSeparation/2 - barrelWidth/2, barrelLength, barrelWidth);
+        ctx.strokeRect(rightRecoil, barrelSeparation/2 - barrelWidth/2, barrelLength, barrelWidth);
       } else {
         // Single barrel for regular turret
-        ctx.fillRect(0, -barrelWidth / 2, barrelLength, barrelWidth);
-        ctx.strokeRect(0, -barrelWidth / 2, barrelLength, barrelWidth);
+        ctx.fillRect(recoilOffset, -barrelWidth / 2, barrelLength, barrelWidth);
+        ctx.strokeRect(recoilOffset, -barrelWidth / 2, barrelLength, barrelWidth);
       }
       
       // Draw turret base (slightly larger for machine gun turrets)
@@ -1857,23 +1970,18 @@ drawPlayer(player) {
   
   // Helper functions
   getExperienceForLevel(level) {
-    // Exponential progression: each level requires 50% more experience than the previous
-    // Level 1 = 0, Level 2 = 100, Level 3 = 250, Level 4 = 475, etc.
+    // Progressive increment: each level requires 100 more XP than the previous level's increment
+    // Level 1 = 0, Level 2 = 100, Level 3 = 300, Level 4 = 600, Level 5 = 1000, etc.
     if (level <= 1) {
       return 0;
     }
     
     let totalExp = 0;
-    const baseExp = 100; // Experience needed to go from level 1 to 2
     
     for (let i = 2; i <= level; i++) {
-      if (i === 2) {
-        totalExp += baseExp;
-      } else {
-        // Each level requires 50% more than the previous level's requirement
-        const levelExp = Math.floor(baseExp * Math.pow(2, i - 2));
-        totalExp += levelExp;
-      }
+      // Level increment increases by 100 each level: 100, 200, 300, 400...
+      const levelIncrement = (i - 1) * 100;
+      totalExp += levelIncrement;
     }
     
     return totalExp;
@@ -1986,6 +2094,7 @@ drawPlayer(player) {
     this.input.selectUpgrade = '';
     this.input.upgradeChoice = '';
     this.input.statUpgradeType = '';
+    this.input.toggleAutofire = false;
   }
 }
 
@@ -2165,6 +2274,38 @@ class StartScreen {
         playerColor: chosenColor,
       });
     }
+  }
+
+  drawAutofireStatus() {
+    if (!this.gameState.myPlayer) return;
+    
+    const player = this.gameState.myPlayer;
+    const autofireEnabled = player.autofireEnabled !== false; // Default to true if not set
+    
+    // Position at bottom center of screen
+    const x = this.canvas.width / 2;
+    const y = this.canvas.height - 30;
+    
+    this.ctx.save();
+    
+    // Draw background
+    this.ctx.fillStyle = autofireEnabled ? 'rgba(0, 255, 0, 0.3)' : 'rgba(255, 0, 0, 0.3)';
+    this.ctx.strokeStyle = autofireEnabled ? '#00ff00' : '#ff0000';
+    this.ctx.lineWidth = 2;
+    
+    const textWidth = 140;
+    const textHeight = 20;
+    
+    this.ctx.fillRect(x - textWidth/2, y - textHeight/2, textWidth, textHeight);
+    this.ctx.strokeRect(x - textWidth/2, y - textHeight/2, textWidth, textHeight);
+    
+    // Draw text
+    this.ctx.fillStyle = '#ffffff';
+    this.ctx.font = 'bold 14px Arial';
+    this.ctx.textAlign = 'center';
+    this.ctx.fillText(`Autofire: ${autofireEnabled ? 'ON' : 'OFF'} (R)`, x, y + 4);
+    
+    this.ctx.restore();
   }
 }
 

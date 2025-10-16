@@ -15,6 +15,7 @@ const (
 	WeaponTypeRam              WeaponType = "ram"
 	WeaponTypeRudder           WeaponType = "rudder"
 	WeaponTypeScatter          WeaponType = "scatter"
+	WeaponTypeRow              WeaponType = "row"
 )
 
 // CannonStats holds the properties of a cannon
@@ -36,6 +37,7 @@ type Cannon struct {
 	Stats        CannonStats `json:"stats"`
 	LastFireTime time.Time   `json:"-"`
 	Type         WeaponType  `json:"type"`
+	RecoilTime   time.Time   `json:"recoilTime"` // When the cannon last fired (for recoil animation)
 }
 
 // CanFire checks if the cannon is ready to fire based on reload time
@@ -114,6 +116,7 @@ func (c *Cannon) Fire(world *World, player *Player, targetAngle float32, now tim
 	}
 
 	c.LastFireTime = now
+	c.RecoilTime = now
 	return bullets
 }
 
@@ -127,6 +130,7 @@ type Turret struct {
 	LastFireTime    time.Time  `json:"-"`
 	Type            WeaponType `json:"type"`
 	NextCannonIndex int        `json:"nextCannonIndex"` // For alternating fire
+	RecoilTime      time.Time  `json:"recoilTime"`      // When the turret last fired (for recoil animation)
 }
 
 // UpdateAiming updates the turret's angle to aim at target position
@@ -240,6 +244,7 @@ func (t *Turret) Fire(world *World, player *Player, now time.Time) []*Bullet {
 			// Move to next cannon for alternating fire
 			t.NextCannonIndex = (t.NextCannonIndex + 1) % len(t.Cannons)
 			t.LastFireTime = now
+			t.RecoilTime = now
 		}
 	} else {
 		// Regular turret: fire all cannons simultaneously
@@ -251,6 +256,7 @@ func (t *Turret) Fire(world *World, player *Player, now time.Time) []*Bullet {
 
 		if len(allBullets) > 0 {
 			t.LastFireTime = now
+			t.RecoilTime = now
 		}
 	}
 
@@ -309,11 +315,22 @@ func NewTurretCannon() CannonStats {
 func NewMachineGunCannon() CannonStats {
 	return CannonStats{
 		ReloadTime:      0.3,
-		BulletSpeedMod:  1,
-		BulletDamageMod: 0.05,
+		BulletSpeedMod:  0.7,
+		BulletDamageMod: 0.03,
 		BulletCount:     1,
 		SpreadAngle:     0,
 		Range:           0,
 		Size:            0.7,
+	}
+}
+
+func NewRowingOar() CannonStats {
+	return CannonStats{
+		ReloadTime:      0, // No firing
+		BulletSpeedMod:  0, // No bullets
+		BulletDamageMod: 0, // No damage
+		BulletCount:     0, // No bullets
+		SpreadAngle:     0, // No spread
+		Range:           0, // No range
 	}
 }
