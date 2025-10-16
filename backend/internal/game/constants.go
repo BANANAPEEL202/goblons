@@ -23,7 +23,7 @@ const (
 	BulletSpeed         = 4    // Bullet travel speed (slower for easier tracking)
 	BulletLifetime      = 2.5  // Seconds before bullet disappears (longer for easier spotting)
 	BulletSize          = 8.0  // Bullet radius (much larger for visibility)
-	BulletDamage        = 1    // Damage per bullet hit
+	BulletDamage        = 8    // Damage per bullet hit
 	CannonCooldown      = 1.5  // Seconds between shots (faster for testing)
 	CannonDistance      = 20.0 // Distance from ship center to cannon
 	MaxCannonsPerSide   = 100  // Maximum cannons per side
