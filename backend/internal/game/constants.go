@@ -71,6 +71,12 @@ const (
 	ItemTypeBlueDiamond  = "blue_diamond"
 )
 
+// Obstacle types
+const (
+	ObstacleTypeShipwreck = "shipwreck"
+	ObstacleTypeReef      = "reef"
+)
+
 // Player states
 const (
 	StateAlive = iota

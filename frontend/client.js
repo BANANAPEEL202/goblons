@@ -1,6 +1,7 @@
 // Game constants (should match backend)
 const WorldWidth = 2000.0;
 const WorldHeight = 2000.0;
+const PlayerSize = 50.0;
 const PRESET_COLORS = ['#FF0040', '#00FF80', '#0080FF', '#FF8000', '#8000FF'];
 const NAME_POOL = ['Pirate', 'Buccaneer', 'Sailor', 'Captain', 'Admiral', 'Navigator', 'Corsair', 'Raider'];
 
@@ -19,6 +20,7 @@ class GameClient {
       players: [],
       items: [],
       bullets: [],
+      obstacles: [],
       myPlayer: null
     };
     this.input = { 
@@ -319,6 +321,7 @@ class GameClient {
         this.gameState.players = data.players || [];
         this.gameState.items = data.items || [];
         this.gameState.bullets = data.bullets || [];
+        this.gameState.obstacles = data.obstacles || [];
         
         // Find our player by the ID we received in the welcome message
         if (this.myPlayerId) {
@@ -769,6 +772,64 @@ class GameClient {
     this.socket.send(JSON.stringify(this.input));
   }
 
+  getPlayerCollisionRadius(player) {
+    if (!player || !player.shipConfig) {
+      return PlayerSize / 2;
+    }
+
+    const config = player.shipConfig;
+    const length = config.shipLength || config.size || PlayerSize;
+    const width = config.shipWidth || config.size || PlayerSize;
+    const radius = Math.max(length, width) / 2;
+
+    if (radius > 0) {
+      return radius;
+    }
+
+    return PlayerSize / 2;
+  }
+
+  resolvePredictionObstacleCollision() {
+    if (!this.gameState.obstacles || this.gameState.obstacles.length === 0) {
+      return;
+    }
+
+    const player = this.gameState.myPlayer;
+    if (!player) {
+      return;
+    }
+
+    const radius = this.getPlayerCollisionRadius(player);
+    if (radius <= 0) {
+      return;
+    }
+
+    for (const obstacle of this.gameState.obstacles) {
+      const obstacleRadius = obstacle.radius || 0;
+
+      if (obstacleRadius <= 0) {
+        continue;
+      }
+
+      const dx = this.predictedPlayerPos.x - obstacle.x;
+      const dy = this.predictedPlayerPos.y - obstacle.y;
+      const minDist = radius + obstacleRadius;
+      const distSq = dx * dx + dy * dy;
+
+      if (distSq < minDist * minDist) {
+        const dist = Math.sqrt(distSq) || 0.0001;
+        const overlap = minDist - dist;
+        const nx = dx / dist || 1;
+        const ny = dy / dist || 0;
+
+        this.predictedPlayerPos.x += nx * overlap;
+        this.predictedPlayerPos.y += ny * overlap;
+        this.shipPhysics.velocity.x = 0;
+        this.shipPhysics.velocity.y = 0;
+      }
+    }
+  }
+
   updateClientPrediction() {
     if (!this.gameState.myPlayer) return;
     
@@ -829,7 +890,10 @@ class GameClient {
     
     this.predictedPlayerPos.x += moveX;
     this.predictedPlayerPos.y += moveY;
-    
+
+    // Prevent predicted position from entering solid obstacles
+    this.resolvePredictionObstacleCollision();
+
     // Keep within world bounds
     if (this.predictedPlayerPos.x <= 10) {
       this.predictedPlayerPos.x = 10;
@@ -896,6 +960,9 @@ class GameClient {
     
     // Draw map border
     this.drawMapBorder();
+
+    // Draw static obstacles
+    this.drawObstacles();
     
     // Draw items
     this.gameState.items.forEach(item => {
@@ -980,6 +1047,150 @@ class GameClient {
     }
     
     this.ctx.stroke();
+  }
+
+  drawObstacles() {
+    if (!this.gameState.obstacles || this.gameState.obstacles.length === 0) {
+      return;
+    }
+
+    const padding = 80;
+
+    this.gameState.obstacles.forEach((obstacle) => {
+      const radius = obstacle.radius || 0;
+      if (radius <= 0) {
+        return;
+      }
+
+      const screenX = obstacle.x - this.camera.x;
+      const screenY = obstacle.y - this.camera.y;
+
+      if (
+        screenX < -radius - padding ||
+        screenX > this.screenWidth + radius + padding ||
+        screenY < -radius - padding ||
+        screenY > this.screenHeight + radius + padding
+      ) {
+        return;
+      }
+
+      this.ctx.save();
+      this.ctx.translate(screenX, screenY);
+      this.ctx.shadowColor = 'rgba(12, 16, 28, 0.45)';
+      this.ctx.shadowBlur = Math.max(12, radius * 0.25);
+      this.ctx.shadowOffsetY = radius * 0.1;
+
+      if (obstacle.type === 'shipwreck') {
+        this.drawShipwreck(obstacle, radius);
+      } else {
+        this.drawReef(obstacle, radius);
+      }
+
+      this.ctx.restore();
+    });
+  }
+
+  drawShipwreck(obstacle, radius) {
+    const hullLength = radius * 2.4;
+    const hullWidth = radius * 0.8;
+    const rotation = (obstacle.rotation || 0) * (Math.PI / 180);
+
+    this.ctx.rotate(rotation);
+    const gradient = this.ctx.createLinearGradient(-hullLength / 2, 0, hullLength / 2, 0);
+    gradient.addColorStop(0, '#2a1e18');
+    gradient.addColorStop(0.45, '#4d3a2c');
+    gradient.addColorStop(0.55, '#3a2a21');
+    gradient.addColorStop(1, '#21150f');
+
+    this.ctx.fillStyle = gradient;
+    this.ctx.beginPath();
+    this.ctx.moveTo(-hullLength / 2, -hullWidth * 0.4);
+    this.ctx.lineTo(hullLength * 0.55, -hullWidth * 0.25);
+    this.ctx.lineTo(hullLength * 0.45, hullWidth * 0.55);
+    this.ctx.lineTo(-hullLength * 0.6, hullWidth * 0.6);
+    this.ctx.closePath();
+    this.ctx.fill();
+
+    // Deck details
+    this.ctx.strokeStyle = 'rgba(30, 20, 15, 0.55)';
+    this.ctx.lineWidth = radius * 0.08;
+    for (let i = -3; i <= 3; i++) {
+      const offset = (i / 3.5) * hullLength * 0.4;
+      this.ctx.beginPath();
+      this.ctx.moveTo(offset, -hullWidth * 0.35);
+      this.ctx.lineTo(offset * 1.1, hullWidth * 0.5);
+      this.ctx.stroke();
+    }
+
+    // Mast stump
+    this.ctx.strokeStyle = 'rgba(114, 82, 57, 0.9)';
+    this.ctx.lineWidth = radius * 0.12;
+    this.ctx.beginPath();
+    this.ctx.moveTo(-hullLength * 0.05, -hullWidth * 0.15);
+    this.ctx.lineTo(0, -radius * 1.1);
+    this.ctx.stroke();
+
+    // Metallic plating highlights
+    this.ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+    this.ctx.beginPath();
+    this.ctx.moveTo(-hullLength * 0.35, -hullWidth * 0.05);
+    this.ctx.lineTo(hullLength * 0.2, hullWidth * 0.15);
+    this.ctx.lineTo(hullLength * 0.1, hullWidth * 0.25);
+    this.ctx.lineTo(-hullLength * 0.45, hullWidth * 0.05);
+    this.ctx.closePath();
+    this.ctx.fill();
+  }
+
+  drawReef(obstacle, radius) {
+    const gradient = this.ctx.createRadialGradient(0, 0, radius * 0.2, 0, 0, radius);
+    gradient.addColorStop(0, 'rgba(82, 126, 143, 0.95)');
+    gradient.addColorStop(0.6, 'rgba(47, 72, 88, 0.95)');
+    gradient.addColorStop(1, 'rgba(24, 36, 48, 0.98)');
+
+    this.ctx.fillStyle = gradient;
+    this.ctx.beginPath();
+
+    const segments = 12;
+    for (let i = 0; i <= segments; i++) {
+      const angle = (Math.PI * 2 * i) / segments;
+      const noise =
+        0.78 +
+        0.18 * Math.sin(i * 1.6 + obstacle.id * 0.7) +
+        0.1 * Math.cos(i * 2.3 + obstacle.id * 0.4);
+      const r = radius * noise;
+      const x = Math.cos(angle) * r;
+      const y = Math.sin(angle) * r;
+
+      if (i === 0) {
+        this.ctx.moveTo(x, y);
+      } else {
+        this.ctx.lineTo(x, y);
+      }
+    }
+    this.ctx.closePath();
+    this.ctx.fill();
+
+    // Outer rim highlight
+    this.ctx.strokeStyle = 'rgba(142, 190, 210, 0.25)';
+    this.ctx.lineWidth = Math.max(2, radius * 0.08);
+    this.ctx.stroke();
+
+    // Surface speckles
+    this.ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+    const speckles = 14;
+    for (let i = 0; i < speckles; i++) {
+      const angle = (Math.PI * 2 * i) / speckles + obstacle.id * 0.3;
+      const distance = radius * (0.3 + 0.5 * ((i % 3) / 3));
+      this.ctx.beginPath();
+      this.ctx.arc(
+        Math.cos(angle) * distance,
+        Math.sin(angle) * distance,
+        Math.max(1.5, radius * 0.06),
+        0,
+        Math.PI * 2
+      );
+      this.ctx.fill();
+    }
   }
 
 drawPlayer(player) {
@@ -1777,6 +1988,30 @@ drawPlayer(player) {
     // Scale factors
     const scaleX = minimapSize / WorldWidth;
     const scaleY = minimapSize / WorldHeight;
+
+    // Draw obstacles as shaded zones
+    if (this.gameState.obstacles && this.gameState.obstacles.length > 0) {
+      this.gameState.obstacles.forEach((obstacle) => {
+        const radius = (obstacle.radius || 0) * scaleX;
+        if (radius <= 0) {
+          return;
+        }
+
+        const dotX = minimapX + obstacle.x * scaleX;
+        const dotY = minimapY + obstacle.y * scaleY;
+
+        this.ctx.fillStyle = 'rgba(36, 64, 84, 0.85)';
+        this.ctx.beginPath();
+        this.ctx.arc(dotX, dotY, Math.max(3, radius), 0, Math.PI * 2);
+        this.ctx.fill();
+
+        this.ctx.strokeStyle = 'rgba(14, 24, 34, 0.6)';
+        this.ctx.lineWidth = 1;
+        this.ctx.beginPath();
+        this.ctx.arc(dotX, dotY, Math.max(3, radius), 0, Math.PI * 2);
+        this.ctx.stroke();
+      });
+    }
     
     // Draw players as dots
     this.gameState.players.forEach(player => {

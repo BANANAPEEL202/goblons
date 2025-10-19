@@ -12,17 +12,113 @@ import (
 // NewWorld creates a new game world
 func NewWorld() *World {
 	world := &World{
-		clients:  make(map[uint32]*Client),
-		players:  make(map[uint32]*Player),
-		items:    make(map[uint32]*GameItem),
-		bullets:  make(map[uint32]*Bullet),
-		nextID:   1,
-		itemID:   1,
-		bulletID: 1,
-		running:  false,
+		clients:   make(map[uint32]*Client),
+		players:   make(map[uint32]*Player),
+		items:     make(map[uint32]*GameItem),
+		bullets:   make(map[uint32]*Bullet),
+		obstacles: make([]Obstacle, 0),
+		nextID:    1,
+		itemID:    1,
+		bulletID:  1,
+		running:   false,
 	}
 	world.mechanics = NewGameMechanics(world)
+	world.initObstacles()
 	return world
+}
+
+// initObstacles creates the static obstacles present on the map
+func (w *World) initObstacles() {
+	layout := []struct {
+		x, y     float32
+		radius   float32
+		typ      string
+		rotation float32
+	}{
+		{380, 420, 120, ObstacleTypeShipwreck, 18},
+		{760, 960, 95, ObstacleTypeReef, 0},
+		{1180, 520, 110, ObstacleTypeShipwreck, -28},
+		{1580, 320, 85, ObstacleTypeReef, 0},
+		{1480, 1280, 140, ObstacleTypeShipwreck, 42},
+		{560, 1460, 100, ObstacleTypeReef, 0},
+		{300, 1180, 70, ObstacleTypeReef, 0},
+		{1020, 1700, 120, ObstacleTypeShipwreck, -12},
+	}
+
+	w.obstacles = make([]Obstacle, len(layout))
+	for i, data := range layout {
+		w.obstacles[i] = Obstacle{
+			ID:       uint32(i + 1),
+			X:        data.x,
+			Y:        data.y,
+			Radius:   data.radius,
+			Type:     data.typ,
+			Rotation: data.rotation,
+		}
+	}
+}
+
+// isCircleBlocked returns true if a circle at (x,y) with the given radius overlaps any obstacle
+func (w *World) isCircleBlocked(x, y, radius float32) bool {
+	if radius <= 0 {
+		return false
+	}
+
+	minRadius := radius
+	for _, obstacle := range w.obstacles {
+		dx := x - obstacle.X
+		dy := y - obstacle.Y
+		minDist := minRadius + obstacle.Radius
+		if dx*dx+dy*dy < minDist*minDist {
+			return true
+		}
+	}
+	return false
+}
+
+// resolvePlayerObstacleCollision pushes the player out of any obstacle they intersect with
+func (w *World) resolvePlayerObstacleCollision(player *Player, prevX, prevY float32) {
+	playerRadius := calculateCollisionRadius(player.ShipConfig.ShipLength, player.ShipConfig.ShipWidth)
+	if playerRadius <= 0 {
+		return
+	}
+
+	for _, obstacle := range w.obstacles {
+		dx := player.X - obstacle.X
+		dy := player.Y - obstacle.Y
+		minDist := playerRadius + obstacle.Radius
+		distSq := dx*dx + dy*dy
+
+		if distSq < minDist*minDist {
+			dist := float32(math.Sqrt(float64(distSq)))
+
+			if dist == 0 {
+				// Player is exactly at obstacle center; revert to previous position and push outward
+				player.X = prevX
+				player.Y = prevY
+				dist = float32(math.Sqrt(float64((player.X-obstacle.X)*(player.X-obstacle.X) + (player.Y-obstacle.Y)*(player.Y-obstacle.Y))))
+				if dist == 0 {
+					player.X = obstacle.X + minDist
+					player.Y = obstacle.Y
+					dist = minDist
+				}
+			}
+
+			overlap := minDist - dist
+			if overlap <= 0 {
+				continue
+			}
+
+			nx := dx / dist
+			ny := dy / dist
+			player.X += nx * overlap
+			player.Y += ny * overlap
+
+			// Damp velocity when colliding with obstacles to avoid jitter
+			player.VelX = 0
+			player.VelY = 0
+		}
+	}
 }
 
 // Start begins the game loop
@@ -204,8 +300,13 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 	}
 
 	// Update position
+	prevX := player.X
+	prevY := player.Y
 	player.X += player.VelX
 	player.Y += player.VelY
+
+	// Prevent ships from entering solid obstacles
+	w.resolvePlayerObstacleCollision(player, prevX, prevY)
 
 	// Update turret aiming and firing using modular system
 	now := time.Now()
@@ -365,10 +466,28 @@ func (w *World) collectItem(playerID, itemID uint32) {
 
 // spawnPlayer spawns a player at a random safe location
 func (w *World) spawnPlayer(player *Player) {
-	// Simple random spawn - could be improved to avoid other players
-	player.X = float32(rand.Intn(int(WorldWidth-100)) + 50)
-	player.Y = float32(rand.Intn(int(WorldHeight-100)) + 50)
+	playerRadius := calculateCollisionRadius(player.ShipConfig.ShipLength, player.ShipConfig.ShipWidth)
+	if playerRadius == 0 {
+		playerRadius = PlayerSize / 2
+	}
+
+	for attempts := 0; attempts < 25; attempts++ {
+		x := float32(rand.Intn(int(WorldWidth-100)) + 50)
+		y := float32(rand.Intn(int(WorldHeight-100)) + 50)
+
+		if !w.isCircleBlocked(x, y, playerRadius) {
+			player.X = x
+			player.Y = y
+			player.State = StateAlive
+			return
+		}
+	}
+
+	// Fallback to center if we couldn't find a clear location
+	player.X = WorldWidth / 2
+	player.Y = WorldHeight / 2
 	player.State = StateAlive
+	w.resolvePlayerObstacleCollision(player, player.X, player.Y)
 }
 
 // resetPlayerShipConfig resets a player's ship configuration to default
@@ -450,11 +569,12 @@ func (w *World) spawnItems() {
 // broadcastSnapshot sends the current game state to all clients
 func (w *World) broadcastSnapshot() {
 	snapshot := Snapshot{
-		Type:    MsgTypeSnapshot,
-		Players: make([]Player, 0, len(w.players)),
-		Items:   make([]GameItem, 0, len(w.items)),
-		Bullets: make([]Bullet, 0, len(w.bullets)),
-		Time:    time.Now().UnixMilli(),
+		Type:      MsgTypeSnapshot,
+		Players:   make([]Player, 0, len(w.players)),
+		Items:     make([]GameItem, 0, len(w.items)),
+		Bullets:   make([]Bullet, 0, len(w.bullets)),
+		Obstacles: make([]Obstacle, 0, len(w.obstacles)),
+		Time:      time.Now().UnixMilli(),
 	}
 
 	// Add all players to snapshot
@@ -470,6 +590,11 @@ func (w *World) broadcastSnapshot() {
 	// Add all bullets to snapshot
 	for _, bullet := range w.bullets {
 		snapshot.Bullets = append(snapshot.Bullets, *bullet)
+	}
+
+	// Add static obstacles
+	for _, obstacle := range w.obstacles {
+		snapshot.Obstacles = append(snapshot.Obstacles, obstacle)
 	}
 
 	data, err := json.Marshal(snapshot)
@@ -599,6 +724,23 @@ func (w *World) updateBullets() {
 
 		// Remove bullets that are out of bounds
 		if bullet.X < 0 || bullet.X > WorldWidth || bullet.Y < 0 || bullet.Y > WorldHeight {
+			delete(w.bullets, id)
+			continue
+		}
+
+		// Check collision with obstacles
+		bulletRadius := bullet.Size / 2
+		hitObstacle := false
+		for _, obstacle := range w.obstacles {
+			dx := bullet.X - obstacle.X
+			dy := bullet.Y - obstacle.Y
+			minDist := bulletRadius + obstacle.Radius
+			if dx*dx+dy*dy <= minDist*minDist {
+				hitObstacle = true
+				break
+			}
+		}
+		if hitObstacle {
 			delete(w.bullets, id)
 			continue
 		}

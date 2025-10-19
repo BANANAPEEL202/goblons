@@ -347,6 +347,11 @@ func (gm *GameMechanics) isLocationSafe(x, y, size float32) bool {
 		}
 	}
 
+	// Ensure the spawn point is not inside an obstacle
+	if gm.world.isCircleBlocked(x, y, size/2) {
+		return false
+	}
+
 	return true
 }
 
@@ -395,12 +400,29 @@ func (gm *GameMechanics) SpawnFoodItems() {
 
 		item := &GameItem{
 			ID:    gm.world.itemID,
-			X:     float32(rand.Intn(int(WorldWidth-50)) + 25),
-			Y:     float32(rand.Intn(int(WorldHeight-50)) + 25),
 			Type:  selectedType.name,
 			Coins: selectedType.coins,
 			XP:    selectedType.xp,
 		}
+
+		itemRadius := float32(ItemPickupSize) / 2
+		foundSpot := false
+		for attempts := 0; attempts < 20; attempts++ {
+			candidateX := float32(rand.Intn(int(WorldWidth-50)) + 25)
+			candidateY := float32(rand.Intn(int(WorldHeight-50)) + 25)
+
+			if !gm.world.isCircleBlocked(candidateX, candidateY, itemRadius) {
+				item.X = candidateX
+				item.Y = candidateY
+				foundSpot = true
+				break
+			}
+		}
+
+		if !foundSpot {
+			continue
+		}
+
 		gm.world.itemID++
 		gm.world.items[item.ID] = item
 	}
