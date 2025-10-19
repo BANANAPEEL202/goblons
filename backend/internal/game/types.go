@@ -134,13 +134,24 @@ type Bullet struct {
 	Damage    int       `json:"damage"`
 }
 
+// Obstacle represents an immovable world obstacle that blocks movement and projectiles
+type Obstacle struct {
+	ID       uint32  `json:"id"`
+	X        float32 `json:"x"`
+	Y        float32 `json:"y"`
+	Radius   float32 `json:"radius"`
+	Type     string  `json:"type"`
+	Rotation float32 `json:"rotation"`
+}
+
 // Snapshot represents the current game state sent to clients
 type Snapshot struct {
-	Type    string     `json:"type"`
-	Players []Player   `json:"players"`
-	Items   []GameItem `json:"items"`
-	Bullets []Bullet   `json:"bullets"`
-	Time    int64      `json:"time"`
+	Type      string     `json:"type"`
+	Players   []Player   `json:"players"`
+	Items     []GameItem `json:"items"`
+	Bullets   []Bullet   `json:"bullets"`
+	Obstacles []Obstacle `json:"obstacles"`
+	Time      int64      `json:"time"`
 }
 
 // WelcomeMsg represents a welcome message sent to a new client
@@ -180,6 +191,7 @@ type World struct {
 	players   map[uint32]*Player
 	items     map[uint32]*GameItem
 	bullets   map[uint32]*Bullet
+	obstacles []Obstacle
 	mechanics *GameMechanics
 	nextID    uint32
 	itemID    uint32
