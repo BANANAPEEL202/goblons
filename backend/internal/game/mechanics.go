@@ -30,17 +30,6 @@ func (gm *GameMechanics) isFrontalRam(attacker, victim *Player) bool {
 	return angleDiff < math.Pi/4
 }
 
-// normalizeAngle normalizes angle to [0, 2*pi)
-func normalizeAngle(a float64) float64 {
-	for a < 0 {
-		a += 2 * math.Pi
-	}
-	for a >= 2*math.Pi {
-		a -= 2 * math.Pi
-	}
-	return a
-}
-
 // NewGameMechanics creates a new game mechanics handler
 func NewGameMechanics(world *World) *GameMechanics {
 	return &GameMechanics{world: world}
