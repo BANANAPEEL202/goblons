@@ -175,16 +175,17 @@ type Client struct {
 
 // World represents the game world and all its entities
 type World struct {
-	mu        sync.RWMutex
-	clients   map[uint32]*Client
-	players   map[uint32]*Player
-	items     map[uint32]*GameItem
-	bullets   map[uint32]*Bullet
-	mechanics *GameMechanics
-	nextID    uint32
-	itemID    uint32
-	bulletID  uint32
-	running   bool
+	mu          sync.RWMutex
+	clients     map[uint32]*Client
+	players     map[uint32]*Player
+	items       map[uint32]*GameItem
+	bullets     map[uint32]*Bullet
+	mechanics   *GameMechanics
+	nextID      uint32
+	itemID      uint32
+	bulletID    uint32
+	running     bool
+	tickCounter uint32 // For performance optimizations
 }
 
 // NewClient creates a new client

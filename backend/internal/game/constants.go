@@ -4,32 +4,32 @@ package game
 const (
 	WorldWidth  = 2000.0
 	WorldHeight = 2000.0
-	TickRate    = 60 // Server updates per second
+	TickRate    = 30 // Server updates per second (reduced for performance)
 	PlayerSpeed = 2.0
 	PlayerSize  = 50.0
-	MaxPlayers  = 100
+	MaxPlayers  = 32
 )
 
 // Ship physics constants
 const (
-	ShipAcceleration  = 10000000 // Forward/backward acceleration
-	BaseShipTurnSpeed = 0.04     // Turning speed in radians per frame
-	ShipDeceleration  = 0.92     // Drag/friction factor
-	BaseShipMaxSpeed  = 2        // Maximum speed
+	ShipAcceleration  = 20000000 // Forward/backward acceleration (doubled for 30 TPS)
+	BaseShipTurnSpeed = 0.08     // Turning speed in radians per frame (doubled for 30 TPS)
+	ShipDeceleration  = 0.84     // Drag/friction factor (adjusted for 30 TPS)
+	BaseShipMaxSpeed  = 4        // Maximum speed (doubled for 30 TPS)
 )
 
 // Cannon and bullet constants
 const (
-	BulletSpeed         = 4    // Bullet travel speed (slower for easier tracking)
-	BulletLifetime      = 2.5  // Seconds before bullet disappears (longer for easier spotting)
-	BulletSize          = 8.0  // Bullet radius (much larger for visibility)
-	BulletDamage        = 8    // Damage per bullet hit
-	CannonCooldown      = 1.5  // Seconds between shots (faster for testing)
-	CannonDistance      = 20.0 // Distance from ship center to cannon
-	MaxCannonsPerSide   = 100  // Maximum cannons per side
-	MinCannonsPerSide   = 1    // Minimum cannons per side
-	CannonSpacingFactor = 0.7  // Factor for spacing cannons along ship length
-	ShipScaleFactor     = 1.0  // Base scale factor for ship size
+	BulletSpeed         = 8    // Bullet travel speed (doubled for 30 TPS)
+	BulletLifetime      = 2.5  // Seconds before bullet disappears (unchanged - time-based)
+	BulletSize          = 8.0  // Bullet radius (unchanged - visual)
+	BulletDamage        = 8    // Damage per bullet hit (unchanged)
+	CannonCooldown      = 1.5  // Seconds between shots (unchanged - time-based)
+	CannonDistance      = 20.0 // Distance from ship center to cannon (unchanged - visual)
+	MaxCannonsPerSide   = 100  // Maximum cannons per side (unchanged)
+	MinCannonsPerSide   = 1    // Minimum cannons per side (unchanged)
+	CannonSpacingFactor = 0.7  // Factor for spacing cannons along ship length (unchanged)
+	ShipScaleFactor     = 1.0  // Base scale factor for ship size (unchanged)
 )
 
 // Turret constants
