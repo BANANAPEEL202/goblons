@@ -618,34 +618,6 @@ func applyStatUpgradeEffects(player *Player, upgradeType StatUpgradeType) {
 		player.MaxHealth += healthIncrease
 		player.Health += healthIncrease     // Heal on upgrade
 		player.ShipConfig.ShipWidth *= 1.01 // Small width increase per level
-
-	case StatUpgradeAutoRepairs:
-		// Adds 1.5 health per second regeneration per upgrade level
-		// This will be handled in the game loop, just track the level
-
-	case StatUpgradeCannonRange:
-		// Increases bullet speed by 26 units/s, increases cannon length by 0.3
-		// These effects will be applied when bullets are created and cannons are rendered
-
-	case StatUpgradeCannonDamage:
-		// Increases damage by 2.6 and width by 0.4 per level
-		// These effects will be applied when bullets are created
-
-	case StatUpgradeReloadSpeed:
-		// Decreases cooldown time by 4% per level
-		// This will be applied when checking weapon cooldowns
-
-	case StatUpgradeMoveSpeed:
-		// Increases movement speed by 5 units/s per level
-		// This will be applied in movement calculations
-
-	case StatUpgradeTurnSpeed:
-		// Increases turning speed by 3 arc/s per level
-		// This will be applied in rotation calculations
-
-	case StatUpgradeBodyDamage:
-		// Increases collision damage per tick
-		// This will be applied in collision calculations
 	}
 }
 
