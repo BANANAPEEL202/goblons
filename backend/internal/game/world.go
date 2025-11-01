@@ -2,7 +2,6 @@ package game
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
 	"math"
 	"math/rand"

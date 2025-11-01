@@ -1709,7 +1709,15 @@ drawPlayer(player) {
 
   drawLeaderboard() {
     const sortedPlayers = [...this.gameState.players]
-      .sort((a, b) => (b.score || 0) - (a.score || 0))
+      .filter(player => !player.isBot) // Exclude bots from leaderboard
+      .sort((a, b) => {
+        const scoreDiff = (b.score || 0) - (a.score || 0);
+        if (scoreDiff !== 0) return scoreDiff;
+        // If scores are tied, sort alphabetically by name
+        const nameA = (a.name || `Player ${a.id}`).toLowerCase();
+        const nameB = (b.name || `Player ${b.id}`).toLowerCase();
+        return nameA.localeCompare(nameB);
+      })
       .slice(0, 5); // Top 5 players
     
     if (sortedPlayers.length === 0) return;
