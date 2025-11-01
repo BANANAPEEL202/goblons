@@ -1,6 +1,6 @@
 // Game constants (should match backend)
-const WorldWidth = 5000.0;
-const WorldHeight = 5000.0;
+const WorldWidth = 3000.0;
+const WorldHeight = 3000.0;
 const PRESET_COLORS = ['#FF0040', '#00FF80', '#0080FF', '#FF8000', '#8000FF'];
 const NAME_POOL = ['Pirate', 'Buccaneer', 'Sailor', 'Captain', 'Admiral', 'Navigator', 'Corsair', 'Raider'];
 
@@ -615,53 +615,72 @@ class GameClient {
     if (this.controlsLocked) {
       return false;
     }
-    if (!this.gameState.myPlayer || this.gameState.myPlayer.availableUpgrades <= 0 || this.upgradeUI.pendingUpgrade) return false;
-    // First check if clicking on upgrade type buttons
-    const availableTypes = [];
+
+    const player = this.gameState.myPlayer;
+    if (!player || player.availableUpgrades <= 0) {
+      return false;
+    }
+
     const upgradeTypes = ['side', 'top', 'front', 'rear'];
-    for (const type of upgradeTypes) {
-      if (this.hasAvailableUpgrades(type)) {
-        availableTypes.push(type);
+    const availableTypes = upgradeTypes.filter((type) => this.hasAvailableUpgrades(type));
+    if (availableTypes.length === 0) {
+      return false;
+    }
+
+    const buttonWidth = 50;
+    const buttonHeight = 50;
+    const spacing = 20;
+    const totalWidth = (buttonWidth * availableTypes.length) + (spacing * (availableTypes.length - 1));
+    const startX = (this.screenWidth - totalWidth) / 2;
+    const buttonY = this.screenHeight - 150;
+
+    for (let i = 0; i < availableTypes.length; i++) {
+      const type = availableTypes[i];
+      const x = startX + (buttonWidth + spacing) * i;
+      if (screenX >= x && screenX <= x + buttonWidth && screenY >= buttonY && screenY <= buttonY + buttonHeight) {
+        this.upgradeUI.selectedUpgradeType = this.upgradeUI.selectedUpgradeType === type ? null : type;
+        return true;
       }
     }
-    if (availableTypes.length > 0) {
-      // Match button dimensions to drawUpgradeUI
-      const buttonWidth = 50;
-      const buttonHeight = 50;
-      const spacing = 20;
-      const totalWidth = (buttonWidth * availableTypes.length) + (spacing * (availableTypes.length - 1));
-      const startX = (this.screenWidth - totalWidth) / 2;
-      const buttonY = this.screenHeight - 150;
-      for (let i = 0; i < availableTypes.length; i++) {
-        const type = availableTypes[i];
-        const x = startX + (buttonWidth + spacing) * i;
-        if (screenX >= x && screenX <= x + buttonWidth && 
-            screenY >= buttonY && screenY <= buttonY + buttonHeight) {
-          // Toggle selection - if already selected, deselect; otherwise select
-          if (this.upgradeUI.selectedUpgradeType === type) {
-            this.upgradeUI.selectedUpgradeType = null;
-          } else {
-            this.upgradeUI.selectedUpgradeType = type;
-          }
+
+    const selectedType = this.upgradeUI.selectedUpgradeType;
+    if (!selectedType) {
+      return false;
+    }
+
+    const options = this.getAvailableUpgrades(selectedType);
+    if (!options || options.length === 0) {
+      return false;
+    }
+
+    const typeIndex = availableTypes.indexOf(selectedType);
+    if (typeIndex === -1) {
+      this.upgradeUI.selectedUpgradeType = null;
+      return false;
+    }
+
+    const optionHeight = 30;
+    const optionWidth = Math.max(buttonWidth, 125);
+    const optionSpacing = 10;
+    const totalHeight = (optionHeight * options.length) + (optionSpacing * (options.length - 1));
+    const optionsX = startX + (buttonWidth + spacing) * typeIndex + (buttonWidth - optionWidth) / 2;
+    const optionsStartY = buttonY - totalHeight - 10;
+
+    for (let i = 0; i < options.length; i++) {
+      const option = options[i];
+      const optionY = optionsStartY + (optionHeight + optionSpacing) * i;
+
+      if (screenX >= optionsX && screenX <= optionsX + optionWidth && screenY >= optionY && screenY <= optionY + optionHeight) {
+        if (this.upgradeUI.pendingUpgrade) {
           return true;
         }
+
+        this.selectUpgrade(selectedType, option.name);
+        return true;
       }
     }
-    
-    // Then check upgrade option clicks using stored positions
-    if (this.upgradeUI.optionPositions && this.upgradeUI.selectedUpgradeType) {
-      const positions = this.upgradeUI.optionPositions[this.upgradeUI.selectedUpgradeType];
-      if (positions) {
-        for (const pos of positions) {
-          if (screenX >= pos.x && screenX <= pos.x + pos.width && 
-              screenY >= pos.y && screenY <= pos.y + pos.height) {
-            // Select upgrade
-            this.selectUpgrade(this.upgradeUI.selectedUpgradeType, pos.option.name);
-            return true;
-          }
-        }
-      }
-    }
+
+    return false;
   }
   
   selectUpgrade(upgradeType, upgradeId) {

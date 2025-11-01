@@ -347,7 +347,6 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 	if elapsedSeconds >= 0.2 {
 		healthToRegen := int(elapsedSeconds * regenRate)
 		if healthToRegen > 0 && player.Health < player.MaxHealth {
-			fmt.Println("Health to regen:", healthToRegen, "Elapsed seconds:", elapsedSeconds, "Regen rate:", regenRate) // --- IGNORE ---w
 			player.Health += healthToRegen
 			if player.Health > player.MaxHealth {
 				player.Health = player.MaxHealth
