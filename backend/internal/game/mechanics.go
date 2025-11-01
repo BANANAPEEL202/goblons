@@ -1,7 +1,6 @@
 package game
 
 import (
-	"log"
 	"math"
 	"math/rand"
 	"time"
@@ -128,17 +127,11 @@ func (gm *GameMechanics) handlePlayerCollision(player1, player2 *Player) {
 	// Frontal ram logic
 	if gm.isFrontalRam(player1, player2) && player1.ShipConfig.FrontUpgrade != nil && player1.ShipConfig.FrontUpgrade.Name == "Ram" {
 		ramDamage := 10 // Base ram damage, can be made configurable/stat-based
-		player2.Health -= ramDamage
-		if player2.Health <= 0 {
-			gm.handlePlayerKilledByCollision(player2, player1, now)
-		}
+		gm.ApplyDamage(player2, ramDamage, player1, KillCauseRam, now)
 	}
 	if gm.isFrontalRam(player2, player1) && player2.ShipConfig.FrontUpgrade != nil && player2.ShipConfig.FrontUpgrade.Name == "Ram" {
 		ramDamage := 1
-		player1.Health -= ramDamage
-		if player1.Health <= 0 {
-			gm.handlePlayerKilledByCollision(player1, player2, now)
-		}
+		gm.ApplyDamage(player1, ramDamage, player2, KillCauseRam, now)
 	}
 }
 
@@ -227,14 +220,7 @@ func (gm *GameMechanics) applyCollisionDamage(player1, player2 *Player, now time
 
 		// Calculate damage from player1 to player2
 		damageToPlayer2 := BaseCollisionDamage + int(effects1["bodyDamage"])
-		if damageToPlayer2 > 0 {
-			player2.Health -= damageToPlayer2
-
-			// Check if player2 died from collision damage
-			if player2.Health <= 0 {
-				gm.handlePlayerKilledByCollision(player2, player1, now)
-			}
-		}
+		gm.ApplyDamage(player2, damageToPlayer2, player1, KillCauseCollision, now)
 
 		player1.LastCollisionDamage = now
 	}
@@ -246,104 +232,10 @@ func (gm *GameMechanics) applyCollisionDamage(player1, player2 *Player, now time
 
 		// Calculate damage from player2 to player1
 		damageToPlayer1 := BaseCollisionDamage + int(effects2["bodyDamage"])
-		if damageToPlayer1 > 0 {
-			player1.Health -= damageToPlayer1
-
-			// Check if player1 died from collision damage
-			if player1.Health <= 0 {
-				gm.handlePlayerKilledByCollision(player1, player2, now)
-			}
-		}
+		gm.ApplyDamage(player1, damageToPlayer1, player2, KillCauseCollision, now)
 
 		player2.LastCollisionDamage = now
 	}
-}
-
-// handlePlayerKilledByCollision handles when a player is killed by collision damage
-func (gm *GameMechanics) handlePlayerKilledByCollision(victim, killer *Player, now time.Time) {
-	victim.Health = 0
-	victim.State = StateDead
-	victim.RespawnTime = now.Add(time.Duration(RespawnDelay) * time.Second)
-
-	log.Printf("Player %d (%s) was killed by collision damage from Player %d (%s)",
-		victim.ID, victim.Name, killer.ID, killer.Name)
-
-	// Handle kill rewards and victim penalties (same as bullet kills)
-	// Calculate rewards from victim (half their resources)
-	xpReward := victim.Experience / 2
-	coinReward := victim.Coins / 2
-
-	// Cap coin reward at 2000
-	if coinReward > 2000 {
-		coinReward = 2000
-	}
-
-	// Award to killer
-	killer.AddExperience(xpReward)
-	killer.Score += xpReward // Also add to score for leaderboard
-	killer.Coins += coinReward
-
-	// Victim loses half their resources
-	victim.Experience = victim.Experience / 2
-	victim.Coins = victim.Coins / 2
-
-	log.Printf("Player %d gained %d XP and %d coins for collision kill against Player %d (victim lost %d XP and %d coins)",
-		killer.ID, xpReward, coinReward, victim.ID, victim.Experience, victim.Coins)
-}
-
-// separatePlayers pushes two overlapping players apart (legacy function for backward compatibility)
-func (gm *GameMechanics) separatePlayers(player1, player2 *Player) {
-	// Redirect to the new push function
-	gm.pushShipsApart(player1, player2)
-}
-
-// respawnPlayer resets a player's state and position
-func (gm *GameMechanics) respawnPlayer(player *Player) {
-	player.ShipConfig.Size = PlayerSize
-	player.Score = 0
-	player.Health = player.MaxHealth
-	player.State = StateSpawning
-
-	// Find a safe spawn location
-	for attempts := 0; attempts < 10; attempts++ {
-		x := float32(rand.Intn(int(WorldWidth-100)) + 50)
-		y := float32(rand.Intn(int(WorldHeight-100)) + 50)
-
-		if gm.isLocationSafe(x, y, PlayerSize) {
-			player.X = x
-			player.Y = y
-			break
-		}
-	}
-
-	player.State = StateAlive
-	player.LastRegenTime = time.Now()       // Reset health regen timer for respawned player
-	player.LastCollisionDamage = time.Now() // Reset collision damage timer for respawned player
-}
-
-// isLocationSafe checks if a location is safe for spawning (no other players nearby)
-func (gm *GameMechanics) isLocationSafe(x, y, size float32) bool {
-	// Create a temporary player to check collision area
-
-	// Check against all existing players
-	for _, other := range gm.world.players {
-		if other.State != StateAlive {
-			continue
-		}
-		distance := gm.calculateDistance(x, y, other.X, other.Y)
-		if distance < (size+other.ShipConfig.Size)/2+20 { // 20 units buffer
-			return false
-		}
-	}
-
-	return true
-}
-
-// calculateDistance calculates the distance between two points
-func (gm *GameMechanics) calculateDistance(x1, y1, x2, y2 float32) float32 {
-	dx := x1 - x2
-	dy := y1 - y2
-	return float32(math.Sqrt(float64(dx*dx + dy*dy)))
 }
 
 // SpawnFoodItems spawns the new 4-tier item system around the map

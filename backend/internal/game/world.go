@@ -735,6 +735,10 @@ func (w *World) updateBullets() {
 
 		// Check collision with players (only if bullet is in world bounds)
 		bulletHit := false
+		var attacker *Player
+		if shooter, exists := w.players[bullet.OwnerID]; exists {
+			attacker = shooter
+		}
 		for playerID, player := range w.players {
 			// Skip if bullet owner or player is dead
 			if bullet.OwnerID == playerID || player.State != StateAlive {
@@ -748,47 +752,16 @@ func (w *World) updateBullets() {
 
 			// Only do expensive collision check if close enough (player size + some margin)
 			if distSq < 10000 && w.checkBulletPlayerCollision(bullet, player) { // 100^2 = 10000
-				// Apply damage
+				// Apply damage through mechanics system (handles death + rewards)
 				damage := bullet.Damage
 				if damage == 0 {
 					damage = BulletDamage // Fallback to default for legacy bullets
 				}
-				player.Health -= damage
+				w.mechanics.ApplyDamage(player, damage, attacker, KillCauseBullet, now)
 
 				// Mark bullet for deletion
 				bulletsToDelete = append(bulletsToDelete, id)
 				bulletHit = true
-
-				// Check if player died
-				if player.Health <= 0 {
-					player.Health = 0
-					player.State = StateDead
-					player.RespawnTime = now.Add(time.Duration(RespawnDelay) * time.Second)
-					log.Printf("Player %d (%s) was killed by Player %d", playerID, player.Name, bullet.OwnerID)
-
-					// Handle kill rewards and victim penalties
-					if shooter, exists := w.players[bullet.OwnerID]; exists {
-						// Calculate rewards from victim (half their resources)
-						xpReward := max(player.Experience/2, 100)
-						coinReward := max(player.Coins/2, 200)
-
-						// Cap coin reward at 2000
-						if coinReward > 2000 {
-							coinReward = 2000
-						}
-
-						// Award to killer
-						shooter.AddExperience(xpReward)
-						shooter.Score += xpReward // Also add to score for leaderboard
-						shooter.Coins += coinReward
-
-						// Victim loses half their resources
-						player.Experience = player.Experience / 2
-						player.Coins = player.Coins / 2
-
-						log.Printf("Player %d gained %d XP and %d coins for killing Player %d (victim lost %d XP and %d coins)", bullet.OwnerID, xpReward, coinReward, playerID, player.Experience, player.Coins)
-					}
-				}
 
 				break // Bullet hit something, stop checking other players
 			}
@@ -870,6 +843,51 @@ func (w *World) fireModularUpgrades(player *Player, input *InputMsg, now time.Ti
 	w.fireRearUpgrade(player, now)
 }
 
+// registerBullets adds the emitted bullets to the world map in one place.
+func (w *World) registerBullets(bullets []*Bullet) {
+	for _, bullet := range bullets {
+		w.bullets[bullet.ID] = bullet
+	}
+}
+
+// fireCannons iterates a list of cannons and fires them using their configured angles.
+func (w *World) fireCannons(player *Player, cannons []*Cannon, now time.Time) bool {
+	fired := false
+	for _, cannon := range cannons {
+		// Skip non-firing equipment such as oars
+		if cannon.Type == WeaponTypeRow {
+			continue
+		}
+
+		angle := player.Angle + cannon.Angle
+		bullets := cannon.Fire(w, player, angle, now)
+		if len(bullets) == 0 {
+			continue
+		}
+
+		w.registerBullets(bullets)
+		fired = true
+	}
+
+	return fired
+}
+
+// fireTurrets iterates a list of turrets and registers emitted bullets.
+func (w *World) fireTurrets(player *Player, turrets []*Turret, now time.Time) bool {
+	fired := false
+	for i := range turrets {
+		bullets := turrets[i].Fire(w, player, now)
+		if len(bullets) == 0 {
+			continue
+		}
+
+		w.registerBullets(bullets)
+		fired = true
+	}
+
+	return fired
+}
+
 // fireSideUpgrade fires side-mounted cannons from the single side upgrade
 func (w *World) fireSideUpgrade(player *Player, now time.Time) bool {
 	if player.ShipConfig.SideUpgrade == nil {
@@ -881,42 +899,12 @@ func (w *World) fireSideUpgrade(player *Player, now time.Time) bool {
 		return false
 	}
 
-	fired := false
-	cannonCount := len(upgrade.Cannons) / 2 // Half are left, half are right
-
-	// Fire left side cannons (skip rowing oars)
-	for i := 0; i < cannonCount; i++ {
-		cannon := upgrade.Cannons[i] // Use pointer to modify original cannon
-		// Skip rowing oars - they don't fire bullets
-		if cannon.Type == WeaponTypeRow {
-			continue
-		}
-		// Calculate left side angle: ship angle + 90 degrees (π/2)
-		leftAngle := player.Angle + float32(math.Pi/2)
-		bullets := cannon.Fire(w, player, leftAngle, now)
-		for _, bullet := range bullets {
-			w.bullets[bullet.ID] = bullet
-			fired = true
-		}
+	cannonCount := len(upgrade.Cannons) / 2
+	if cannonCount == 0 {
+		return false
 	}
 
-	// Fire right side cannons (skip rowing oars)
-	for i := cannonCount; i < len(upgrade.Cannons); i++ {
-		cannon := upgrade.Cannons[i] // Use pointer to modify original cannon
-		// Skip rowing oars - they don't fire bullets
-		if cannon.Type == WeaponTypeRow {
-			continue
-		}
-		// Calculate right side angle: ship angle - 90 degrees (-π/2)
-		rightAngle := player.Angle - float32(math.Pi/2)
-		bullets := cannon.Fire(w, player, rightAngle, now)
-		for _, bullet := range bullets {
-			w.bullets[bullet.ID] = bullet
-			fired = true
-		}
-	}
-
-	return fired
+	return w.fireCannons(player, upgrade.Cannons, now)
 }
 
 // fireTopUpgrade fires top-mounted turrets from the single top upgrade
@@ -926,22 +914,7 @@ func (w *World) fireTopUpgrade(player *Player, now time.Time) bool {
 	}
 
 	upgrade := player.ShipConfig.TopUpgrade
-	fired := false
-
-	// Fire all turrets in the upgrade simultaneously
-	for i := range upgrade.Turrets {
-		turret := upgrade.Turrets[i] // Already a pointer to maintain state changes
-		bullets := turret.Fire(w, player, now)
-
-		if len(bullets) > 0 {
-			for _, bullet := range bullets {
-				w.bullets[bullet.ID] = bullet
-			}
-			fired = true
-		}
-	}
-
-	return fired
+	return w.fireTurrets(player, upgrade.Turrets, now)
 }
 
 // fireFrontUpgrade fires front-mounted weapons from the single front upgrade
@@ -951,32 +924,10 @@ func (w *World) fireFrontUpgrade(player *Player, now time.Time) bool {
 	}
 
 	upgrade := player.ShipConfig.FrontUpgrade
-	fired := false
+	firedCannons := w.fireCannons(player, upgrade.Cannons, now)
+	firedTurrets := w.fireTurrets(player, upgrade.Turrets, now)
 
-	// Fire all cannons in the upgrade simultaneously
-	for i := range upgrade.Cannons {
-		cannon := upgrade.Cannons[i] // Use pointer to modify original cannon
-		bullets := cannon.Fire(w, player, cannon.Angle, now)
-		for _, bullet := range bullets {
-			w.bullets[bullet.ID] = bullet
-			fired = true
-		}
-	}
-
-	// Fire all turrets in the upgrade simultaneously
-	for i := range upgrade.Turrets {
-		turret := upgrade.Turrets[i]
-		bullets := turret.Fire(w, player, now)
-
-		if len(bullets) > 0 {
-			for _, bullet := range bullets {
-				w.bullets[bullet.ID] = bullet
-			}
-			fired = true
-		}
-	}
-
-	return fired
+	return firedCannons || firedTurrets
 }
 
 // fireRearUpgrade fires rear-mounted weapons from the single rear upgrade
@@ -986,32 +937,10 @@ func (w *World) fireRearUpgrade(player *Player, now time.Time) bool {
 	}
 
 	upgrade := player.ShipConfig.RearUpgrade
-	fired := false
+	firedCannons := w.fireCannons(player, upgrade.Cannons, now)
+	firedTurrets := w.fireTurrets(player, upgrade.Turrets, now)
 
-	// Fire all cannons in the upgrade simultaneously
-	for i := range upgrade.Cannons {
-		cannon := upgrade.Cannons[i] // Use pointer to modify original cannon
-		bullets := cannon.Fire(w, player, cannon.Angle, now)
-		for _, bullet := range bullets {
-			w.bullets[bullet.ID] = bullet
-			fired = true
-		}
-	}
-
-	// Fire all turrets in the upgrade simultaneously
-	for i := range upgrade.Turrets {
-		turret := upgrade.Turrets[i]
-		bullets := turret.Fire(w, player, now)
-
-		if len(bullets) > 0 {
-			for _, bullet := range bullets {
-				w.bullets[bullet.ID] = bullet
-			}
-			fired = true
-		}
-	}
-
-	return fired
+	return firedCannons || firedTurrets
 }
 
 // updateModularTurretAiming updates turret aiming using the new modular system

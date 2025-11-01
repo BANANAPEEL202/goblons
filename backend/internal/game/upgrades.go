@@ -110,12 +110,14 @@ func (sc *ShipConfiguration) UpdateUpgradePositions() {
 				X: relativeX,
 				Y: sc.ShipWidth/2 + gunWidth/2,
 			}
+			sideUpgrade.Cannons[i].Angle = float32(math.Pi / 2)
 
 			// Right side cannon (negative Y in ship coordinates)w
 			sideUpgrade.Cannons[cannonCount+i].Position = Position{
 				X: relativeX,
 				Y: -sc.ShipWidth/2 - gunWidth/2,
 			}
+			sideUpgrade.Cannons[cannonCount+i].Angle = -float32(math.Pi / 2)
 		}
 	}
 
