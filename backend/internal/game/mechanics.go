@@ -259,8 +259,8 @@ func (gm *GameMechanics) SpawnFoodItems() {
 		totalWeight += itemType.weight
 	}
 
-	// Spawn 5 items with weighted random selection
-	for i := 0; i < 5; i++ {
+	// Spawn until we reach the maximum item count
+	for len(gm.world.items) < MaxItems {
 		// Select item type based on weighted probability
 		roll := rand.Intn(totalWeight)
 		currentWeight := 0
@@ -274,15 +274,17 @@ func (gm *GameMechanics) SpawnFoodItems() {
 			}
 		}
 
+		itemID := gm.world.itemID
+		gm.world.itemID++
+
 		item := &GameItem{
-			ID:    gm.world.itemID,
+			ID:    itemID,
 			X:     float32(rand.Intn(int(WorldWidth-50)) + 25),
 			Y:     float32(rand.Intn(int(WorldHeight-50)) + 25),
 			Type:  selectedType.name,
 			Coins: selectedType.coins,
 			XP:    selectedType.xp,
 		}
-		gm.world.itemID++
 		gm.world.items[item.ID] = item
 	}
 }

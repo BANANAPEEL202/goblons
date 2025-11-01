@@ -465,8 +465,11 @@ func (w *World) checkCollisions() {
 
 // collectItem handles when a player collects an item
 func (w *World) collectItem(playerID, itemID uint32) {
-	player := w.players[playerID]
-	item := w.items[itemID]
+	player, playerExists := w.players[playerID]
+	item, itemExists := w.items[itemID]
+	if !playerExists || !itemExists {
+		return
+	}
 
 	// Use the mechanics system to apply item effects
 	w.mechanics.ApplyItemEffect(player, item)
@@ -558,7 +561,7 @@ func (w *World) spawnItems() {
 		case <-foodTicker.C:
 			w.mu.Lock()
 			// Reduced item limit and spawn rate to prevent accumulation
-			if len(w.items) < 50 && len(w.players) > 0 { // Only spawn if players present
+			if len(w.items) < MaxItems && len(w.players) > 0 { // Only spawn if players present
 				w.mechanics.SpawnFoodItems()
 			}
 			w.mu.Unlock()
@@ -576,7 +579,7 @@ func (w *World) spawnItems() {
 // broadcastSnapshot sends the current game state to all clients (optimized)
 func (w *World) broadcastSnapshot() {
 	// Limit data to reduce bandwidth
-	maxItems := 200
+	maxItems := MaxItems * 2
 	maxBullets := 300
 
 	snapshot := Snapshot{

@@ -1,6 +1,6 @@
 // Game constants (should match backend)
-const WorldWidth = 2000.0;
-const WorldHeight = 2000.0;
+const WorldWidth = 5000.0;
+const WorldHeight = 5000.0;
 const PRESET_COLORS = ['#FF0040', '#00FF80', '#0080FF', '#FF8000', '#8000FF'];
 const NAME_POOL = ['Pirate', 'Buccaneer', 'Sailor', 'Captain', 'Admiral', 'Navigator', 'Corsair', 'Raider'];
 
@@ -939,14 +939,11 @@ class GameClient {
   }
 
   drawMapBorder() {
-    const worldWidth = 2000;
-    const worldHeight = 2000;
-    
     // Convert world coordinates to screen coordinates
     const borderLeft = 0 - this.camera.x;
     const borderTop = 0 - this.camera.y;
-    const borderRight = worldWidth - this.camera.x;
-    const borderBottom = worldHeight - this.camera.y;
+    const borderRight = WorldWidth - this.camera.x;
+    const borderBottom = WorldHeight - this.camera.y;
     
     // Only draw border segments that are visible on screen
     this.ctx.strokeStyle = '#404040'; 

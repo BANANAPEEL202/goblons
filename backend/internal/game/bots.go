@@ -20,7 +20,7 @@ const (
 	botCannonDamageLevel         = 3
 	botCannonRangeLevel          = 2
 	botReloadSpeedLevel          = 2
-	botMoveSpeedLevel            = 1
+	botMoveSpeedLevel            = -1
 	botTurnSpeedLevel            = 1
 )
 
