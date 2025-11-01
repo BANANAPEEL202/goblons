@@ -14,6 +14,7 @@ func NewWorld() *World {
 	world := &World{
 		clients:  make(map[uint32]*Client),
 		players:  make(map[uint32]*Player),
+		bots:     make(map[uint32]*Bot),
 		items:    make(map[uint32]*GameItem),
 		bullets:  make(map[uint32]*Bullet),
 		nextID:   1,
@@ -34,6 +35,9 @@ func (w *World) Start() {
 	}
 	w.running = true
 	w.mu.Unlock()
+
+	// Spawn persistent bots before the game loop begins
+	w.spawnInitialBots()
 
 	// Spawn initial items
 	go w.spawnItems()
@@ -118,10 +122,16 @@ func (w *World) update() {
 
 	// Update all players
 	for _, player := range w.players {
+		if player.IsBot {
+			continue
+		}
 		if client, exists := w.clients[player.ID]; exists {
 			w.updatePlayer(player, &client.Input)
 		}
 	}
+
+	// Update bot-controlled ships using AI inputs
+	w.updateBots()
 
 	// Handle respawning
 	w.handleRespawns()
@@ -498,6 +508,13 @@ func (w *World) handleRespawns() {
 	now := time.Now()
 	for _, player := range w.players {
 		if player.State == StateDead && now.After(player.RespawnTime) {
+			if player.IsBot {
+				if bot, exists := w.bots[player.ID]; exists {
+					w.respawnBot(bot, now)
+				}
+				continue
+			}
+
 			// Respawn the player - reset all progress
 			player.Experience = 0
 			player.Coins = 100000 // Reset to starting coins

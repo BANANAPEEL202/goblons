@@ -88,6 +88,7 @@ type Player struct {
 	State           int       `json:"state"`
 	Name            string    `json:"name"`
 	Color           string    `json:"color"`
+	IsBot           bool      `json:"isBot"`
 	Health          int       `json:"health"`
 	MaxHealth       int       `json:"maxHealth"`
 	RespawnTime     time.Time `json:"-"` // When the player can respawn
@@ -109,6 +110,23 @@ type Player struct {
 	LastCollisionDamage time.Time                       `json:"-"`            // Last collision damage time
 	// Autofire toggle state
 	AutofireEnabled bool `json:"autofireEnabled"` // Whether autofire is currently enabled
+}
+
+// Bot wraps an AI-controlled player with simple state required for decision making.
+type Bot struct {
+	ID                uint32
+	Player            *Player
+	Input             InputMsg
+	GuardCenter       Position
+	GuardRadius       float32
+	AggroRadius       float32
+	TargetDistance    float32
+	PreferredDistance float32
+	NextDecision      time.Time
+	TargetPlayerID    uint32
+	OrbitDirection    int
+	TurnIntent        float32
+	DesiredAngle      float32
 }
 
 // GameItem represents collectible items in the game
@@ -178,6 +196,7 @@ type World struct {
 	mu          sync.RWMutex
 	clients     map[uint32]*Client
 	players     map[uint32]*Player
+	bots        map[uint32]*Bot
 	items       map[uint32]*GameItem
 	bullets     map[uint32]*Bullet
 	mechanics   *GameMechanics
@@ -186,6 +205,7 @@ type World struct {
 	bulletID    uint32
 	running     bool
 	tickCounter uint32 // For performance optimizations
+	botsSpawned bool
 }
 
 // NewClient creates a new client
@@ -415,4 +435,47 @@ func InitializeStatUpgrades(player *Player) {
 			CurrentCost: 10,
 		}
 	}
+}
+
+// ForceStatUpgrades applies stat upgrade levels directly without consuming coins.
+func ForceStatUpgrades(player *Player, levels map[StatUpgradeType]int) {
+	if player == nil || len(levels) == 0 {
+		return
+	}
+
+	if player.StatUpgrades == nil {
+		InitializeStatUpgrades(player)
+	}
+
+	for upgradeType, level := range levels {
+		forceStatUpgradeLevel(player, upgradeType, level)
+	}
+}
+
+func forceStatUpgradeLevel(player *Player, upgradeType StatUpgradeType, level int) {
+	upgrade, exists := player.StatUpgrades[upgradeType]
+	if !exists {
+		return
+	}
+
+	if level < 0 {
+		level = 0
+	}
+	if level > upgrade.MaxLevel {
+		level = upgrade.MaxLevel
+	}
+
+	if level <= upgrade.Level {
+		upgrade.CurrentCost = upgrade.BaseCost * (upgrade.Level + 1)
+		player.StatUpgrades[upgradeType] = upgrade
+		return
+	}
+
+	for upgrade.Level < level {
+		upgrade.Level++
+		applyStatUpgradeEffects(player, upgradeType)
+	}
+
+	upgrade.CurrentCost = upgrade.BaseCost * (upgrade.Level + 1)
+	player.StatUpgrades[upgradeType] = upgrade
 }

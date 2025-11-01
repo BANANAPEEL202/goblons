@@ -308,7 +308,7 @@ func NewBasicTurrets(turretCount int) *ShipUpgrade {
 		Count:   turretCount,
 		Turrets: turrets,
 		Effect: UpgradeEffect{
-			SpeedMultiplier:     0.98,
+			SpeedMultiplier:     0.95,
 			TurnRateMultiplier:  0.95,
 			ShipWidthMultiplier: 1.0,
 		},
@@ -651,7 +651,7 @@ func GetStatUpgradeEffects(player *Player) map[string]float32 {
 
 	// Move Speed effects
 	moveLevel := player.StatUpgrades[StatUpgradeMoveSpeed].Level
-	effects["moveSpeedBonus"] = float32(moveLevel) * 0.03
+	effects["moveSpeedBonus"] = float32(moveLevel) * 0.05
 
 	// Turn Speed effects
 	turnLevel := player.StatUpgrades[StatUpgradeTurnSpeed].Level
