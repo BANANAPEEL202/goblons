@@ -126,7 +126,7 @@ func (gm *GameMechanics) handlePlayerCollision(player1, player2 *Player) {
 
 	// Frontal ram logic
 	if gm.isFrontalRam(player1, player2) && player1.ShipConfig.FrontUpgrade != nil && player1.ShipConfig.FrontUpgrade.Name == "Ram" {
-		ramDamage := 10 // Base ram damage, can be made configurable/stat-based
+		ramDamage := 15 // Base ram damage, can be made configurable/stat-based
 		gm.ApplyDamage(player2, ramDamage, player1, KillCauseRam, now)
 	}
 	if gm.isFrontalRam(player2, player1) && player2.ShipConfig.FrontUpgrade != nil && player2.ShipConfig.FrontUpgrade.Name == "Ram" {

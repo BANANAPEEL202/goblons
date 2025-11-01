@@ -1272,18 +1272,46 @@ drawPlayer(player) {
 
   ctx.restore();
   
-  // Draw player name above the ship
+  // Calculate total stat upgrade level
+  let totalUpgrades = 0;
+  if (player.statUpgrades) {
+    Object.values(player.statUpgrades).forEach(upgrade => {
+      totalUpgrades += upgrade.level || 0;
+    });
+  }
+  
+  // Draw player name with upgrade level prefix above the ship
   const displayName = (player.name && player.name.trim()) ? player.name.trim() : `Player ${player.id}`;
   const labelY = screenY - (shaftWidth / 2) - 20;
 
   this.ctx.save();
-  this.ctx.font = 'bold 14px Arial';
-  this.ctx.textAlign = 'center';
   this.ctx.lineWidth = 3;
   this.ctx.strokeStyle = 'rgba(15, 15, 35, 0.65)';
   this.ctx.fillStyle = player.id === this.myPlayerId ? '#FFFFFF' : '#D7D7D7';
-  this.ctx.strokeText(displayName, screenX, labelY);
-  this.ctx.fillText(displayName, screenX, labelY);
+  
+  // Measure both text elements to center them together
+  this.ctx.font = 'bold 22px Arial';
+  const levelWidth = this.ctx.measureText(totalUpgrades.toString()).width;
+  this.ctx.font = 'bold 18px Arial';
+  const nameWidth = this.ctx.measureText(displayName).width;
+  const spacing = 5;
+  const totalWidth = levelWidth + spacing + nameWidth;
+  
+  // Calculate starting X position to center the combined text
+  const startX = screenX - totalWidth / 2;
+  
+  // Draw the upgrade level number (larger, on the left)
+  this.ctx.font = 'bold 22px Arial';
+  this.ctx.textAlign = 'left';
+  this.ctx.strokeText(totalUpgrades.toString(), startX, labelY);
+  this.ctx.fillText(totalUpgrades.toString(), startX, labelY);
+  
+  // Draw the player name (smaller, to the right)
+  this.ctx.font = 'bold 18px Arial';
+  const nameX = startX + levelWidth + spacing;
+  this.ctx.strokeText(displayName, nameX, labelY);
+  this.ctx.fillText(displayName, nameX, labelY);
+  
   this.ctx.restore();
   
   // Draw health bar above the ship

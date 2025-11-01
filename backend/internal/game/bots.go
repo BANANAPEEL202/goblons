@@ -3,6 +3,7 @@ package game
 import (
 	"fmt"
 	"math"
+	"math/rand"
 	"time"
 )
 
@@ -17,11 +18,13 @@ const (
 	botSideCannonsCount  int     = 2
 	botTopTurretCount    int     = 1
 	botDecisionInterval          = 250 * time.Millisecond
-	botCannonDamageLevel         = 3
-	botCannonRangeLevel          = 2
-	botReloadSpeedLevel          = 2
+	botCannonDamageLevel         = 5
+	botCannonRangeLevel          = 5
+	botReloadSpeedLevel          = 5
 	botMoveSpeedLevel            = -1
-	botTurnSpeedLevel            = 1
+	botTurnSpeedLevel            = 0
+	botHealthLevel               = 5
+	botRegenLevel                = 5
 )
 
 const (
@@ -30,12 +33,6 @@ const (
 	botAreaMinY float32 = 0
 	botAreaMaxY float32 = WorldHeight
 )
-
-var botSpawnPoints = []Position{
-	{X: float32(WorldWidth * 0.5), Y: float32(WorldHeight * 0.5)},
-	{X: float32(WorldWidth*0.5) + 220, Y: float32(WorldHeight*0.5) - 220},
-	{X: float32(WorldWidth*0.5) - 220, Y: float32(WorldHeight*0.5) + 220},
-}
 
 var botColors = []string{"#5B73FF", "#FF6F61", "#48C9B0"}
 
@@ -49,12 +46,7 @@ func (w *World) spawnInitialBots() {
 
 	now := time.Now()
 
-	spawnCount := botCount
-	if spawnCount > len(botSpawnPoints) {
-		spawnCount = len(botSpawnPoints)
-	}
-
-	for i := 0; i < spawnCount; i++ {
+	for i := 0; i < botCount; i++ {
 		id := w.nextID
 		w.nextID++
 
@@ -66,8 +58,15 @@ func (w *World) spawnInitialBots() {
 		player.Coins = 0
 		player.Level = 1
 		player.AvailableUpgrades = 0
-		player.X = botSpawnPoints[i].X
-		player.Y = botSpawnPoints[i].Y
+
+		// Random spawn position with some padding from edges
+		spawnPos := Position{
+			X: float32(rand.Intn(int(WorldWidth-200)) + 100),
+			Y: float32(rand.Intn(int(WorldHeight-200)) + 100),
+		}
+
+		player.X = spawnPos.X
+		player.Y = spawnPos.Y
 		player.Angle = 0
 		player.Health = botMaxHealth
 		player.MaxHealth = botMaxHealth
@@ -85,7 +84,7 @@ func (w *World) spawnInitialBots() {
 		bot := &Bot{
 			ID:                id,
 			Player:            player,
-			GuardCenter:       botSpawnPoints[i],
+			GuardCenter:       spawnPos,
 			GuardRadius:       botGuardRadius,
 			TargetDistance:    botTargetDistance,
 			AggroRadius:       botAggroRadius,
@@ -112,6 +111,8 @@ func (w *World) applyBotLoadout(player *Player) {
 		StatUpgradeReloadSpeed:  botReloadSpeedLevel,
 		StatUpgradeMoveSpeed:    botMoveSpeedLevel,
 		StatUpgradeTurnSpeed:    botTurnSpeedLevel,
+		StatUpgradeHullStrength: botHealthLevel,
+		StatUpgradeAutoRepairs:  botRegenLevel,
 	})
 
 	config := ShipConfiguration{
@@ -285,11 +286,17 @@ func (w *World) respawnBot(bot *Bot, now time.Time) {
 
 	w.applyBotLoadout(player)
 
+	// Random respawn position with some padding from edges
+	spawnPos := Position{
+		X: float32(rand.Intn(int(WorldWidth-200)) + 100),
+		Y: float32(rand.Intn(int(WorldHeight-200)) + 100),
+	}
+
 	player.Health = botMaxHealth
 	player.MaxHealth = botMaxHealth
 	player.State = StateAlive
-	player.X = bot.GuardCenter.X
-	player.Y = bot.GuardCenter.Y
+	player.X = spawnPos.X
+	player.Y = spawnPos.Y
 	player.VelX = 0
 	player.VelY = 0
 	player.Angle = 0
@@ -299,6 +306,8 @@ func (w *World) respawnBot(bot *Bot, now time.Time) {
 	player.LastRegenTime = now
 	player.LastCollisionDamage = now
 
+	// Update guard center to new spawn location
+	bot.GuardCenter = spawnPos
 	bot.TargetPlayerID = 0
 	bot.NextDecision = now.Add(botDecisionInterval)
 }
