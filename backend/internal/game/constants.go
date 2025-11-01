@@ -20,8 +20,8 @@ const (
 
 // Cannon and bullet constants
 const (
-	BulletSpeed    = 8   // Bullet travel speed (doubled for 30 TPS)
-	BulletLifetime = 2.5 // Seconds before bullet disappears (unchanged - time-based)
+	BulletSpeed    = 12  // Bullet travel speed (doubled for 30 TPS)
+	BulletLifetime = 2   // Seconds before bullet disappears (unchanged - time-based)
 	BulletSize     = 8.0 // Bullet radius (unchanged - visual)
 	BulletDamage   = 8   // Damage per bullet hit (unchanged)
 )
