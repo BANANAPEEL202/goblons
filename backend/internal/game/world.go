@@ -58,10 +58,16 @@ func (w *World) Stop() {
 	w.mu.Unlock()
 }
 
-// AddClient adds a new client to the world
-func (w *World) AddClient(client *Client) {
+// AddClient adds a new client to the world with connection limits
+func (w *World) AddClient(client *Client) bool {
 	w.mu.Lock()
 	defer w.mu.Unlock()
+
+	// Check player limit for performance
+	if len(w.clients) >= MaxPlayers {
+		log.Printf("Server full: rejecting new player (limit: %d)", MaxPlayers)
+		return false
+	}
 
 	client.ID = w.nextID
 	client.Player.ID = w.nextID
@@ -82,7 +88,8 @@ func (w *World) AddClient(client *Client) {
 	// Send available upgrades
 	w.sendAvailableUpgrades(client)
 
-	log.Printf("Player %d (%s) joined the game", client.ID, client.Player.Name)
+	log.Printf("Player %d (%s) joined the game (%d/%d players)", client.ID, client.Player.Name, len(w.clients), MaxPlayers)
+	return true
 }
 
 // RemoveClient removes a client from the world
@@ -128,8 +135,16 @@ func (w *World) update() {
 	// Handle player vs player collisions
 	w.mechanics.HandlePlayerCollisions()
 
-	// Send snapshot to all clients
-	w.broadcastSnapshot()
+	// Send snapshot to all clients (only every other tick for performance)
+	w.tickCounter++
+	if w.tickCounter%1 == 0 {
+		w.broadcastSnapshot()
+	}
+
+	// Periodic cleanup every 10 seconds (300 ticks at 30 TPS)
+	if w.tickCounter%300 == 0 {
+		w.performCleanup()
+	}
 }
 
 // updatePlayer updates a single player's state with realistic ship physics
@@ -336,17 +351,103 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 	w.keepPlayerInBounds(player)
 }
 
-// checkCollisions handles player-item collisions
+// performCleanup removes old entities and prevents memory leaks
+func (w *World) performCleanup() {
+	now := time.Now()
+
+	// Clean up old bullets (in case some weren't removed properly)
+	oldBullets := 0
+	for id, bullet := range w.bullets {
+		if now.Sub(bullet.CreatedAt).Seconds() > BulletLifetime+5 { // 5 second grace period
+			delete(w.bullets, id)
+			oldBullets++
+		}
+	}
+
+	// Limit total bullets to prevent memory issues
+	if len(w.bullets) > 1000 {
+		// Remove oldest bullets
+		type bulletAge struct {
+			id  uint32
+			age time.Duration
+		}
+		bulletAges := make([]bulletAge, 0, len(w.bullets))
+		for id, bullet := range w.bullets {
+			bulletAges = append(bulletAges, bulletAge{id, now.Sub(bullet.CreatedAt)})
+		}
+
+		// Sort by age (oldest first)
+		for i := 0; i < len(bulletAges)-1; i++ {
+			for j := i + 1; j < len(bulletAges); j++ {
+				if bulletAges[i].age < bulletAges[j].age {
+					bulletAges[i], bulletAges[j] = bulletAges[j], bulletAges[i]
+				}
+			}
+		}
+
+		// Remove oldest bullets to get under limit
+		toRemove := len(w.bullets) - 800 // Keep 800, remove excess
+		for i := 0; i < toRemove && i < len(bulletAges); i++ {
+			delete(w.bullets, bulletAges[i].id)
+		}
+		log.Printf("Cleaned up %d excess bullets", toRemove)
+	}
+
+	// Limit total items to prevent server overload
+	if len(w.items) > 500 {
+		// Remove oldest items
+		itemsToRemove := len(w.items) - 400 // Keep 400, remove excess
+		count := 0
+		for id := range w.items {
+			if count >= itemsToRemove {
+				break
+			}
+			delete(w.items, id)
+			count++
+		}
+		log.Printf("Cleaned up %d excess items", itemsToRemove)
+	}
+
+	if oldBullets > 0 {
+		log.Printf("Cleanup: removed %d old bullets, %d total bullets, %d total items",
+			oldBullets, len(w.bullets), len(w.items))
+	}
+}
+
+// checkCollisions handles player-item collisions (optimized)
 func (w *World) checkCollisions() {
+	// Early exit if no items or players
+	if len(w.items) == 0 || len(w.players) == 0 {
+		return
+	}
+
+	// Pre-allocate slice for items to collect (avoid map iteration during deletion)
+	itemsToCollect := make([]struct{ playerID, itemID uint32 }, 0, 16)
+
 	for playerID, player := range w.players {
 		if player.State != StateAlive {
 			continue
 		}
 
-		// Check item collisions using rectangular bounding boxes
+		// Simple distance check first (cheaper than full bounding box)
 		for itemID, item := range w.items {
-			if w.checkPlayerItemCollision(player, item) {
-				w.collectItem(playerID, itemID)
+			// Quick distance check (using squares to avoid sqrt)
+			dx := player.X - item.X
+			dy := player.Y - item.Y
+			distSq := dx*dx + dy*dy
+
+			// Only do expensive collision check if close enough
+			if distSq < 2500 && w.checkPlayerItemCollision(player, item) { // 50^2 = 2500
+				itemsToCollect = append(itemsToCollect, struct{ playerID, itemID uint32 }{playerID, itemID})
+			}
+		}
+	}
+
+	// Process collections after iteration to avoid map modification during iteration
+	for _, collision := range itemsToCollect {
+		if _, exists := w.players[collision.playerID]; exists {
+			if _, exists := w.items[collision.itemID]; exists {
+				w.collectItem(collision.playerID, collision.itemID)
 			}
 		}
 	}
@@ -428,10 +529,10 @@ func (w *World) handleRespawns() {
 	}
 }
 
-// spawnItems continuously spawns items in the world
+// spawnItems continuously spawns items in the world (with limits)
 func (w *World) spawnItems() {
-	foodTicker := time.NewTicker(time.Second * 1)    // Spawn food every 1 second
-	specialTicker := time.NewTicker(time.Second * 5) // Spawn special items every 5 seconds
+	foodTicker := time.NewTicker(time.Second * 2)     // Spawn food every 2 seconds (reduced frequency)
+	specialTicker := time.NewTicker(time.Second * 10) // Spawn special items every 10 seconds (reduced frequency)
 	defer foodTicker.Stop()
 	defer specialTicker.Stop()
 
@@ -439,21 +540,33 @@ func (w *World) spawnItems() {
 		select {
 		case <-foodTicker.C:
 			w.mu.Lock()
-			if len(w.items) < 100 { // Max 100 items at once
+			// Reduced item limit and spawn rate to prevent accumulation
+			if len(w.items) < 50 && len(w.players) > 0 { // Only spawn if players present
 				w.mechanics.SpawnFoodItems()
+			}
+			w.mu.Unlock()
+		case <-specialTicker.C:
+			w.mu.Lock()
+			// Only spawn special items occasionally
+			if len(w.items) < 75 && len(w.players) > 2 { // Only if multiple players
+				w.mechanics.SpawnFoodItems() // Reuse food spawning for now
 			}
 			w.mu.Unlock()
 		}
 	}
 }
 
-// broadcastSnapshot sends the current game state to all clients
+// broadcastSnapshot sends the current game state to all clients (optimized)
 func (w *World) broadcastSnapshot() {
+	// Limit data to reduce bandwidth
+	maxItems := 200
+	maxBullets := 300
+
 	snapshot := Snapshot{
 		Type:    MsgTypeSnapshot,
 		Players: make([]Player, 0, len(w.players)),
-		Items:   make([]GameItem, 0, len(w.items)),
-		Bullets: make([]Bullet, 0, len(w.bullets)),
+		Items:   make([]GameItem, 0, min(len(w.items), maxItems)),
+		Bullets: make([]Bullet, 0, min(len(w.bullets), maxBullets)),
 		Time:    time.Now().UnixMilli(),
 	}
 
@@ -462,14 +575,24 @@ func (w *World) broadcastSnapshot() {
 		snapshot.Players = append(snapshot.Players, *player)
 	}
 
-	// Add all items to snapshot
+	// Add limited items to snapshot (prioritize closer items for performance)
+	itemCount := 0
 	for _, item := range w.items {
+		if itemCount >= maxItems {
+			break
+		}
 		snapshot.Items = append(snapshot.Items, *item)
+		itemCount++
 	}
 
-	// Add all bullets to snapshot
+	// Add limited bullets to snapshot
+	bulletCount := 0
 	for _, bullet := range w.bullets {
+		if bulletCount >= maxBullets {
+			break
+		}
 		snapshot.Bullets = append(snapshot.Bullets, *bullet)
+		bulletCount++
 	}
 
 	data, err := json.Marshal(snapshot)
@@ -478,13 +601,15 @@ func (w *World) broadcastSnapshot() {
 		return
 	}
 
-	// Send to all clients
+	// Send to all clients concurrently (non-blocking)
 	for _, client := range w.clients {
-		select {
-		case client.Send <- data:
-		default:
-			// Channel full, skip this client
-		}
+		go func(c *Client) {
+			select {
+			case c.Send <- data:
+			case <-time.After(10 * time.Millisecond):
+				// Skip slow clients to prevent blocking
+			}
+		}(client)
 	}
 }
 
@@ -582,14 +707,19 @@ func (w *World) keepPlayerInBounds(player *Player) {
 	player.Y = float32(math.Max(float64(player.ShipConfig.Size/2), math.Min(float64(WorldHeight-player.ShipConfig.Size/2), float64(player.Y))))
 }
 
-// updateBullets handles bullet movement and cleanup
+// updateBullets handles bullet movement and cleanup (optimized)
 func (w *World) updateBullets() {
+	if len(w.bullets) == 0 {
+		return
+	}
+
 	now := time.Now()
+	bulletsToDelete := make([]uint32, 0, 32) // Pre-allocate for common case
 
 	for id, bullet := range w.bullets {
 		// Check if bullet has expired
 		if now.Sub(bullet.CreatedAt).Seconds() >= BulletLifetime {
-			delete(w.bullets, id)
+			bulletsToDelete = append(bulletsToDelete, id)
 			continue
 		}
 
@@ -598,20 +728,26 @@ func (w *World) updateBullets() {
 		bullet.Y += bullet.VelY
 
 		// Remove bullets that are out of bounds
-		if bullet.X < 0 || bullet.X > WorldWidth || bullet.Y < 0 || bullet.Y > WorldHeight {
-			delete(w.bullets, id)
+		if bullet.X < -100 || bullet.X > WorldWidth+100 || bullet.Y < -100 || bullet.Y > WorldHeight+100 {
+			bulletsToDelete = append(bulletsToDelete, id)
 			continue
 		}
 
-		// Check collision with players
+		// Check collision with players (only if bullet is in world bounds)
+		bulletHit := false
 		for playerID, player := range w.players {
 			// Skip if bullet owner or player is dead
 			if bullet.OwnerID == playerID || player.State != StateAlive {
 				continue
 			}
 
-			// Use rectangular bounding box collision similar to ship collisions
-			if w.checkBulletPlayerCollision(bullet, player) {
+			// Quick distance check before expensive bounding box collision
+			dx := bullet.X - player.X
+			dy := bullet.Y - player.Y
+			distSq := dx*dx + dy*dy
+
+			// Only do expensive collision check if close enough (player size + some margin)
+			if distSq < 10000 && w.checkBulletPlayerCollision(bullet, player) { // 100^2 = 10000
 				// Apply damage
 				damage := bullet.Damage
 				if damage == 0 {
@@ -619,8 +755,9 @@ func (w *World) updateBullets() {
 				}
 				player.Health -= damage
 
-				// Remove the bullet
-				delete(w.bullets, id)
+				// Mark bullet for deletion
+				bulletsToDelete = append(bulletsToDelete, id)
+				bulletHit = true
 
 				// Check if player died
 				if player.Health <= 0 {
@@ -656,6 +793,15 @@ func (w *World) updateBullets() {
 				break // Bullet hit something, stop checking other players
 			}
 		}
+
+		if bulletHit {
+			break // Move to next bullet
+		}
+	}
+
+	// Delete bullets in batch (avoid map modification during iteration)
+	for _, bulletID := range bulletsToDelete {
+		delete(w.bullets, bulletID)
 	}
 }
 

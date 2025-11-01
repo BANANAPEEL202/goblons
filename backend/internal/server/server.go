@@ -64,7 +64,13 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		client.Player.Color = requestedColor
 	}
 
-	s.world.AddClient(client)
+	// Try to add client (may fail if server is full)
+	if !s.world.AddClient(client) {
+		// Server is full, send error and close connection
+		conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseTryAgainLater, "Server is full"))
+		conn.Close()
+		return
+	}
 
 	// Start client goroutines
 	go s.handleClientReads(client)

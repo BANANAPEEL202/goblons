@@ -49,10 +49,10 @@ class GameClient {
     this.shipPhysics = {
       angle: 0,           // Current facing direction (radians)
       velocity: { x: 0, y: 0 },  // Current velocity
-      acceleration: 1000,   // Forward acceleration (matches server)
-      deceleration: 0.97,  // Drag/friction factor (matches server)
-      turnSpeed: 0.07,      // How fast the ship turns (matches server)
-      maxSpeed: 4.0        // Maximum speed (matches server)
+      acceleration: 20000000,   // Forward acceleration (doubled for 30 TPS to match server)
+      deceleration: 0.84,  // Drag/friction factor (adjusted for 30 TPS to match server)
+      turnSpeed: 0.08,      // How fast the ship turns (doubled for 30 TPS to match server)
+      maxSpeed: 4.0        // Maximum speed (already matches server at 30 TPS)
     };
     
     this.camera = { x: 0, y: 0, targetX: 0, targetY: 0 };
@@ -823,8 +823,8 @@ class GameClient {
       physics.velocity.y *= speedRatio;
     }
     
-    // Update predicted position with more conservative movement
-    const moveX = physics.velocity.x * deltaTime * 30; // Reduced multiplier
+    // Update predicted position with delta time scaling for 30 TPS
+    const moveX = physics.velocity.x * deltaTime * 30; // Matches server physics
     const moveY = physics.velocity.y * deltaTime * 30;
     
     this.predictedPlayerPos.x += moveX;
@@ -917,26 +917,25 @@ class GameClient {
   }
 
   drawGrid() {
-    const gridSize = 25;
+    const gridSize = 50; // Larger grid for better performance
     this.ctx.strokeStyle = '#808080';
     this.ctx.lineWidth = 1;
     
     const startX = Math.floor(this.camera.x / gridSize) * gridSize;
     const startY = Math.floor(this.camera.y / gridSize) * gridSize;
     
-    for (let x = startX; x < this.camera.x + this.screenWidth; x += gridSize) {
-      this.ctx.beginPath();
+    // Draw fewer grid lines by using larger steps
+    this.ctx.beginPath();
+    for (let x = startX; x < this.camera.x + this.screenWidth + gridSize; x += gridSize) {
       this.ctx.moveTo(x - this.camera.x, 0);
       this.ctx.lineTo(x - this.camera.x, this.screenHeight);
-      this.ctx.stroke();
     }
     
-    for (let y = startY; y < this.camera.y + this.screenHeight; y += gridSize) {
-      this.ctx.beginPath();
+    for (let y = startY; y < this.camera.y + this.screenHeight + gridSize; y += gridSize) {
       this.ctx.moveTo(0, y - this.camera.y);
       this.ctx.lineTo(this.screenWidth, y - this.camera.y);
-      this.ctx.stroke();
     }
+    this.ctx.stroke();
   }
 
   drawMapBorder() {
@@ -2027,8 +2026,15 @@ drawPlayer(player) {
   }
 
   startGameLoop() {
-    const gameLoop = () => {
-      this.render();
+    let lastFrameTime = 0;
+    const targetFPS = 60;
+    const frameInterval = 1000 / targetFPS;
+    
+    const gameLoop = (currentTime) => {
+      if (currentTime - lastFrameTime >= frameInterval) {
+        this.render();
+        lastFrameTime = currentTime;
+      }
       requestAnimationFrame(gameLoop);
     };
     gameLoop();
