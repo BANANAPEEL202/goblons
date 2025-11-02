@@ -2,8 +2,8 @@ package game
 
 // Game world constants
 const (
-	WorldWidth  = 3000 //5000.0
-	WorldHeight = 3000 //5000.0
+	WorldWidth  = 2000 //5000.0
+	WorldHeight = 2000 //5000.0
 	TickRate    = 30   // Server updates per second (reduced for performance)
 	PlayerSpeed = 2.0
 	PlayerSize  = 50.0
@@ -28,13 +28,14 @@ const (
 
 // Message types for client-server communication
 const (
-	MsgTypeInput    = "input"
-	MsgTypeSnapshot = "snapshot"
-	MsgTypeJoin     = "join"
-	MsgTypeLeave    = "leave"
-	MsgTypeScore    = "score"
-	MsgTypeShoot    = "shoot"
-	MsgTypeWelcome  = "welcome"
+	MsgTypeInput     = "input"
+	MsgTypeSnapshot  = "snapshot"
+	MsgTypeJoin      = "join"
+	MsgTypeLeave     = "leave"
+	MsgTypeScore     = "score"
+	MsgTypeShoot     = "shoot"
+	MsgTypeWelcome   = "welcome"
+	MsgTypeGameEvent = "gameEvent"
 )
 
 // Combat constants

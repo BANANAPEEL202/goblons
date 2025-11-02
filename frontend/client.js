@@ -88,6 +88,8 @@ class GameClient {
       killerName: '',
       respawnButtonBounds: null
     };
+
+    this.killNotifications = [];
     
     this.resizeCanvas();
     this.init();
@@ -426,9 +428,28 @@ class GameClient {
           // Could show death screen or respawn message
         }
         break;
+      case 'playerSunk':
+        if (!data.killerId || data.killerId === this.myPlayerId) {
+          const victim = data.victimName && data.victimName.trim() ? data.victimName : 'Enemy';
+          this.addNotification(`${victim} sunk!`);
+        }
+        break;
       case 'itemCollected':
         // Could add visual effects for item collection
         break;
+    }
+  }
+
+  addNotification(message, duration = 3000) {
+    const now = Date.now();
+    this.killNotifications.push({
+      message,
+      expiresAt: now + duration,
+      duration
+    });
+
+    if (this.killNotifications.length > 4) {
+      this.killNotifications.shift();
     }
   }
 
@@ -472,7 +493,7 @@ class GameClient {
     const panelY = centerY - panelHeight / 2;
 
     // Panel background
-    ctx.fillStyle = 'rgba(20, 20, 30, 0.95)';
+    ctx.fillStyle = 'rgba(20, 20, 30, 0.7)';
     this.drawRoundedRect(panelX, panelY, panelWidth, panelHeight, 15);
     ctx.fill();
 
@@ -1135,6 +1156,9 @@ class GameClient {
   }
 
 drawPlayer(player) {
+  if (player.state !== 0) {
+    return; // Skip rendering players that are not alive
+  }
   const ctx = this.ctx;
   const screenX = player.x - this.camera.x;
   const screenY = player.y - this.camera.y;
@@ -1709,6 +1733,49 @@ drawPlayer(player) {
     
     // Draw upgrade UI
     this.drawUpgradeUI();
+
+    this.drawKillNotifications();
+  }
+
+  drawKillNotifications() {
+    const now = Date.now();
+    this.killNotifications = this.killNotifications.filter(notification => notification.expiresAt > now);
+    if (this.killNotifications.length === 0) {
+      return;
+    }
+
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = 'bold 24px Arial';
+
+    const startY = Math.max(90, this.screenHeight * 0.18);
+    const spacing = 44;
+
+    this.killNotifications.forEach((notification, index) => {
+      const remaining = notification.expiresAt - now;
+      const fadeWindow = Math.min(500, notification.duration);
+      const opacity = fadeWindow > 0 && remaining < fadeWindow ? remaining / fadeWindow : 1;
+
+      const x = this.screenWidth / 2;
+      const y = startY + index * spacing;
+      const padding = 18;
+      const textWidth = ctx.measureText(notification.message).width;
+      const boxWidth = textWidth + padding * 2;
+      const boxHeight = 38;
+      const boxX = x - boxWidth / 2;
+      const boxY = y - boxHeight / 2;
+
+      ctx.fillStyle = `rgba(16, 16, 16, ${0.7 * opacity})`;
+      this.drawRoundedRect(boxX, boxY, boxWidth, boxHeight, 10);
+      ctx.fill();
+
+      ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
+      ctx.fillText(notification.message, x, y);
+    });
+
+    ctx.restore();
   }
 
   drawStatUpgradePanel() {

@@ -740,6 +740,22 @@ func (w *World) sendAvailableUpgrades(client *Client) {
 	}
 }
 
+func (w *World) sendGameEvent(client *Client, event GameEventMsg) {
+	event.Type = MsgTypeGameEvent
+
+	data, err := json.Marshal(event)
+	if err != nil {
+		log.Printf("Error marshaling game event message: %v", err)
+		return
+	}
+
+	select {
+	case client.Send <- data:
+	default:
+		log.Printf("Could not send game event to client %d", client.ID)
+	}
+}
+
 // HandleInput processes input from a client
 func (w *World) HandleInput(clientID uint32, input InputMsg) {
 	client, exists := w.GetClient(clientID)

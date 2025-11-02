@@ -188,6 +188,16 @@ type AvailableUpgradesMsg struct {
 	Upgrades map[string][]UpgradeInfo `json:"upgrades"`
 }
 
+// GameEventMsg represents a one-off gameplay notification
+type GameEventMsg struct {
+	Type       string `json:"type"`
+	EventType  string `json:"eventType"`
+	KillerID   uint32 `json:"killerId,omitempty"`
+	KillerName string `json:"killerName,omitempty"`
+	VictimID   uint32 `json:"victimId,omitempty"`
+	VictimName string `json:"victimName,omitempty"`
+}
+
 // Client represents a connected game client
 type Client struct {
 	ID          uint32

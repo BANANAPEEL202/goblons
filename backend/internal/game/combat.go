@@ -57,6 +57,18 @@ func (gm *GameMechanics) handlePlayerDeath(victim *Player, killer *Player, cause
 			victim.ID, victim.Name, cause.describe(), killer.ID, killer.Name)
 		log.Printf("Player %d gained %d XP and %d coins for killing Player %d (victim now has %d XP and %d coins)",
 			killer.ID, xpReward, coinReward, victim.ID, victim.Experience, victim.Coins)
+
+		if killer.ID != victim.ID && !killer.IsBot {
+			if client, exists := gm.world.GetClient(killer.ID); exists {
+				gm.world.sendGameEvent(client, GameEventMsg{
+					EventType:  "playerSunk",
+					KillerID:   killer.ID,
+					KillerName: killer.Name,
+					VictimID:   victim.ID,
+					VictimName: victim.Name,
+				})
+			}
+		}
 	} else {
 		// No killer (e.g., suicide or environment)
 		victim.KilledBy = 0
