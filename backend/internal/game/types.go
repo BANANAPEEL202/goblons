@@ -59,8 +59,10 @@ type InputMsg struct {
 	// Stat upgrade inputs
 	StatUpgradeType string `json:"statUpgradeType"` // Which stat to upgrade
 	// Autofire toggle
-	ToggleAutofire bool   `json:"toggleAutofire"` // Toggle autofire on/off
-	ManualFire     bool   `json:"manualFire"`     // Manual fire command
+	ToggleAutofire bool `json:"toggleAutofire"` // Toggle autofire on/off
+	ManualFire     bool `json:"manualFire"`     // Manual fire command
+	// Respawn request
+	RequestRespawn bool   `json:"requestRespawn"` // Player requests to respawn
 	PlayerName     string `json:"playerName"`
 	PlayerColor    string `json:"playerColor"`
 	Mouse          struct {
@@ -88,6 +90,7 @@ type Player struct {
 	State           int       `json:"state"`
 	Name            string    `json:"name"`
 	Color           string    `json:"color"`
+	IsBot           bool      `json:"isBot"`
 	Health          int       `json:"health"`
 	MaxHealth       int       `json:"maxHealth"`
 	RespawnTime     time.Time `json:"-"` // When the player can respawn
@@ -109,6 +112,30 @@ type Player struct {
 	LastCollisionDamage time.Time                       `json:"-"`            // Last collision damage time
 	// Autofire toggle state
 	AutofireEnabled bool `json:"autofireEnabled"` // Whether autofire is currently enabled
+	// Death tracking
+	KilledBy     uint32    `json:"killedBy"`     // ID of player who killed this player (0 if none)
+	KilledByName string    `json:"killedByName"` // Name of player who killed this player
+	DeathTime    time.Time `json:"-"`            // When the player died
+	ScoreAtDeath int       `json:"scoreAtDeath"` // Score when player died
+	SurvivalTime float64   `json:"survivalTime"` // How long the player was alive (in seconds)
+	SpawnTime    time.Time `json:"-"`            // When the player spawned
+}
+
+// Bot wraps an AI-controlled player with simple state required for decision making.
+type Bot struct {
+	ID                uint32
+	Player            *Player
+	Input             InputMsg
+	GuardCenter       Position
+	GuardRadius       float32
+	AggroRadius       float32
+	TargetDistance    float32
+	PreferredDistance float32
+	NextDecision      time.Time
+	TargetPlayerID    uint32
+	OrbitDirection    int
+	TurnIntent        float32
+	DesiredAngle      float32
 }
 
 // GameItem represents collectible items in the game
@@ -161,6 +188,16 @@ type AvailableUpgradesMsg struct {
 	Upgrades map[string][]UpgradeInfo `json:"upgrades"`
 }
 
+// GameEventMsg represents a one-off gameplay notification
+type GameEventMsg struct {
+	Type       string `json:"type"`
+	EventType  string `json:"eventType"`
+	KillerID   uint32 `json:"killerId,omitempty"`
+	KillerName string `json:"killerName,omitempty"`
+	VictimID   uint32 `json:"victimId,omitempty"`
+	VictimName string `json:"victimName,omitempty"`
+}
+
 // Client represents a connected game client
 type Client struct {
 	ID          uint32
@@ -178,6 +215,7 @@ type World struct {
 	mu          sync.RWMutex
 	clients     map[uint32]*Client
 	players     map[uint32]*Player
+	bots        map[uint32]*Bot
 	items       map[uint32]*GameItem
 	bullets     map[uint32]*Bullet
 	mechanics   *GameMechanics
@@ -186,6 +224,7 @@ type World struct {
 	bulletID    uint32
 	running     bool
 	tickCounter uint32 // For performance optimizations
+	botsSpawned bool
 }
 
 // NewClient creates a new client
@@ -228,7 +267,7 @@ func NewPlayer(id uint32) *Player {
 		Experience:          0,
 		AvailableUpgrades:   0,
 		ShipConfig:          shipConfig,
-		Coins:               100000, // Starting coins
+		Coins:               10000, // Starting coins
 		StatUpgrades:        make(map[StatUpgradeType]StatUpgrade),
 		LastRegenTime:       time.Now(), // Initialize health regen timer
 		LastCollisionDamage: time.Now(), // Initialize collision damage timer
@@ -372,16 +411,14 @@ func (p *Player) GetExperienceProgressToNextLevel() float32 {
 }
 
 // AddExperience adds experience and handles level ups
-func (p *Player) AddExperience(exp int) bool {
+func (p *Player) AddExperience(exp int) {
 	p.Experience += exp
 
 	// Check for level up
 	if p.Experience >= p.GetExperienceRequiredForNextLevel() {
 		p.Level++
 		p.AvailableUpgrades++
-		return true // Level up occurred
 	}
-	return false
 }
 
 // DebugLevelUp increases the player's level (for testing)
@@ -415,4 +452,47 @@ func InitializeStatUpgrades(player *Player) {
 			CurrentCost: 10,
 		}
 	}
+}
+
+// ForceStatUpgrades applies stat upgrade levels directly without consuming coins.
+func ForceStatUpgrades(player *Player, levels map[StatUpgradeType]int) {
+	if player == nil || len(levels) == 0 {
+		return
+	}
+
+	if player.StatUpgrades == nil {
+		InitializeStatUpgrades(player)
+	}
+
+	for upgradeType, level := range levels {
+		forceStatUpgradeLevel(player, upgradeType, level)
+	}
+}
+
+func forceStatUpgradeLevel(player *Player, upgradeType StatUpgradeType, level int) {
+	upgrade, exists := player.StatUpgrades[upgradeType]
+	if !exists {
+		return
+	}
+
+	if level < 0 {
+		level = 0
+	}
+	if level > upgrade.MaxLevel {
+		level = upgrade.MaxLevel
+	}
+
+	if level <= upgrade.Level {
+		upgrade.CurrentCost = upgrade.BaseCost * (upgrade.Level + 1)
+		player.StatUpgrades[upgradeType] = upgrade
+		return
+	}
+
+	for upgrade.Level < level {
+		upgrade.Level++
+		applyStatUpgradeEffects(player, upgradeType)
+	}
+
+	upgrade.CurrentCost = upgrade.BaseCost * (upgrade.Level + 1)
+	player.StatUpgrades[upgradeType] = upgrade
 }

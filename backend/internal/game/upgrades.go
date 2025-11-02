@@ -308,7 +308,7 @@ func NewBasicTurrets(turretCount int) *ShipUpgrade {
 		Count:   turretCount,
 		Turrets: turrets,
 		Effect: UpgradeEffect{
-			SpeedMultiplier:     0.98,
+			SpeedMultiplier:     0.95,
 			TurnRateMultiplier:  0.95,
 			ShipWidthMultiplier: 1.0,
 		},
@@ -614,7 +614,7 @@ func UpgradeStatLevel(player *Player, upgradeType StatUpgradeType) bool {
 func applyStatUpgradeEffects(player *Player, upgradeType StatUpgradeType) {
 	switch upgradeType {
 	case StatUpgradeHullStrength:
-		healthIncrease := 50
+		healthIncrease := 30
 		player.MaxHealth += healthIncrease
 		player.Health += healthIncrease     // Heal on upgrade
 		player.ShipConfig.ShipWidth *= 1.01 // Small width increase per level
@@ -635,7 +635,7 @@ func GetStatUpgradeEffects(player *Player) map[string]float32 {
 
 	// Auto Repairs effects
 	repairLevel := player.StatUpgrades[StatUpgradeAutoRepairs].Level
-	effects["healthRegen"] = float32(repairLevel) * 1
+	effects["healthRegen"] = float32(repairLevel) * 0.7
 
 	// Cannon Range effects
 	rangeLevel := player.StatUpgrades[StatUpgradeCannonRange].Level
@@ -651,7 +651,7 @@ func GetStatUpgradeEffects(player *Player) map[string]float32 {
 
 	// Move Speed effects
 	moveLevel := player.StatUpgrades[StatUpgradeMoveSpeed].Level
-	effects["moveSpeedBonus"] = float32(moveLevel) * 0.03
+	effects["moveSpeedBonus"] = float32(moveLevel) * 0.05
 
 	// Turn Speed effects
 	turnLevel := player.StatUpgrades[StatUpgradeTurnSpeed].Level

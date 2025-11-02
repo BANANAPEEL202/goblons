@@ -1,6 +1,6 @@
 // Game constants (should match backend)
-const WorldWidth = 2000.0;
-const WorldHeight = 2000.0;
+const WorldWidth = 3000.0;
+const WorldHeight = 3000.0;
 const PRESET_COLORS = ['#FF0040', '#00FF80', '#0080FF', '#FF8000', '#8000FF'];
 const NAME_POOL = ['Pirate', 'Buccaneer', 'Sailor', 'Captain', 'Admiral', 'Navigator', 'Corsair', 'Raider'];
 
@@ -41,6 +41,7 @@ class GameClient {
       statUpgradeType: '',
       toggleAutofire: false,
       manualFire: false,
+      requestRespawn: false,
       mouse: { x: 0, y: 0 }
     };
     
@@ -78,6 +79,17 @@ class GameClient {
 
     this.controlsLocked = true;
     this.pendingConnectConfig = null;
+    
+    // Death screen state
+    this.deathScreen = {
+      visible: false,
+      score: 0,
+      survivalTime: 0,
+      killerName: '',
+      respawnButtonBounds: null
+    };
+
+    this.killNotifications = [];
     
     this.resizeCanvas();
     this.init();
@@ -165,13 +177,23 @@ class GameClient {
     
     // Mouse click handling for upgrade UI and manual firing
     this.canvas.addEventListener('click', (e) => {
-      if (this.controlsLocked) {
-        return;
-      }
-
       const rect = this.canvas.getBoundingClientRect();
       const screenX = e.clientX - rect.left;
       const screenY = e.clientY - rect.top;
+      
+      // Check death screen respawn button first
+      if (this.deathScreen.visible && this.deathScreen.respawnButtonBounds) {
+        const bounds = this.deathScreen.respawnButtonBounds;
+        if (screenX >= bounds.x && screenX <= bounds.x + bounds.width &&
+            screenY >= bounds.y && screenY <= bounds.y + bounds.height) {
+          this.handleRespawn();
+          return;
+        }
+      }
+      
+      if (this.controlsLocked) {
+        return;
+      }
       
       // Try to handle upgrade UI click first
       const handledByUI = this.handleUpgradeUIClick(screenX, screenY);
@@ -342,7 +364,14 @@ class GameClient {
               this.shipPhysics.velocity.y = serverPlayer.velY || 0;
             } else {
               // Update our player with server data
+              const prevState = this.gameState.myPlayer.state;
               this.gameState.myPlayer = serverPlayer;
+              
+              // Check if player just died (transition from alive to dead)
+              if (serverPlayer.state === 1 && prevState === 0 && !this.deathScreen.visible) { // State 1 = Dead, State 0 = Alive
+                this.showDeathScreen(serverPlayer);
+              }
+              // Don't hide death screen when player respawns - let the respawn button control that
               
               // Sync angle with server
               if (serverPlayer.angle !== undefined) {
@@ -399,10 +428,136 @@ class GameClient {
           // Could show death screen or respawn message
         }
         break;
+      case 'playerSunk':
+        if (!data.killerId || data.killerId === this.myPlayerId) {
+          const victim = data.victimName && data.victimName.trim() ? data.victimName : 'Enemy';
+          this.addNotification(`${victim} sunk!`);
+        }
+        break;
       case 'itemCollected':
         // Could add visual effects for item collection
         break;
     }
+  }
+
+  addNotification(message, duration = 3000) {
+    const now = Date.now();
+    this.killNotifications.push({
+      message,
+      expiresAt: now + duration,
+      duration
+    });
+
+    if (this.killNotifications.length > 4) {
+      this.killNotifications.shift();
+    }
+  }
+
+  showDeathScreen(player) {
+    this.deathScreen.visible = true;
+    this.deathScreen.score = player.scoreAtDeath || player.score;
+    this.deathScreen.survivalTime = player.survivalTime || 0;
+    this.deathScreen.killerName = player.killedByName || 'Unknown';
+    console.log('Death screen shown:', this.deathScreen);
+  }
+
+  handleRespawn() {
+    console.log('Respawn requested');
+    this.deathScreen.visible = false;
+    
+    // Send respawn request to server
+    this.input.requestRespawn = true;
+    this.sendInput();
+    
+    // Reset the flag after sending
+    setTimeout(() => {
+      this.input.requestRespawn = false;
+    }, 100);
+  }
+
+  drawDeathScreen() {
+    if (!this.deathScreen.visible) return;
+
+    const ctx = this.ctx;
+    const centerX = this.screenWidth / 2;
+    const centerY = this.screenHeight / 2;
+
+    // Semi-transparent overlay
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.fillRect(0, 0, this.screenWidth, this.screenHeight);
+
+    // Death screen panel
+    const panelWidth = 500;
+    const panelHeight = 400;
+    const panelX = centerX - panelWidth / 2;
+    const panelY = centerY - panelHeight / 2;
+
+    // Panel background
+    ctx.fillStyle = 'rgba(20, 20, 30, 0.7)';
+    this.drawRoundedRect(panelX, panelY, panelWidth, panelHeight, 15);
+    ctx.fill();
+
+    // Panel border
+    ctx.strokeStyle = '#ff4444';
+    ctx.lineWidth = 3;
+    this.drawRoundedRect(panelX, panelY, panelWidth, panelHeight, 15);
+    ctx.stroke();
+
+    // Title
+    ctx.font = 'bold 48px Arial';
+    ctx.fillStyle = '#ff4444';
+    ctx.textAlign = 'center';
+    ctx.fillText('YOU DIED', centerX, panelY + 80);
+
+    // Stats
+    ctx.font = 'bold 24px Arial';
+    ctx.fillStyle = '#ffffff';
+    
+    const statsY = panelY + 150;
+    const lineHeight = 45;
+    
+    ctx.fillText(`Score: ${this.deathScreen.score}`, centerX, statsY);
+    
+    const minutes = Math.floor(this.deathScreen.survivalTime / 60);
+    const seconds = Math.floor(this.deathScreen.survivalTime % 60);
+    const timeString = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    ctx.fillText(`Survived: ${timeString}`, centerX, statsY + lineHeight);
+    
+    if (this.deathScreen.killerName && this.deathScreen.killerName !== '') {
+      ctx.fillText(`Killed by: ${this.deathScreen.killerName}`, centerX, statsY + lineHeight * 2);
+    } else {
+      ctx.fillText('Killed by: Environment', centerX, statsY + lineHeight * 2);
+    }
+
+    // Respawn button
+    const buttonWidth = 200;
+    const buttonHeight = 50;
+    const buttonX = centerX - buttonWidth / 2;
+    const buttonY = panelY + panelHeight - 90;
+
+    // Store button bounds for click detection
+    this.deathScreen.respawnButtonBounds = {
+      x: buttonX,
+      y: buttonY,
+      width: buttonWidth,
+      height: buttonHeight
+    };
+
+    // Button background
+    ctx.fillStyle = '#4CAF50';
+    this.drawRoundedRect(buttonX, buttonY, buttonWidth, buttonHeight, 8);
+    ctx.fill();
+
+    // Button border
+    ctx.strokeStyle = '#45a049';
+    ctx.lineWidth = 2;
+    this.drawRoundedRect(buttonX, buttonY, buttonWidth, buttonHeight, 8);
+    ctx.stroke();
+
+    // Button text
+    ctx.font = 'bold 20px Arial';
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText('RESPAWN', centerX, buttonY + 32);
   }
 
   handleKeyDown(e) {
@@ -615,53 +770,72 @@ class GameClient {
     if (this.controlsLocked) {
       return false;
     }
-    if (!this.gameState.myPlayer || this.gameState.myPlayer.availableUpgrades <= 0 || this.upgradeUI.pendingUpgrade) return false;
-    // First check if clicking on upgrade type buttons
-    const availableTypes = [];
+
+    const player = this.gameState.myPlayer;
+    if (!player || player.availableUpgrades <= 0) {
+      return false;
+    }
+
     const upgradeTypes = ['side', 'top', 'front', 'rear'];
-    for (const type of upgradeTypes) {
-      if (this.hasAvailableUpgrades(type)) {
-        availableTypes.push(type);
+    const availableTypes = upgradeTypes.filter((type) => this.hasAvailableUpgrades(type));
+    if (availableTypes.length === 0) {
+      return false;
+    }
+
+    const buttonWidth = 50;
+    const buttonHeight = 50;
+    const spacing = 20;
+    const totalWidth = (buttonWidth * availableTypes.length) + (spacing * (availableTypes.length - 1));
+    const startX = (this.screenWidth - totalWidth) / 2;
+    const buttonY = this.screenHeight - 150;
+
+    for (let i = 0; i < availableTypes.length; i++) {
+      const type = availableTypes[i];
+      const x = startX + (buttonWidth + spacing) * i;
+      if (screenX >= x && screenX <= x + buttonWidth && screenY >= buttonY && screenY <= buttonY + buttonHeight) {
+        this.upgradeUI.selectedUpgradeType = this.upgradeUI.selectedUpgradeType === type ? null : type;
+        return true;
       }
     }
-    if (availableTypes.length > 0) {
-      // Match button dimensions to drawUpgradeUI
-      const buttonWidth = 50;
-      const buttonHeight = 50;
-      const spacing = 20;
-      const totalWidth = (buttonWidth * availableTypes.length) + (spacing * (availableTypes.length - 1));
-      const startX = (this.screenWidth - totalWidth) / 2;
-      const buttonY = this.screenHeight - 150;
-      for (let i = 0; i < availableTypes.length; i++) {
-        const type = availableTypes[i];
-        const x = startX + (buttonWidth + spacing) * i;
-        if (screenX >= x && screenX <= x + buttonWidth && 
-            screenY >= buttonY && screenY <= buttonY + buttonHeight) {
-          // Toggle selection - if already selected, deselect; otherwise select
-          if (this.upgradeUI.selectedUpgradeType === type) {
-            this.upgradeUI.selectedUpgradeType = null;
-          } else {
-            this.upgradeUI.selectedUpgradeType = type;
-          }
+
+    const selectedType = this.upgradeUI.selectedUpgradeType;
+    if (!selectedType) {
+      return false;
+    }
+
+    const options = this.getAvailableUpgrades(selectedType);
+    if (!options || options.length === 0) {
+      return false;
+    }
+
+    const typeIndex = availableTypes.indexOf(selectedType);
+    if (typeIndex === -1) {
+      this.upgradeUI.selectedUpgradeType = null;
+      return false;
+    }
+
+    const optionHeight = 30;
+    const optionWidth = Math.max(buttonWidth, 125);
+    const optionSpacing = 10;
+    const totalHeight = (optionHeight * options.length) + (optionSpacing * (options.length - 1));
+    const optionsX = startX + (buttonWidth + spacing) * typeIndex + (buttonWidth - optionWidth) / 2;
+    const optionsStartY = buttonY - totalHeight - 10;
+
+    for (let i = 0; i < options.length; i++) {
+      const option = options[i];
+      const optionY = optionsStartY + (optionHeight + optionSpacing) * i;
+
+      if (screenX >= optionsX && screenX <= optionsX + optionWidth && screenY >= optionY && screenY <= optionY + optionHeight) {
+        if (this.upgradeUI.pendingUpgrade) {
           return true;
         }
+
+        this.selectUpgrade(selectedType, option.name);
+        return true;
       }
     }
-    
-    // Then check upgrade option clicks using stored positions
-    if (this.upgradeUI.optionPositions && this.upgradeUI.selectedUpgradeType) {
-      const positions = this.upgradeUI.optionPositions[this.upgradeUI.selectedUpgradeType];
-      if (positions) {
-        for (const pos of positions) {
-          if (screenX >= pos.x && screenX <= pos.x + pos.width && 
-              screenY >= pos.y && screenY <= pos.y + pos.height) {
-            // Select upgrade
-            this.selectUpgrade(this.upgradeUI.selectedUpgradeType, pos.option.name);
-            return true;
-          }
-        }
-      }
-    }
+
+    return false;
   }
   
   selectUpgrade(upgradeType, upgradeId) {
@@ -914,6 +1088,9 @@ class GameClient {
     
     // Draw UI
     this.drawUI();
+    
+    // Draw death screen on top of everything
+    this.drawDeathScreen();
   }
 
   drawGrid() {
@@ -939,14 +1116,11 @@ class GameClient {
   }
 
   drawMapBorder() {
-    const worldWidth = 2000;
-    const worldHeight = 2000;
-    
     // Convert world coordinates to screen coordinates
     const borderLeft = 0 - this.camera.x;
     const borderTop = 0 - this.camera.y;
-    const borderRight = worldWidth - this.camera.x;
-    const borderBottom = worldHeight - this.camera.y;
+    const borderRight = WorldWidth - this.camera.x;
+    const borderBottom = WorldHeight - this.camera.y;
     
     // Only draw border segments that are visible on screen
     this.ctx.strokeStyle = '#404040'; 
@@ -982,6 +1156,9 @@ class GameClient {
   }
 
 drawPlayer(player) {
+  if (player.state !== 0) {
+    return; // Skip rendering players that are not alive
+  }
   const ctx = this.ctx;
   const screenX = player.x - this.camera.x;
   const screenY = player.y - this.camera.y;
@@ -1256,18 +1433,46 @@ drawPlayer(player) {
 
   ctx.restore();
   
-  // Draw player name above the ship
+  // Calculate total stat upgrade level
+  let totalUpgrades = 0;
+  if (player.statUpgrades) {
+    Object.values(player.statUpgrades).forEach(upgrade => {
+      totalUpgrades += upgrade.level || 0;
+    });
+  }
+  
+  // Draw player name with upgrade level prefix above the ship
   const displayName = (player.name && player.name.trim()) ? player.name.trim() : `Player ${player.id}`;
   const labelY = screenY - (shaftWidth / 2) - 20;
 
   this.ctx.save();
-  this.ctx.font = 'bold 14px Arial';
-  this.ctx.textAlign = 'center';
   this.ctx.lineWidth = 3;
   this.ctx.strokeStyle = 'rgba(15, 15, 35, 0.65)';
   this.ctx.fillStyle = player.id === this.myPlayerId ? '#FFFFFF' : '#D7D7D7';
-  this.ctx.strokeText(displayName, screenX, labelY);
-  this.ctx.fillText(displayName, screenX, labelY);
+  
+  // Measure both text elements to center them together
+  this.ctx.font = 'bold 22px Arial';
+  const levelWidth = this.ctx.measureText(totalUpgrades.toString()).width;
+  this.ctx.font = 'bold 18px Arial';
+  const nameWidth = this.ctx.measureText(displayName).width;
+  const spacing = 5;
+  const totalWidth = levelWidth + spacing + nameWidth;
+  
+  // Calculate starting X position to center the combined text
+  const startX = screenX - totalWidth / 2;
+  
+  // Draw the upgrade level number (larger, on the left)
+  this.ctx.font = 'bold 22px Arial';
+  this.ctx.textAlign = 'left';
+  this.ctx.strokeText(totalUpgrades.toString(), startX, labelY);
+  this.ctx.fillText(totalUpgrades.toString(), startX, labelY);
+  
+  // Draw the player name (smaller, to the right)
+  this.ctx.font = 'bold 18px Arial';
+  const nameX = startX + levelWidth + spacing;
+  this.ctx.strokeText(displayName, nameX, labelY);
+  this.ctx.fillText(displayName, nameX, labelY);
+  
   this.ctx.restore();
   
   // Draw health bar above the ship
@@ -1528,6 +1733,49 @@ drawPlayer(player) {
     
     // Draw upgrade UI
     this.drawUpgradeUI();
+
+    this.drawKillNotifications();
+  }
+
+  drawKillNotifications() {
+    const now = Date.now();
+    this.killNotifications = this.killNotifications.filter(notification => notification.expiresAt > now);
+    if (this.killNotifications.length === 0) {
+      return;
+    }
+
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = 'bold 24px Arial';
+
+    const startY = Math.max(90, this.screenHeight * 0.18);
+    const spacing = 44;
+
+    this.killNotifications.forEach((notification, index) => {
+      const remaining = notification.expiresAt - now;
+      const fadeWindow = Math.min(500, notification.duration);
+      const opacity = fadeWindow > 0 && remaining < fadeWindow ? remaining / fadeWindow : 1;
+
+      const x = this.screenWidth / 2;
+      const y = startY + index * spacing;
+      const padding = 18;
+      const textWidth = ctx.measureText(notification.message).width;
+      const boxWidth = textWidth + padding * 2;
+      const boxHeight = 38;
+      const boxX = x - boxWidth / 2;
+      const boxY = y - boxHeight / 2;
+
+      ctx.fillStyle = `rgba(16, 16, 16, ${0.7 * opacity})`;
+      this.drawRoundedRect(boxX, boxY, boxWidth, boxHeight, 10);
+      ctx.fill();
+
+      ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
+      ctx.fillText(notification.message, x, y);
+    });
+
+    ctx.restore();
   }
 
   drawStatUpgradePanel() {
@@ -1693,7 +1941,15 @@ drawPlayer(player) {
 
   drawLeaderboard() {
     const sortedPlayers = [...this.gameState.players]
-      .sort((a, b) => (b.score || 0) - (a.score || 0))
+      .filter(player => !player.isBot) // Exclude bots from leaderboard
+      .sort((a, b) => {
+        const scoreDiff = (b.score || 0) - (a.score || 0);
+        if (scoreDiff !== 0) return scoreDiff;
+        // If scores are tied, sort alphabetically by name
+        const nameA = (a.name || `Player ${a.id}`).toLowerCase();
+        const nameB = (b.name || `Player ${b.id}`).toLowerCase();
+        return nameA.localeCompare(nameB);
+      })
       .slice(0, 5); // Top 5 players
     
     if (sortedPlayers.length === 0) return;
