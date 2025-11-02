@@ -59,8 +59,10 @@ type InputMsg struct {
 	// Stat upgrade inputs
 	StatUpgradeType string `json:"statUpgradeType"` // Which stat to upgrade
 	// Autofire toggle
-	ToggleAutofire bool   `json:"toggleAutofire"` // Toggle autofire on/off
-	ManualFire     bool   `json:"manualFire"`     // Manual fire command
+	ToggleAutofire bool `json:"toggleAutofire"` // Toggle autofire on/off
+	ManualFire     bool `json:"manualFire"`     // Manual fire command
+	// Respawn request
+	RequestRespawn bool   `json:"requestRespawn"` // Player requests to respawn
 	PlayerName     string `json:"playerName"`
 	PlayerColor    string `json:"playerColor"`
 	Mouse          struct {
@@ -110,6 +112,13 @@ type Player struct {
 	LastCollisionDamage time.Time                       `json:"-"`            // Last collision damage time
 	// Autofire toggle state
 	AutofireEnabled bool `json:"autofireEnabled"` // Whether autofire is currently enabled
+	// Death tracking
+	KilledBy     uint32    `json:"killedBy"`     // ID of player who killed this player (0 if none)
+	KilledByName string    `json:"killedByName"` // Name of player who killed this player
+	DeathTime    time.Time `json:"-"`            // When the player died
+	ScoreAtDeath int       `json:"scoreAtDeath"` // Score when player died
+	SurvivalTime float64   `json:"survivalTime"` // How long the player was alive (in seconds)
+	SpawnTime    time.Time `json:"-"`            // When the player spawned
 }
 
 // Bot wraps an AI-controlled player with simple state required for decision making.
@@ -248,7 +257,7 @@ func NewPlayer(id uint32) *Player {
 		Experience:          0,
 		AvailableUpgrades:   0,
 		ShipConfig:          shipConfig,
-		Coins:               100000, // Starting coins
+		Coins:               10000, // Starting coins
 		StatUpgrades:        make(map[StatUpgradeType]StatUpgrade),
 		LastRegenTime:       time.Now(), // Initialize health regen timer
 		LastCollisionDamage: time.Now(), // Initialize collision damage timer
@@ -392,16 +401,14 @@ func (p *Player) GetExperienceProgressToNextLevel() float32 {
 }
 
 // AddExperience adds experience and handles level ups
-func (p *Player) AddExperience(exp int) bool {
+func (p *Player) AddExperience(exp int) {
 	p.Experience += exp
 
 	// Check for level up
 	if p.Experience >= p.GetExperienceRequiredForNextLevel() {
 		p.Level++
 		p.AvailableUpgrades++
-		return true // Level up occurred
 	}
-	return false
 }
 
 // DebugLevelUp increases the player's level (for testing)

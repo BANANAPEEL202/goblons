@@ -41,6 +41,7 @@ class GameClient {
       statUpgradeType: '',
       toggleAutofire: false,
       manualFire: false,
+      requestRespawn: false,
       mouse: { x: 0, y: 0 }
     };
     
@@ -78,6 +79,15 @@ class GameClient {
 
     this.controlsLocked = true;
     this.pendingConnectConfig = null;
+    
+    // Death screen state
+    this.deathScreen = {
+      visible: false,
+      score: 0,
+      survivalTime: 0,
+      killerName: '',
+      respawnButtonBounds: null
+    };
     
     this.resizeCanvas();
     this.init();
@@ -165,13 +175,23 @@ class GameClient {
     
     // Mouse click handling for upgrade UI and manual firing
     this.canvas.addEventListener('click', (e) => {
-      if (this.controlsLocked) {
-        return;
-      }
-
       const rect = this.canvas.getBoundingClientRect();
       const screenX = e.clientX - rect.left;
       const screenY = e.clientY - rect.top;
+      
+      // Check death screen respawn button first
+      if (this.deathScreen.visible && this.deathScreen.respawnButtonBounds) {
+        const bounds = this.deathScreen.respawnButtonBounds;
+        if (screenX >= bounds.x && screenX <= bounds.x + bounds.width &&
+            screenY >= bounds.y && screenY <= bounds.y + bounds.height) {
+          this.handleRespawn();
+          return;
+        }
+      }
+      
+      if (this.controlsLocked) {
+        return;
+      }
       
       // Try to handle upgrade UI click first
       const handledByUI = this.handleUpgradeUIClick(screenX, screenY);
@@ -342,7 +362,14 @@ class GameClient {
               this.shipPhysics.velocity.y = serverPlayer.velY || 0;
             } else {
               // Update our player with server data
+              const prevState = this.gameState.myPlayer.state;
               this.gameState.myPlayer = serverPlayer;
+              
+              // Check if player just died (transition from alive to dead)
+              if (serverPlayer.state === 1 && prevState === 0 && !this.deathScreen.visible) { // State 1 = Dead, State 0 = Alive
+                this.showDeathScreen(serverPlayer);
+              }
+              // Don't hide death screen when player respawns - let the respawn button control that
               
               // Sync angle with server
               if (serverPlayer.angle !== undefined) {
@@ -403,6 +430,113 @@ class GameClient {
         // Could add visual effects for item collection
         break;
     }
+  }
+
+  showDeathScreen(player) {
+    this.deathScreen.visible = true;
+    this.deathScreen.score = player.scoreAtDeath || player.score;
+    this.deathScreen.survivalTime = player.survivalTime || 0;
+    this.deathScreen.killerName = player.killedByName || 'Unknown';
+    console.log('Death screen shown:', this.deathScreen);
+  }
+
+  handleRespawn() {
+    console.log('Respawn requested');
+    this.deathScreen.visible = false;
+    
+    // Send respawn request to server
+    this.input.requestRespawn = true;
+    this.sendInput();
+    
+    // Reset the flag after sending
+    setTimeout(() => {
+      this.input.requestRespawn = false;
+    }, 100);
+  }
+
+  drawDeathScreen() {
+    if (!this.deathScreen.visible) return;
+
+    const ctx = this.ctx;
+    const centerX = this.screenWidth / 2;
+    const centerY = this.screenHeight / 2;
+
+    // Semi-transparent overlay
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.fillRect(0, 0, this.screenWidth, this.screenHeight);
+
+    // Death screen panel
+    const panelWidth = 500;
+    const panelHeight = 400;
+    const panelX = centerX - panelWidth / 2;
+    const panelY = centerY - panelHeight / 2;
+
+    // Panel background
+    ctx.fillStyle = 'rgba(20, 20, 30, 0.95)';
+    this.drawRoundedRect(panelX, panelY, panelWidth, panelHeight, 15);
+    ctx.fill();
+
+    // Panel border
+    ctx.strokeStyle = '#ff4444';
+    ctx.lineWidth = 3;
+    this.drawRoundedRect(panelX, panelY, panelWidth, panelHeight, 15);
+    ctx.stroke();
+
+    // Title
+    ctx.font = 'bold 48px Arial';
+    ctx.fillStyle = '#ff4444';
+    ctx.textAlign = 'center';
+    ctx.fillText('YOU DIED', centerX, panelY + 80);
+
+    // Stats
+    ctx.font = 'bold 24px Arial';
+    ctx.fillStyle = '#ffffff';
+    
+    const statsY = panelY + 150;
+    const lineHeight = 45;
+    
+    ctx.fillText(`Score: ${this.deathScreen.score}`, centerX, statsY);
+    
+    const minutes = Math.floor(this.deathScreen.survivalTime / 60);
+    const seconds = Math.floor(this.deathScreen.survivalTime % 60);
+    const timeString = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    ctx.fillText(`Survived: ${timeString}`, centerX, statsY + lineHeight);
+    
+    if (this.deathScreen.killerName && this.deathScreen.killerName !== '') {
+      ctx.fillText(`Killed by: ${this.deathScreen.killerName}`, centerX, statsY + lineHeight * 2);
+    } else {
+      ctx.fillText('Killed by: Environment', centerX, statsY + lineHeight * 2);
+    }
+
+    // Respawn button
+    const buttonWidth = 200;
+    const buttonHeight = 50;
+    const buttonX = centerX - buttonWidth / 2;
+    const buttonY = panelY + panelHeight - 90;
+
+    // Store button bounds for click detection
+    this.deathScreen.respawnButtonBounds = {
+      x: buttonX,
+      y: buttonY,
+      width: buttonWidth,
+      height: buttonHeight
+    };
+
+    // Button background
+    ctx.fillStyle = '#4CAF50';
+    this.drawRoundedRect(buttonX, buttonY, buttonWidth, buttonHeight, 8);
+    ctx.fill();
+
+    // Button border
+    ctx.strokeStyle = '#45a049';
+    ctx.lineWidth = 2;
+    this.drawRoundedRect(buttonX, buttonY, buttonWidth, buttonHeight, 8);
+    ctx.stroke();
+
+    // Button text
+    ctx.font = 'bold 20px Arial';
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText('RESPAWN', centerX, buttonY + 32);
   }
 
   handleKeyDown(e) {
@@ -933,6 +1067,9 @@ class GameClient {
     
     // Draw UI
     this.drawUI();
+    
+    // Draw death screen on top of everything
+    this.drawDeathScreen();
   }
 
   drawGrid() {

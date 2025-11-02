@@ -34,28 +34,38 @@ func (gm *GameMechanics) handlePlayerDeath(victim *Player, killer *Player, cause
 	victim.State = StateDead
 	victim.RespawnTime = now.Add(time.Duration(RespawnDelay) * time.Second)
 
+	// Track death information
+	victim.DeathTime = now
+	victim.ScoreAtDeath = victim.Score
+	if !victim.SpawnTime.IsZero() {
+		victim.SurvivalTime = now.Sub(victim.SpawnTime).Seconds()
+	}
+
 	if killer != nil {
-		xpReward, coinReward, remainingXP, remainingCoins := gm.calculateKillOutcome(victim)
+		xpReward, coinReward := gm.calculateKillOutcome(victim)
+
+		// Track who killed the victim
+		victim.KilledBy = killer.ID
+		victim.KilledByName = killer.Name
 
 		// Apply rewards to killer
 		killer.AddExperience(xpReward)
 		killer.Score += xpReward
 		killer.Coins += coinReward
 
-		// Apply penalties to victim
-		victim.Experience = remainingXP
-		victim.Coins = remainingCoins
-
 		log.Printf("Player %d (%s) was killed by %s from Player %d (%s)",
 			victim.ID, victim.Name, cause.describe(), killer.ID, killer.Name)
 		log.Printf("Player %d gained %d XP and %d coins for killing Player %d (victim now has %d XP and %d coins)",
 			killer.ID, xpReward, coinReward, victim.ID, victim.Experience, victim.Coins)
 	} else {
+		// No killer (e.g., suicide or environment)
+		victim.KilledBy = 0
+		victim.KilledByName = ""
 		log.Printf("Player %d (%s) died due to %s", victim.ID, victim.Name, cause.describe())
 	}
 }
 
-func (gm *GameMechanics) calculateKillOutcome(victim *Player) (xpReward int, coinReward int, remainingXP int, remainingCoins int) {
+func (gm *GameMechanics) calculateKillOutcome(victim *Player) (xpReward int, coinReward int) {
 	xpReward = max(victim.Experience/2, 100)
 	coinReward = max(victim.Coins/2, 200)
 	if coinReward > 2000 {

@@ -54,9 +54,10 @@ func (w *World) spawnInitialBots() {
 		player.IsBot = true
 		player.Name = fmt.Sprintf("Guardian %d", i+1)
 		player.Color = botColors[i%len(botColors)]
-		player.Score = 0
-		player.Coins = 0
-		player.Level = 1
+		player.Score = 500
+		player.Coins = 500
+		player.Experience = 500
+		player.Level = 25
 		player.AvailableUpgrades = 0
 
 		// Random spawn position with some padding from edges

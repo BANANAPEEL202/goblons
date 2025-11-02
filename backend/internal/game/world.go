@@ -158,6 +158,12 @@ func (w *World) update() {
 
 // updatePlayer updates a single player's state with realistic ship physics
 func (w *World) updatePlayer(player *Player, input *InputMsg) {
+	// Handle respawn request if player is dead
+	if player.State == StateDead && input.RequestRespawn {
+		w.respawnPlayer(player)
+		return
+	}
+
 	if player.State != StateAlive {
 		return
 	}
@@ -235,6 +241,11 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 	now := time.Now()
 	w.updateModularTurretAiming(player, input)
 	w.fireModularUpgrades(player, input, now)
+
+	for player.Experience >= player.GetExperienceRequiredForNextLevel() {
+		player.Level++
+		player.AvailableUpgrades++
+	}
 
 	// Handle ship upgrades - use new modular system
 	if input.UpgradeCannons {
@@ -481,6 +492,7 @@ func (w *World) spawnPlayer(player *Player) {
 	player.X = float32(rand.Intn(int(WorldWidth-100)) + 50)
 	player.Y = float32(rand.Intn(int(WorldHeight-100)) + 50)
 	player.State = StateAlive
+	player.SpawnTime = time.Now() // Track when player spawned
 }
 
 // resetPlayerShipConfig resets a player's ship configuration to default
@@ -516,35 +528,69 @@ func (w *World) handleRespawns() {
 				continue
 			}
 
-			// Respawn the player - reset all progress
-			player.Experience = 0
-			player.Coins = 100000 // Reset to starting coins
-			player.Level = 1
-			player.AvailableUpgrades = 0
-			player.Health = player.MaxHealth
-			player.State = StateAlive
-			player.LastRegenTime = now       // Reset health regen timer for respawned player
-			player.LastCollisionDamage = now // Reset collision damage timer for respawned player
-
-			// Reset autofire to default enabled state
-			player.AutofireEnabled = true
-
-			// Reset ship configuration to default
-			w.resetPlayerShipConfig(player)
-
-			// Reset stat upgrades
-			InitializeStatUpgrades(player)
-
-			w.spawnPlayer(player)
-
-			// Send updated available upgrades to client
-			if client, exists := w.GetClient(player.ID); exists {
-				w.sendAvailableUpgrades(client)
-			}
-
-			log.Printf("Player %d (%s) respawned", player.ID, player.Name)
+			// For human players, don't auto-respawn - wait for their respawn request
+			// The respawn is handled in processInput when RequestRespawn is true
 		}
 	}
+}
+
+// respawnPlayer respawns a dead player when they request it
+func (w *World) respawnPlayer(player *Player) {
+	now := time.Now()
+
+	// Only respawn if player is dead and respawn time has passed
+	if player.State != StateDead || now.Before(player.RespawnTime) {
+		return
+	}
+
+	// Save half of previous XP and coins
+	respawnXP := player.Experience / 2
+	respawnCoins := player.Coins / 2
+
+	// Save player identity
+	playerID := player.ID
+	playerName := player.Name
+	playerColor := player.Color
+
+	// Reset to fresh player state (similar to NewPlayer)
+	player.Experience = respawnXP
+	player.Coins = respawnCoins
+	player.Level = 1
+	player.AvailableUpgrades = 0
+	player.Score = 0
+	player.Health = 100
+	player.MaxHealth = 100
+	player.State = StateAlive
+	player.LastRegenTime = now
+	player.LastCollisionDamage = now
+
+	// Restore identity
+	player.ID = playerID
+	player.Name = playerName
+	player.Color = playerColor
+
+	// Reset death tracking
+	player.KilledBy = 0
+	player.KilledByName = ""
+	player.ScoreAtDeath = 0
+	player.SurvivalTime = 0
+
+	// Reset autofire to default enabled state
+	player.AutofireEnabled = true
+
+	w.resetPlayerShipConfig(player)
+
+	// Reset stat upgrades
+	InitializeStatUpgrades(player)
+
+	w.spawnPlayer(player)
+
+	// Send updated available upgrades to client
+	if client, exists := w.GetClient(player.ID); exists {
+		w.sendAvailableUpgrades(client)
+	}
+
+	log.Printf("Player %d (%s) respawned with %d XP and %d coins", player.ID, player.Name, respawnXP, respawnCoins)
 }
 
 // spawnItems continuously spawns items in the world (with limits)
