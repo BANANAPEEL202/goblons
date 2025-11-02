@@ -1,125 +1,142 @@
 #!/bin/bash
 
+# ============================================
 # Manual Azure Deployment Script for Goblons.io
-# Run this script to deploy your game manually to Azure Container Instances
+# Deploys a Dockerized game server on a low-cost Azure VM
+# ============================================
 
-# Configuration - UPDATE THESE VALUES BEFORE RUNNING
+set -e
+
+# =========================
+# Configuration
+# =========================
 RESOURCE_GROUP="goblons-rg"
 LOCATION="eastus"
-CONTAINER_NAME="goblons-game"
+VM_NAME="goblons-vm"
+VM_SIZE="Standard_B2s"           # 2 vCPU, 4 GB RAM (low-cost)
 IMAGE_NAME="goblons"
-REGISTRY_NAME="goblonsregistry$(whoami)"  # Adds your username for uniqueness
-DNS_LABEL="goblons-$(whoami)"             # Adds your username for uniqueness
+REGISTRY_NAME="goblonsregistry$(whoami)"  # Unique name per user
+ADMIN_USER="azureuser"
+SSH_KEY="$HOME/.ssh/id_rsa.pub"
 
-echo "🚀 Manual deployment of Goblons.io to Azure..."
-echo "📋 Using configuration:"
-echo "   Resource Group: $RESOURCE_GROUP"
-echo "   Registry: $REGISTRY_NAME"
-echo "   DNS Label: $DNS_LABEL"
-echo ""
+# =========================
+# Helper Functions
+# =========================
+check_azure_cli() {
+    if ! command -v az &> /dev/null; then
+        echo "❌ Azure CLI not installed. Install it first: brew install azure-cli"
+        exit 1
+    fi
+    if ! az account show &> /dev/null; then
+        echo "❌ Not logged in. Run: az login"
+        exit 1
+    fi
+    echo "✅ Azure CLI ready"
+}
 
-# Check if Azure CLI is installed and logged in
-if ! command -v az &> /dev/null; then
-    echo "❌ Azure CLI is not installed. Please install it first:"
-    echo "   brew install azure-cli"
-    exit 1
-fi
+# =========================
+# 1. Prepare Azure Resources
+# =========================
+check_azure_cli
 
-# Check if logged in to Azure
-if ! az account show &> /dev/null; then
-    echo "❌ Not logged in to Azure. Please run: az login"
-    exit 1
-fi
-
-echo "✅ Azure CLI is ready"
-
-# Step 1: Register required resource providers
-echo "🔧 Registering Azure resource providers..."
-echo "   This may take a few minutes on first run..."
+echo "🔧 Registering resource providers..."
 az provider register --namespace Microsoft.ContainerRegistry --wait
-az provider register --namespace Microsoft.ContainerInstance --wait
+az provider register --namespace Microsoft.Compute --wait
+az provider register --namespace Microsoft.Network --wait
 echo "✅ Resource providers registered"
 
-# Step 2: Create resource group
 echo "📁 Creating resource group..."
-az group create \
-  --name $RESOURCE_GROUP \
-  --location $LOCATION \
-  --output table
+az group create --name "$RESOURCE_GROUP" --location "$LOCATION" --output table
 
-# Step 3: Create Azure Container Registry (ACR)
+# =========================
+# 2. Create ACR
+# =========================
 echo "🐳 Creating container registry..."
 az acr create \
-  --resource-group $RESOURCE_GROUP \
-  --name $REGISTRY_NAME \
-  --sku Basic \
-  --location $LOCATION \
-  --output table
+    --resource-group "$RESOURCE_GROUP" \
+    --name "$REGISTRY_NAME" \
+    --sku Basic \
+    --location "$LOCATION" \
+    --output table
 
-# Enable admin access for the registry
-echo "🔧 Enabling admin access on container registry..."
-az acr update \
-  --name $REGISTRY_NAME \
-  --admin-enabled true \
-  --output table
-
-echo "⏳ Waiting for registry to be ready..."
+echo "🔧 Enabling admin access..."
+az acr update --name "$REGISTRY_NAME" --admin-enabled true --output table
 sleep 10
 
-# Step 4: Build and push Docker image
+# =========================
+# 3. Build and Push Image
+# =========================
 echo "🔨 Building and pushing Docker image..."
-echo "   This may take a few minutes..."
 az acr build \
-  --registry $REGISTRY_NAME \
-  --image $IMAGE_NAME:latest \
-  --file Dockerfile \
-  . \
+    --registry "$REGISTRY_NAME" \
+    --image "$IMAGE_NAME:latest" \
+    --file Dockerfile \
+    . \
+    --output table
+
+# =========================
+# 4. Create VM
+# =========================
+echo "💻 Creating Azure VM ($VM_SIZE)..."
+az vm create \
+  --resource-group "$RESOURCE_GROUP" \
+  --name "$VM_NAME" \
+  --image Ubuntu2204 \
+  --size "$VM_SIZE" \
+  --admin-username "$ADMIN_USER" \
+  --ssh-key-values "$SSH_KEY" \
+  --public-ip-sku Standard \
   --output table
 
-# Step 5: Deploy to Azure Container Instances
-echo "☁️ Deploying to Azure Container Instances..."
+# Open port 8080 for game traffic
+echo "🌐 Opening port 8080..."
+az vm open-port \
+  --port 8080 \
+  --resource-group "$RESOURCE_GROUP" \
+  --name "$VM_NAME"
 
-# Get ACR credentials for authentication
-REGISTRY_USERNAME=$(az acr credential show --name $REGISTRY_NAME --query username -o tsv)
-REGISTRY_PASSWORD=$(az acr credential show --name $REGISTRY_NAME --query passwords[0].value -o tsv)
-
-az container create \
-  --resource-group $RESOURCE_GROUP \
-  --name $CONTAINER_NAME \
-  --image $REGISTRY_NAME.azurecr.io/$IMAGE_NAME:latest \
-  --registry-login-server $REGISTRY_NAME.azurecr.io \
-  --registry-username $REGISTRY_USERNAME \
-  --registry-password $REGISTRY_PASSWORD \
-  --dns-name-label $DNS_LABEL \
-  --ports 8080 \
-  --cpu 2.0 \
-  --memory 2 \
-  --os-type Linux \
-  --location $LOCATION \
-  --output table
-
-# Wait for container to start
-echo "⏳ Waiting for container to start..."
+# =========================
+# 5. Connect to VM and Run Container
+# =========================
+echo "⏳ Waiting for VM public IP..."
 sleep 30
+VM_IP=$(az vm show --resource-group "$RESOURCE_GROUP" --name "$VM_NAME" --show-details --query publicIps -o tsv)
 
-# Step 6: Show results
+REGISTRY_USERNAME=$(az acr credential show --name "$REGISTRY_NAME" --query username -o tsv)
+REGISTRY_PASSWORD=$(az acr credential show --name "$REGISTRY_NAME" --query passwords[0].value -o tsv)
+
+echo "🔗 Connecting to VM ($VM_IP) and setting up container..."
+ssh -o StrictHostKeyChecking=no "$ADMIN_USER@$VM_IP" << EOF
+    set -e
+    echo "🧰 Installing Docker..."
+    sudo apt-get update -y
+    sudo apt-get install -y docker.io
+    sudo systemctl enable --now docker
+
+    echo "🔐 Logging into ACR..."
+    echo "$REGISTRY_PASSWORD" | sudo docker login "$REGISTRY_NAME.azurecr.io" -u "$REGISTRY_USERNAME" --password-stdin
+
+    echo "🐳 Pulling latest image..."
+    sudo docker pull "$REGISTRY_NAME.azurecr.io/$IMAGE_NAME:latest"
+
+    echo "🧹 Cleaning old container..."
+    sudo docker rm -f "$IMAGE_NAME" 2>/dev/null || true
+
+    echo "🚀 Starting game container..."
+    sudo docker run -d -p 8080:8080 --name "$IMAGE_NAME" "$REGISTRY_NAME.azurecr.io/$IMAGE_NAME:latest"
+EOF
+
+# =========================
+# 6. Done
+# =========================
 echo ""
 echo "🎉 Deployment complete!"
+echo "📍 Game running at: http://$VM_IP:8080"
 echo ""
-echo "📍 Your game URLs:"
-echo "   Public URL: http://$DNS_LABEL.$LOCATION.azurecontainer.io:8080"
+echo "🔍 SSH into VM: az vm ssh --name $VM_NAME --resource-group $RESOURCE_GROUP"
+echo "   Docker commands inside VM:"
+echo "     docker logs $IMAGE_NAME"
+echo "     docker restart $IMAGE_NAME"
+echo "     docker stop $IMAGE_NAME"
+echo "     docker rm $IMAGE_NAME"
 echo ""
-echo "🔍 Useful commands:"
-echo "   Check status: az container show --resource-group $RESOURCE_GROUP --name $CONTAINER_NAME --query instanceView.state"
-echo "   View logs:    az container logs --resource-group $RESOURCE_GROUP --name $CONTAINER_NAME"
-echo "   Restart:      az container restart --resource-group $RESOURCE_GROUP --name $CONTAINER_NAME"
-echo "   Delete:       az container delete --resource-group $RESOURCE_GROUP --name $CONTAINER_NAME --yes"
-echo ""
-
-# Show current status
-echo "📊 Current container status:"
-az container show \
-  --resource-group $RESOURCE_GROUP \
-  --name $CONTAINER_NAME \
-  --query "{State:instanceView.state,IP:ipAddress.ip,FQDN:ipAddress.fqdn}" \
-  --output table
