@@ -267,24 +267,12 @@ func (t *Turret) Fire(world *World, player *Player, now time.Time) []*Bullet {
 func NewBasicCannon() CannonStats {
 	return CannonStats{
 		ReloadTime:      1.5, // 1 second reload
-		BulletSpeedMod:  0.7, // Normal speed
+		BulletSpeedMod:  1,   // Normal speed
 		BulletDamageMod: 1.0, // Normal damage
 		BulletCount:     1,   // Single shot
 		SpreadAngle:     0,   // No spread
 		Range:           0,   // Unlimited range
 		Size:            1.0, // Normal size
-	}
-}
-
-func NewHeavyCannon() CannonStats {
-	return CannonStats{
-		ReloadTime:      2.0, // Slow reload
-		BulletSpeedMod:  0.8, // 20% slower bullets
-		BulletDamageMod: 1.5, // 50% more damage
-		BulletCount:     1,
-		SpreadAngle:     0,
-		Range:           0,
-		Size:            1.5,
 	}
 }
 
@@ -302,7 +290,7 @@ func NewScatterCannon() CannonStats {
 
 func NewTurretCannon() CannonStats {
 	return CannonStats{
-		ReloadTime:      1, // Fast turret firing
+		ReloadTime:      1.5,
 		BulletSpeedMod:  1.0,
 		BulletDamageMod: 1.0,
 		BulletCount:     1,
@@ -314,9 +302,9 @@ func NewTurretCannon() CannonStats {
 
 func NewMachineGunCannon() CannonStats {
 	return CannonStats{
-		ReloadTime:      0.3,
-		BulletSpeedMod:  0.7,
-		BulletDamageMod: 0.03,
+		ReloadTime:      0.5,
+		BulletSpeedMod:  0.8,
+		BulletDamageMod: 0.3,
 		BulletCount:     1,
 		SpreadAngle:     0,
 		Range:           0,

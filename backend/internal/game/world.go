@@ -502,8 +502,9 @@ func (w *World) resetPlayerShipConfig(player *Player) {
 	shipWidth := float32(PlayerSize) * 0.6
 
 	player.ShipConfig = ShipConfiguration{
-		SideUpgrade:  NewBasicSideCannons(1),
-		TopUpgrade:   NewBasicTurrets(0),
+
+		SideUpgrade:  NewSideUpgradeTree(),
+		TopUpgrade:   NewTopUpgradeTree(),
 		FrontUpgrade: nil,
 		RearUpgrade:  nil,
 		ShipLength:   shipLength,

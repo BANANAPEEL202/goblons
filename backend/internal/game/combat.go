@@ -20,6 +20,11 @@ func (gm *GameMechanics) ApplyDamage(target *Player, damage int, attacker *Playe
 		return false
 	}
 
+	if damage == 0 {
+		log.Printf("Warning: Attempted to apply zero damage to Player %d", target.ID)
+		damage = 1 // Ensure at least 1 damage is applied
+	}
+
 	target.Health -= damage
 	if target.Health > 0 {
 		return false

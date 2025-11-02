@@ -377,7 +377,6 @@ func NewTopUpgradeTree() *ShipUpgrade {
 	turret1 := NewBasicTurrets(1)
 	turret2 := NewBasicTurrets(2)
 	turret3 := NewBasicTurrets(3)
-	turret4 := NewBasicTurrets(4)
 
 	// Build the machine gun turret upgrade path: 1 -> 2
 	machineGunTurret1 := NewMachineGunTurrest(1)
@@ -390,7 +389,6 @@ func NewTopUpgradeTree() *ShipUpgrade {
 	// Basic turret path
 	turret1.NextUpgrades = []*ShipUpgrade{turret2}
 	turret2.NextUpgrades = []*ShipUpgrade{turret3}
-	turret3.NextUpgrades = []*ShipUpgrade{turret4}
 
 	// machine gun path
 	machineGunTurret1.NextUpgrades = []*ShipUpgrade{machineGunTurret2}

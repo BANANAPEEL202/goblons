@@ -23,7 +23,7 @@ const (
 	BulletSpeed    = 12  // Bullet travel speed (doubled for 30 TPS)
 	BulletLifetime = 2   // Seconds before bullet disappears (unchanged - time-based)
 	BulletSize     = 8.0 // Bullet radius (unchanged - visual)
-	BulletDamage   = 8   // Damage per bullet hit (unchanged)
+	BulletDamage   = 4   // Damage per bullet hit (unchanged)
 )
 
 // Message types for client-server communication
