@@ -192,6 +192,7 @@ class GameClient {
       }
       
       if (this.controlsLocked) {
+        console.log('Controls are locked; ignoring click.');
         return;
       }
       
@@ -826,10 +827,7 @@ class GameClient {
       const optionY = optionsStartY + (optionHeight + optionSpacing) * i;
 
       if (screenX >= optionsX && screenX <= optionsX + optionWidth && screenY >= optionY && screenY <= optionY + optionHeight) {
-        if (this.upgradeUI.pendingUpgrade) {
-          return true;
-        }
-
+        console.log(`Selected upgrade: ${selectedType} - ${option.name}`);
         this.selectUpgrade(selectedType, option.name);
         return true;
       }
@@ -841,6 +839,7 @@ class GameClient {
   selectUpgrade(upgradeType, upgradeId) {
     // Prevent multiple upgrade selections
     if (this.upgradeUI.pendingUpgrade) {
+      console.log('Upgrade selection is already pending; ignoring additional selection.');
       return;
     }
     
@@ -852,9 +851,6 @@ class GameClient {
     this.input.upgradeChoice = upgradeId;
     this.sendInput();
     
-    // Reset upgrade selection inputs immediately to prevent repeated sending
-    this.input.selectUpgrade = '';
-    this.input.upgradeChoice = '';
     
     // Clear selected upgrade type to hide the options
     this.upgradeUI.selectedUpgradeType = null;
@@ -862,7 +858,10 @@ class GameClient {
     // Reset pending flag after a delay (or when server confirms upgrade)
     setTimeout(() => {
       this.upgradeUI.pendingUpgrade = false;
-    }, 1000);
+          // Reset upgrade selection inputs immediately to prevent repeated sending
+    this.input.selectUpgrade = '';
+    this.input.upgradeChoice = '';
+    }, 500);
   }
 
   handleStatUpgradeKey(keyNumber) {
@@ -1306,18 +1305,50 @@ drawPlayer(player) {
   }
 
   // --- Draw Ram upgrade (gray triangle on front) ---
-  if (player.shipConfig && player.shipConfig.frontUpgrade && player.shipConfig.frontUpgrade.name === "Ram") {
-    const ramLength = bowLength * 1;
-    const ramWidth = shaftWidth * 0.6;
-    
-    ctx.fillStyle = '#444'; // Gray color for ram
-    
-    ctx.beginPath();
-    ctx.moveTo(shaftLength / 2 + bowLength - 8 + ramLength, 0); // ram tip
-    ctx.lineTo(shaftLength / 2 + bowLength - 8, ramWidth / 2);  // ram base right
-    ctx.lineTo(shaftLength / 2 + bowLength - 8, -ramWidth / 2); // ram base left
-    ctx.closePath();
-    ctx.fill();
+  if (player.shipConfig && player.shipConfig.frontUpgrade) {
+    if (player.shipConfig.frontUpgrade.name == 'Ram') {
+      const ramLength = bowLength * 1;
+      const ramWidth = shaftWidth * 0.6;
+      
+      ctx.fillStyle = '#444'; // Gray color for ram
+      
+      ctx.beginPath();
+      ctx.moveTo(shaftLength / 2 + bowLength - 8 + ramLength, 0); // ram tip
+      ctx.lineTo(shaftLength / 2 + bowLength - 8, ramWidth / 2);  // ram base right
+      ctx.lineTo(shaftLength / 2 + bowLength - 8, -ramWidth / 2); // ram base left
+      ctx.closePath();
+      ctx.fill();
+    }
+    else {
+      for (const cannon of player.shipConfig.frontUpgrade.cannons || []) {
+        // Draw front cannons similarly to side cannons
+        let centerX = cannon.position.x;
+        let centerY = cannon.position.y;
+        
+        // Calculate recoil animation offset
+        if (cannon.recoilTime) {
+          const timeSinceFire = Date.now() - new Date(cannon.recoilTime).getTime();
+          const recoilDuration = 400; // 200ms recoil animation
+          
+          if (timeSinceFire < recoilDuration) {
+            const progress = timeSinceFire / recoilDuration;
+            // Ease-out animation: starts fast, slows down
+            const easeOut = 1 - Math.pow(1 - progress, 3);
+            const recoilDistance = 8; // Maximum recoil distance in pixels
+            
+            // Front cannons recoil backward along ship's forward axis
+            const recoilOffset = recoilDistance * (1 - easeOut);
+            centerX -= recoilOffset; // Move backward along X axis
+          }
+        }
+        
+        // Draw regular cannon as rectangle
+        const x = centerX - gunLength / 2; // Convert center to top-left for fillRect
+        const y = centerY - gunWidth / 2;  // Convert center to top-left for fillRect
+        ctx.fillRect(x, y, gunLength, gunWidth);
+        ctx.strokeRect(x, y, gunLength, gunWidth);
+      }
+    }
   }
 
   ctx.fillStyle = color;
