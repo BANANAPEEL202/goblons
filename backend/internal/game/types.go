@@ -44,8 +44,6 @@ type InputMsg struct {
 	Down             bool   `json:"down"`
 	Left             bool   `json:"left"`
 	Right            bool   `json:"right"`
-	ShootLeft        bool   `json:"shootLeft"`
-	ShootRight       bool   `json:"shootRight"`
 	UpgradeCannons   bool   `json:"upgradeCannons"`
 	DowngradeCannons bool   `json:"downgradeCannons"`
 	UpgradeScatter   bool   `json:"upgradeScatter"`
@@ -248,7 +246,7 @@ func NewPlayer(id uint32) *Player {
 		SideUpgrade:  NewSideUpgradeTree(),
 		TopUpgrade:   NewTopUpgradeTree(),
 		FrontUpgrade: NewFrontUpgradeTree(),
-		RearUpgrade:  nil,
+		RearUpgrade:  NewRearUpgradeTree(),
 		ShipLength:   shipLength,
 		ShipWidth:    shipWidth,
 		Size:         PlayerSize,

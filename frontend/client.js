@@ -1351,6 +1351,24 @@ drawPlayer(player) {
     }
   }
 
+  if (player.shipConfig && player.shipConfig.rearUpgrade) {
+    console.log(player.shipConfig.rearUpgrade);
+    if (player.shipConfig.rearUpgrade.name == 'Rudder') {
+      const rudderLength = size * 0.25;
+      const rudderWidth = shaftWidth * 0.3;
+      
+      ctx.fillStyle = '#666'; // Gray color for rectangular rudder
+
+      ctx.beginPath();
+      ctx.moveTo(-shaftLength / 2 - totalRearLength - rudderLength, rudderWidth / 2);
+      ctx.lineTo(-shaftLength / 2 - totalRearLength , rudderWidth / 2);
+      ctx.lineTo(-shaftLength / 2 - totalRearLength, -rudderWidth / 2);
+      ctx.lineTo(-shaftLength / 2 - totalRearLength - rudderLength, -rudderWidth / 2);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+
   ctx.fillStyle = color;
   ctx.strokeStyle = '#444';
   ctx.lineWidth = 3;

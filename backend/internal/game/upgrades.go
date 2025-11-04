@@ -32,9 +32,6 @@ type ShipUpgrade struct {
 	Turrets []*Turret     `json:"turrets"` // Turret weapons (if applicable)
 
 	NextUpgrades []*ShipUpgrade `json:"nextUpgrades,omitempty"` // Possible next upgrades
-
-	ShipWidthModifier  float32 `json:"shipWidthModifier"`  // Width modification (1.0 = no change)
-	ShipLengthModifier float32 `json:"shipLengthModifier"` // Length modification (1.0 = no change)
 }
 
 // ShipConfiguration holds all upgrades for a ship
@@ -295,7 +292,7 @@ func NewScatterSideCannons(cannonCount int) *ShipUpgrade {
 		Cannons: cannons,
 		Effect: UpgradeEffect{
 			SpeedMultiplier:     0.92, // Slower due to heavier scatter cannons
-			TurnRateMultiplier:  0.88, // Slower turning due to weight and length
+			TurnRateMultiplier:  0.95, // Slower turning due to weight and length
 			ShipWidthMultiplier: 1,
 		},
 	}
@@ -511,9 +508,22 @@ func NewRowingUpgrade(oarCount int) *ShipUpgrade {
 		Count:   oarCount,
 		Cannons: oars,
 		Effect: UpgradeEffect{
-			SpeedMultiplier:     1.1 + float32(oarCount)*0.05, // Increase speed based on oar count
-			TurnRateMultiplier:  0.9,
+			SpeedMultiplier:     1.0 + float32(oarCount)*0.05, // Increase speed based on oar count
+			TurnRateMultiplier:  0.7,
 			ShipWidthMultiplier: 1.0, // No effect on width
+		},
+	}
+}
+
+func NewRudderUpgrade() *ShipUpgrade {
+	return &ShipUpgrade{
+		Type:  UpgradeTypeRear,
+		Name:  "Rudder",
+		Count: 1,
+		Effect: UpgradeEffect{
+			SpeedMultiplier:     1.0,
+			TurnRateMultiplier:  1.2, // Improved turn rate
+			ShipWidthMultiplier: 1.0,
 		},
 	}
 }
@@ -524,8 +534,8 @@ func NewRamUpgrade() *ShipUpgrade {
 		Name:  "Ram",
 		Count: 1,
 		Effect: UpgradeEffect{
-			SpeedMultiplier:     0.97, // Slightly slower due to heavy ram
-			TurnRateMultiplier:  0.95,
+			SpeedMultiplier:     0.8, // Slightly slower due to heavy ram
+			TurnRateMultiplier:  0.8,
 			ShipWidthMultiplier: 1.0,
 		},
 	}
@@ -605,13 +615,25 @@ func (sc *ShipConfiguration) GetAvailableUpgrades(upgradeType UpgradeType) []*Sh
 
 	case UpgradeTypeRear:
 		if sc.RearUpgrade == nil {
-			// TODO: Implement rear upgrade tree when available
-			return []*ShipUpgrade{}
+			root := NewRearUpgradeTree()
+			return root.NextUpgrades
 		}
 		return sc.RearUpgrade.NextUpgrades
 	}
 
 	return availableUpgrades
+}
+
+func NewRearUpgradeTree() *ShipUpgrade {
+	// Placeholder for rear upgrade tree
+	root := &ShipUpgrade{
+		Type: UpgradeTypeRear,
+		Name: "No Rear Upgrades",
+	}
+
+	rudder := NewRudderUpgrade()
+	root.NextUpgrades = []*ShipUpgrade{rudder}
+	return root
 }
 
 // ApplyUpgrade applies a selected upgrade to the ship configuration
@@ -702,6 +724,7 @@ func applyStatUpgradeEffects(player *Player, upgradeType StatUpgradeType) {
 		player.MaxHealth += healthIncrease
 		player.Health += healthIncrease     // Heal on upgrade
 		player.ShipConfig.ShipWidth *= 1.01 // Small width increase per level
+		player.ShipConfig.UpdateUpgradePositions()
 	}
 }
 
@@ -739,7 +762,7 @@ func GetStatUpgradeEffects(player *Player) map[string]float32 {
 
 	// Turn Speed effects
 	turnLevel := player.StatUpgrades[StatUpgradeTurnSpeed].Level
-	effects["turnSpeedBonus"] = float32(turnLevel) * 0.001
+	effects["turnSpeedBonus"] = float32(turnLevel) * 0.003
 
 	// Body Damage effects
 	bodyLevel := player.StatUpgrades[StatUpgradeBodyDamage].Level
