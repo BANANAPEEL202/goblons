@@ -21,7 +21,7 @@ const (
 	botCannonDamageLevel         = 5
 	botCannonRangeLevel          = 5
 	botReloadSpeedLevel          = 5
-	botMoveSpeedLevel            = -1
+	botMoveSpeedLevel            = 0
 	botTurnSpeedLevel            = 0
 	botHealthLevel               = 5
 	botRegenLevel                = 5
@@ -47,8 +47,8 @@ func (w *World) spawnInitialBots() {
 	now := time.Now()
 
 	for i := 0; i < botCount; i++ {
-		id := w.nextID
-		w.nextID++
+		id := w.nextPlayerID
+		w.nextPlayerID++
 
 		player := NewPlayer(id)
 		player.IsBot = true
@@ -106,7 +106,7 @@ func (w *World) applyBotLoadout(player *Player) {
 	baseWidth := float32(PlayerSize * 0.8)
 
 	InitializeStatUpgrades(player)
-	ForceStatUpgrades(player, map[StatUpgradeType]int{
+	ForceStatUpgrades(player, map[UpgradeType]int{
 		StatUpgradeCannonDamage: botCannonDamageLevel,
 		StatUpgradeCannonRange:  botCannonRangeLevel,
 		StatUpgradeReloadSpeed:  botReloadSpeedLevel,
@@ -115,6 +115,7 @@ func (w *World) applyBotLoadout(player *Player) {
 		StatUpgradeHullStrength: botHealthLevel,
 		StatUpgradeAutoRepairs:  botRegenLevel,
 	})
+	player.Modifiers.MoveSpeedMultiplier = 0.8 // Slightly slower base speed for bots
 
 	config := ShipConfiguration{
 		SideUpgrade:  NewBasicSideCannons(botSideCannonsCount),
@@ -130,6 +131,16 @@ func (w *World) applyBotLoadout(player *Player) {
 	config.UpdateUpgradePositions()
 
 	player.ShipConfig = config
+}
+
+func ForceStatUpgrades(player *Player, upgrades map[UpgradeType]int) {
+	for upgradeType, level := range upgrades {
+		player.Upgrades[upgradeType] = Upgrade{
+			Type:  upgradeType,
+			Level: level,
+		}
+	}
+	player.updateModifiers()
 }
 
 func (w *World) updateBots() {
@@ -301,7 +312,6 @@ func (w *World) respawnBot(bot *Bot, now time.Time) {
 	player.VelX = 0
 	player.VelY = 0
 	player.Angle = 0
-	player.AngularVelocity = 0
 	player.AutofireEnabled = true
 	player.RespawnTime = time.Time{}
 	player.LastRegenTime = now

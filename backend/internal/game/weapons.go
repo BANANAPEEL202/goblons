@@ -43,9 +43,8 @@ type Cannon struct {
 
 // CanFire checks if the cannon is ready to fire based on reload time
 func (c *Cannon) CanFire(player *Player, now time.Time) bool {
-	effects := GetStatUpgradeEffects(player)
-	reloadTime := float64(c.Stats.ReloadTime) * float64(effects["reloadSpeedMultiplier"])
-	return now.Sub(c.LastFireTime).Seconds() >= reloadTime
+	reloadTime := c.Stats.ReloadTime * player.Modifiers.ReloadSpeedMultiplier
+	return float32(now.Sub(c.LastFireTime).Seconds()) >= reloadTime
 }
 
 // Fire creates bullets from this cannon
@@ -72,33 +71,16 @@ func (c *Cannon) Fire(world *World, player *Player, targetAngle float32, now tim
 			bulletAngle += spreadOffset
 		}
 
-		// Get stat upgrade effects
-		effects := GetStatUpgradeEffects(player)
-
 		// Base bullet velocity with cannon range upgrade
 		bulletSpeed := BulletSpeed * c.Stats.BulletSpeedMod
-		bulletSpeed += effects["bulletSpeed"] // Add cannon range bonus
+		bulletSpeed *= player.Modifiers.BulletSpeedMultiplier
 		bulletVelX := float32(math.Cos(float64(bulletAngle))) * bulletSpeed
 		bulletVelY := float32(math.Sin(float64(bulletAngle))) * bulletSpeed
 
-		// Add ship's linear velocity
-		//bulletVelX += player.VelX * 0.7
-		//bulletVelY += player.VelY * 0.7
-
-		// Add tangential velocity from ship rotation
-		/*
-			if player.AngularVelocity != 0 {
-				tangentialVelX := -player.AngularVelocity * c.Position.Y
-				tangentialVelY := player.AngularVelocity * c.Position.X
-				bulletVelX += tangentialVelX
-				bulletVelY += tangentialVelY
-			}
-		*/
-
 		// Calculate bullet damage and size with upgrades
 		baseDamage := float32(BulletDamage) * c.Stats.BulletDamageMod
-		finalDamage := baseDamage + effects["bulletDamage"]            // Add cannon damage bonus
-		bulletSize := BulletSize*c.Stats.Size + effects["bulletWidth"] // Add bullet width bonus
+		finalDamage := baseDamage * player.Modifiers.BulletDamageMultiplier // Add cannon damage bonus
+		bulletSize := BulletSize * c.Stats.Size
 
 		bullet := &Bullet{
 			ID:        world.bulletID,
@@ -152,9 +134,9 @@ func (t *Turret) CanFire(player *Player, targetX, targetY float32, now time.Time
 		if t.NextCannonIndex >= len(t.Cannons) {
 			t.NextCannonIndex = 0
 		}
-		effects := GetStatUpgradeEffects(player)
+
 		cannon := t.Cannons[t.NextCannonIndex]
-		reloadTime := float64(cannon.Stats.ReloadTime) * float64(effects["reloadSpeedMultiplier"])
+		reloadTime := float64(cannon.Stats.ReloadTime) * float64(player.Modifiers.ReloadSpeedMultiplier)
 		return now.Sub(t.LastFireTime).Seconds() >= reloadTime
 	} else {
 		// For regular turrets, check if any cannon can fire
@@ -178,9 +160,8 @@ func (t *Turret) Fire(world *World, player *Player, now time.Time) []*Bullet {
 		}
 
 		// Check turret reload time instead of individual cannon reload
-		effects := GetStatUpgradeEffects(player)
 		cannon := &t.Cannons[t.NextCannonIndex]
-		reloadTime := float64(cannon.Stats.ReloadTime) * float64(effects["reloadSpeedMultiplier"])
+		reloadTime := float64(cannon.Stats.ReloadTime) * float64(player.Modifiers.ReloadSpeedMultiplier)
 
 		if now.Sub(t.LastFireTime).Seconds() >= reloadTime {
 			// Fire the specific cannon with proper position calculation
@@ -211,7 +192,7 @@ func (t *Turret) Fire(world *World, player *Player, now time.Time) []*Bullet {
 
 				// Base bullet velocity with cannon range upgrade
 				bulletSpeed := BulletSpeed * cannon.Stats.BulletSpeedMod
-				bulletSpeed += effects["bulletSpeed"]
+				bulletSpeed *= player.Modifiers.BulletSpeedMultiplier
 				bulletVelX := float32(math.Cos(float64(bulletAngle))) * bulletSpeed
 				bulletVelY := float32(math.Sin(float64(bulletAngle))) * bulletSpeed
 
@@ -221,8 +202,8 @@ func (t *Turret) Fire(world *World, player *Player, now time.Time) []*Bullet {
 
 				// Calculate bullet damage and size with upgrades
 				baseDamage := float32(BulletDamage) * cannon.Stats.BulletDamageMod
-				finalDamage := baseDamage + effects["bulletDamage"]
-				bulletSize := BulletSize*cannon.Stats.Size + effects["bulletWidth"]
+				finalDamage := baseDamage * player.Modifiers.BulletDamageMultiplier // Add cannon damage bonus
+				bulletSize := BulletSize * cannon.Stats.Size
 
 				bullet := &Bullet{
 					ID:        world.bulletID,
@@ -303,9 +284,9 @@ func NewTurretCannon() CannonStats {
 
 func NewMachineGunCannon() CannonStats {
 	return CannonStats{
-		ReloadTime:      0.5,
-		BulletSpeedMod:  0.8,
-		BulletDamageMod: 0.3,
+		ReloadTime:      0.3,
+		BulletSpeedMod:  0.7,
+		BulletDamageMod: 0.25,
 		BulletCount:     1,
 		SpreadAngle:     0,
 		Range:           0,
@@ -328,7 +309,7 @@ func NewChaseCannon() CannonStats {
 func NewBigCannon() CannonStats {
 	return CannonStats{
 		ReloadTime:      2,
-		BulletSpeedMod:  1.2,
+		BulletSpeedMod:  1,
 		BulletDamageMod: 5,
 		BulletCount:     1,
 		SpreadAngle:     0,

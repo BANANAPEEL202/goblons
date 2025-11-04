@@ -18,12 +18,16 @@ const (
 	BaseShipMaxSpeed  = 4    // Maximum speed (doubled for 30 TPS)
 )
 
+const (
+	HealthIncrease = 50
+)
+
 // Cannon and bullet constants
 const (
 	BulletSpeed    = 12  // Bullet travel speed (doubled for 30 TPS)
 	BulletLifetime = 2   // Seconds before bullet disappears
 	BulletSize     = 8.0 // Bullet radius
-	BulletDamage   = 6   // Damage per bullet hit (unchanged)
+	BulletDamage   = 4   // Damage per bullet hit (unchanged)
 )
 
 // Message types for client-server communication
