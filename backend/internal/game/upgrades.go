@@ -32,9 +32,6 @@ type ShipUpgrade struct {
 	Turrets []*Turret     `json:"turrets"` // Turret weapons (if applicable)
 
 	NextUpgrades []*ShipUpgrade `json:"nextUpgrades,omitempty"` // Possible next upgrades
-
-	ShipWidthModifier  float32 `json:"shipWidthModifier"`  // Width modification (1.0 = no change)
-	ShipLengthModifier float32 `json:"shipLengthModifier"` // Length modification (1.0 = no change)
 }
 
 // ShipConfiguration holds all upgrades for a ship
@@ -295,7 +292,7 @@ func NewScatterSideCannons(cannonCount int) *ShipUpgrade {
 		Cannons: cannons,
 		Effect: UpgradeEffect{
 			SpeedMultiplier:     0.92, // Slower due to heavier scatter cannons
-			TurnRateMultiplier:  0.88, // Slower turning due to weight and length
+			TurnRateMultiplier:  0.95, // Slower turning due to weight and length
 			ShipWidthMultiplier: 1,
 		},
 	}
@@ -303,15 +300,15 @@ func NewScatterSideCannons(cannonCount int) *ShipUpgrade {
 
 func NewBasicTurrets(turretCount int) *ShipUpgrade {
 	turretCount = int(math.Max(0, float64(turretCount))) // Ensure non-negative
-	turretCannon := Cannon{
-		ID:    1,
-		Angle: 0, // Will be controlled by turret aiming
-		Stats: NewTurretCannon(),
-		Type:  WeaponTypeCannon,
-	}
 
 	turrets := make([]*Turret, turretCount)
 	for i := 0; i < turretCount; i++ {
+		turretCannon := Cannon{
+			ID:    uint32(i),
+			Angle: 0, // Will be controlled by turret aiming
+			Stats: NewTurretCannon(),
+			Type:  WeaponTypeCannon,
+		}
 		turret := &Turret{
 			ID:      uint32(i + 1),
 			Angle:   0, // Will be controlled by turret aiming
@@ -334,7 +331,38 @@ func NewBasicTurrets(turretCount int) *ShipUpgrade {
 	}
 }
 
-func NewMachineGunTurrest(turretCount int) *ShipUpgrade {
+func NewBigTurrets(turretCount int) *ShipUpgrade {
+	turretCount = int(math.Max(0, float64(turretCount))) // Ensure non-negative
+	turrets := make([]*Turret, turretCount)
+	for i := 0; i < turretCount; i++ {
+		turretCannon := Cannon{
+			ID:    uint32(i),
+			Angle: 0, // Will be controlled by turret aiming
+			Stats: NewBigCannon(),
+			Type:  WeaponTypeCannon,
+		}
+		turret := &Turret{
+			ID:      uint32(i + 1),
+			Angle:   0, // Will be controlled by turret aiming
+			Cannons: []Cannon{turretCannon},
+			Type:    WeaponTypeBigTurret,
+		}
+		turrets[i] = turret
+	}
+	return &ShipUpgrade{
+		Type:    UpgradeTypeTop,
+		Name:    "Big Turret",
+		Count:   turretCount,
+		Turrets: turrets,
+		Effect: UpgradeEffect{
+			SpeedMultiplier:     0.9,
+			TurnRateMultiplier:  0.9,
+			ShipWidthMultiplier: 1.05,
+		},
+	}
+}
+
+func NewMachineGunTurret(turretCount int) *ShipUpgrade {
 	turretCount = int(math.Max(0, float64(turretCount))) // Ensure non-negative
 
 	turrets := make([]*Turret, turretCount)
@@ -398,20 +426,24 @@ func NewTopUpgradeTree() *ShipUpgrade {
 	turret3 := NewBasicTurrets(3)
 
 	// Build the machine gun turret upgrade path: 1 -> 2
-	machineGunTurret1 := NewMachineGunTurrest(1)
-	machineGunTurret2 := NewMachineGunTurrest(2)
+	machineGunTurret1 := NewMachineGunTurret(1)
+	machineGunTurret2 := NewMachineGunTurret(2)
+
+	bigTurret1 := NewBigTurrets(1)
+	bigTurret2 := NewBigTurrets(2)
 
 	// Link the upgrade paths
 	// From root, you can choose basic turret or machine gun turret
 	root.NextUpgrades = []*ShipUpgrade{turret1, machineGunTurret1}
 
 	// Basic turret path
-	turret1.NextUpgrades = []*ShipUpgrade{turret2}
+	turret1.NextUpgrades = []*ShipUpgrade{turret2, bigTurret1}
 	turret2.NextUpgrades = []*ShipUpgrade{turret3}
+
+	bigTurret1.NextUpgrades = []*ShipUpgrade{bigTurret2}
 
 	// machine gun path
 	machineGunTurret1.NextUpgrades = []*ShipUpgrade{machineGunTurret2}
-
 	return root
 }
 
@@ -476,9 +508,22 @@ func NewRowingUpgrade(oarCount int) *ShipUpgrade {
 		Count:   oarCount,
 		Cannons: oars,
 		Effect: UpgradeEffect{
-			SpeedMultiplier:     1.1 + float32(oarCount)*0.05, // Increase speed based on oar count
-			TurnRateMultiplier:  0.9,
+			SpeedMultiplier:     1.0 + float32(oarCount)*0.05, // Increase speed based on oar count
+			TurnRateMultiplier:  0.7,
 			ShipWidthMultiplier: 1.0, // No effect on width
+		},
+	}
+}
+
+func NewRudderUpgrade() *ShipUpgrade {
+	return &ShipUpgrade{
+		Type:  UpgradeTypeRear,
+		Name:  "Rudder",
+		Count: 1,
+		Effect: UpgradeEffect{
+			SpeedMultiplier:     1.0,
+			TurnRateMultiplier:  1.2, // Improved turn rate
+			ShipWidthMultiplier: 1.0,
 		},
 	}
 }
@@ -489,8 +534,8 @@ func NewRamUpgrade() *ShipUpgrade {
 		Name:  "Ram",
 		Count: 1,
 		Effect: UpgradeEffect{
-			SpeedMultiplier:     0.97, // Slightly slower due to heavy ram
-			TurnRateMultiplier:  0.95,
+			SpeedMultiplier:     0.8, // Slightly slower due to heavy ram
+			TurnRateMultiplier:  0.8,
 			ShipWidthMultiplier: 1.0,
 		},
 	}
@@ -570,13 +615,25 @@ func (sc *ShipConfiguration) GetAvailableUpgrades(upgradeType UpgradeType) []*Sh
 
 	case UpgradeTypeRear:
 		if sc.RearUpgrade == nil {
-			// TODO: Implement rear upgrade tree when available
-			return []*ShipUpgrade{}
+			root := NewRearUpgradeTree()
+			return root.NextUpgrades
 		}
 		return sc.RearUpgrade.NextUpgrades
 	}
 
 	return availableUpgrades
+}
+
+func NewRearUpgradeTree() *ShipUpgrade {
+	// Placeholder for rear upgrade tree
+	root := &ShipUpgrade{
+		Type: UpgradeTypeRear,
+		Name: "No Rear Upgrades",
+	}
+
+	rudder := NewRudderUpgrade()
+	root.NextUpgrades = []*ShipUpgrade{rudder}
+	return root
 }
 
 // ApplyUpgrade applies a selected upgrade to the ship configuration
@@ -667,6 +724,7 @@ func applyStatUpgradeEffects(player *Player, upgradeType StatUpgradeType) {
 		player.MaxHealth += healthIncrease
 		player.Health += healthIncrease     // Heal on upgrade
 		player.ShipConfig.ShipWidth *= 1.01 // Small width increase per level
+		player.ShipConfig.UpdateUpgradePositions()
 	}
 }
 
@@ -692,11 +750,11 @@ func GetStatUpgradeEffects(player *Player) map[string]float32 {
 
 	// Cannon Damage effects
 	damageLevel := player.StatUpgrades[StatUpgradeCannonDamage].Level
-	effects["bulletDamage"] = float32(damageLevel) * 0.3
+	effects["bulletDamage"] = float32(damageLevel) * 0.1
 
 	// Reload Speed effects
 	reloadLevel := player.StatUpgrades[StatUpgradeReloadSpeed].Level
-	effects["reloadSpeedMultiplier"] = 1.0 - (float32(reloadLevel) * 0.03) // 4% faster per level
+	effects["reloadSpeedMultiplier"] = 1.0 - (float32(reloadLevel) * 0.02) // 2% faster per level
 
 	// Move Speed effects
 	moveLevel := player.StatUpgrades[StatUpgradeMoveSpeed].Level
@@ -704,7 +762,7 @@ func GetStatUpgradeEffects(player *Player) map[string]float32 {
 
 	// Turn Speed effects
 	turnLevel := player.StatUpgrades[StatUpgradeTurnSpeed].Level
-	effects["turnSpeedBonus"] = float32(turnLevel) * 0.001
+	effects["turnSpeedBonus"] = float32(turnLevel) * 0.003
 
 	// Body Damage effects
 	bodyLevel := player.StatUpgrades[StatUpgradeBodyDamage].Level

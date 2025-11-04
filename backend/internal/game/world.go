@@ -204,7 +204,7 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 	lengthFactor := baseShipLength / player.ShipConfig.ShipLength // Longer ships get smaller factor
 
 	// Apply turn speed upgrade
-	baseTurnSpeed := BaseShipTurnSpeed + statEffects["turnSpeedBonus"]
+	baseTurnSpeed := BaseShipTurnSpeed*player.ShipConfig.GetTotalUpgradeEffects().TurnRateMultiplier + statEffects["turnSpeedBonus"]
 	scaledTurnSpeed := baseTurnSpeed * turnFactor * lengthFactor
 
 	// Handle turning (A/D keys) and track angular velocity
@@ -505,8 +505,8 @@ func (w *World) resetPlayerShipConfig(player *Player) {
 
 		SideUpgrade:  NewSideUpgradeTree(),
 		TopUpgrade:   NewTopUpgradeTree(),
-		FrontUpgrade: nil,
-		RearUpgrade:  nil,
+		FrontUpgrade: NewFrontUpgradeTree(),
+		RearUpgrade:  NewRearUpgradeTree(),
 		ShipLength:   shipLength,
 		ShipWidth:    shipWidth,
 		Size:         PlayerSize,
@@ -834,7 +834,7 @@ func (w *World) updateBullets() {
 			// Only do expensive collision check if close enough (player size + some margin)
 			if distSq < 10000 && w.checkBulletPlayerCollision(bullet, player) { // 100^2 = 10000
 				// Apply damage through mechanics system (handles death + rewards)
-				damage := bullet.Damage
+				damage := bullet.Damage + bullet.Damage*int(GetStatUpgradeEffects(attacker)["bulletDamage"])
 				if damage == 0 {
 					damage = BulletDamage // Fallback to default for legacy bullets
 				}
