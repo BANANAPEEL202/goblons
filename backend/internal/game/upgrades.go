@@ -447,7 +447,6 @@ func NewTopUpgradeTree() *ShipUpgrade {
 
 	// machine gun path
 	machineGunTurret1.NextUpgrades = []*ShipUpgrade{machineGunTurret2}
-	return bigTurret1
 	return root
 }
 
@@ -732,7 +731,7 @@ func GetStatUpgradeEffects(player *Player) map[string]float32 {
 
 	// Reload Speed effects
 	reloadLevel := player.StatUpgrades[StatUpgradeReloadSpeed].Level
-	effects["reloadSpeedMultiplier"] = 1.0 - (float32(reloadLevel) * 0.03) // 4% faster per level
+	effects["reloadSpeedMultiplier"] = 1.0 - (float32(reloadLevel) * 0.02) // 2% faster per level
 
 	// Move Speed effects
 	moveLevel := player.StatUpgrades[StatUpgradeMoveSpeed].Level
