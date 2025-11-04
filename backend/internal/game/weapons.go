@@ -52,7 +52,10 @@ func (c *Cannon) Fire(world *World, player *Player, targetAngle float32, now tim
 	if !c.CanFire(player, now) {
 		return nil
 	}
+	return c.ForceFire(world, player, targetAngle, now)
+}
 
+func (c *Cannon) ForceFire(world *World, player *Player, targetAngle float32, now time.Time) []*Bullet {
 	bullets := make([]*Bullet, 0, c.Stats.BulletCount)
 
 	// Calculate world position of cannon
@@ -127,28 +130,6 @@ func (t *Turret) UpdateAiming(player *Player, targetX, targetY float32) {
 	t.Angle = targetAngle
 }
 
-// CanFire checks if any cannon in the turret can fire and target is in range
-func (t *Turret) CanFire(player *Player, targetX, targetY float32, now time.Time) bool {
-	if t.Type == WeaponTypeMachineGunTurret && len(t.Cannons) > 1 {
-		// For twin turrets, check turret reload time (shared between cannons)
-		if t.NextCannonIndex >= len(t.Cannons) {
-			t.NextCannonIndex = 0
-		}
-
-		cannon := t.Cannons[t.NextCannonIndex]
-		reloadTime := float64(cannon.Stats.ReloadTime) * float64(player.Modifiers.ReloadSpeedMultiplier)
-		return now.Sub(t.LastFireTime).Seconds() >= reloadTime
-	} else {
-		// For regular turrets, check if any cannon can fire
-		for _, cannon := range t.Cannons {
-			if cannon.CanFire(player, now) {
-				return true
-			}
-		}
-		return false
-	}
-}
-
 // Fire makes all cannons in the turret fire (simultaneously or alternating based on type)
 func (t *Turret) Fire(world *World, player *Player, now time.Time) []*Bullet {
 	var allBullets []*Bullet
@@ -164,63 +145,7 @@ func (t *Turret) Fire(world *World, player *Player, now time.Time) []*Bullet {
 		reloadTime := float64(cannon.Stats.ReloadTime) * float64(player.Modifiers.ReloadSpeedMultiplier)
 
 		if now.Sub(t.LastFireTime).Seconds() >= reloadTime {
-			// Fire the specific cannon with proper position calculation
-			bullets := make([]*Bullet, 0, cannon.Stats.BulletCount)
-
-			// Calculate world position of cannon (turret position + cannon offset)
-			shipCos := float32(math.Cos(float64(player.Angle)))
-			shipSin := float32(math.Sin(float64(player.Angle)))
-
-			// First, get turret world position relative to ship (rotated by ship angle)
-			turretWorldX := player.X + (t.Position.X*shipCos - t.Position.Y*shipSin)
-			turretWorldY := player.Y + (t.Position.X*shipSin + t.Position.Y*shipCos)
-
-			// Then, add cannon offset relative to turret (rotated by turret angle)
-			turretCos := float32(math.Cos(float64(t.Angle)))
-			turretSin := float32(math.Sin(float64(t.Angle)))
-			worldX := turretWorldX + (cannon.Position.X*turretCos - cannon.Position.Y*turretSin)
-			worldY := turretWorldY + (cannon.Position.X*turretSin + cannon.Position.Y*turretCos)
-
-			// Create bullets
-			for i := 0; i < cannon.Stats.BulletCount; i++ {
-				// Calculate bullet angle (with spread for multi-bullet cannons)
-				bulletAngle := t.Angle
-				if cannon.Stats.BulletCount > 1 {
-					spreadOffset := cannon.Stats.SpreadAngle * (float32(i)/float32(cannon.Stats.BulletCount-1) - 0.5)
-					bulletAngle += spreadOffset
-				}
-
-				// Base bullet velocity with cannon range upgrade
-				bulletSpeed := BulletSpeed * cannon.Stats.BulletSpeedMod
-				bulletSpeed *= player.Modifiers.BulletSpeedMultiplier
-				bulletVelX := float32(math.Cos(float64(bulletAngle))) * bulletSpeed
-				bulletVelY := float32(math.Sin(float64(bulletAngle))) * bulletSpeed
-
-				// Add ship's linear velocity
-				//bulletVelX += player.VelX * 0.7
-				//bulletVelY += player.VelY * 0.7
-
-				// Calculate bullet damage and size with upgrades
-				baseDamage := float32(BulletDamage) * cannon.Stats.BulletDamageMod
-				finalDamage := baseDamage * player.Modifiers.BulletDamageMultiplier // Add cannon damage bonus
-				bulletSize := BulletSize * cannon.Stats.Size
-
-				bullet := &Bullet{
-					ID:        world.bulletID,
-					X:         worldX,
-					Y:         worldY,
-					VelX:      bulletVelX,
-					VelY:      bulletVelY,
-					OwnerID:   player.ID,
-					CreatedAt: now,
-					Size:      bulletSize,
-					Damage:    int(finalDamage),
-				}
-
-				bullets = append(bullets, bullet)
-				world.bulletID++
-			}
-
+			bullets := cannon.ForceFire(world, player, t.Angle, now)
 			allBullets = append(allBullets, bullets...)
 
 			// Move to next cannon for alternating fire
