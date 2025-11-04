@@ -1404,6 +1404,7 @@ drawPlayer(player) {
       const turretSize = size * 0.5;
       const barrelLength = size * 0.5;
       const barrelWidth = size * 0.2;
+      let baseSize = turretSize * 0.5;
       
       ctx.save();
       ctx.translate(turret.position.x, turret.position.y);
@@ -1444,14 +1445,54 @@ drawPlayer(player) {
         const rightRecoil = (lastFiredIndex === 1) ? recoilOffset : 0;
         ctx.fillRect(rightRecoil, barrelSeparation/2 - barrelWidth/2, barrelLength, barrelWidth);
         ctx.strokeRect(rightRecoil, barrelSeparation/2 - barrelWidth/2, barrelLength, barrelWidth);
-      } else {
+        baseSize = turretSize * 0.6;
+      } 
+      else if (turret.type === 'big_turret') {
+        const bigBarrelWidth = barrelWidth * 2;
+
+        // Proportions
+        const baseLength = barrelLength*1.2;
+        const muzzleLength = barrelLength * 0.5;
+        const baseWidthBack = bigBarrelWidth * 1.5; // slightly wider at the turret
+        const baseWidthFront = bigBarrelWidth * 1; // slightly narrower where it meets the barrel
+
+        // --- Draw trapezoidal base (wide at turret, narrower toward barrel) ---
+        ctx.beginPath();
+        ctx.moveTo(recoilOffset, -baseWidthBack / 2); // top back (turret side)
+        ctx.lineTo(recoilOffset + baseLength, -baseWidthFront / 2); // top front (joins barrel)
+        ctx.lineTo(recoilOffset + baseLength, baseWidthFront / 2);  // bottom front
+        ctx.lineTo(recoilOffset, baseWidthBack / 2); // bottom back
+        ctx.closePath();
+        ctx.fillStyle = '#666';
+        ctx.fill();
+        ctx.stroke();
+
+        // --- Draw main rectangular barrel extending forward from trapezoid ---
+        ctx.fillStyle = '#666';
+        ctx.fillRect(
+          recoilOffset + baseLength,           // start right after trapezoid
+          -baseWidthFront / 2,                 // vertically centered
+          muzzleLength,                          // length of rectangular part
+          baseWidthFront                       // width matches trapezoid tip
+        );
+        ctx.strokeRect(
+          recoilOffset + baseLength,
+          -baseWidthFront / 2,
+          muzzleLength,
+          baseWidthFront
+        );
+
+        baseSize = turretSize * 0.7;
+      }
+      else {
         // Single barrel for regular turret
         ctx.fillRect(recoilOffset, -barrelWidth / 2, barrelLength, barrelWidth);
         ctx.strokeRect(recoilOffset, -barrelWidth / 2, barrelLength, barrelWidth);
+        baseSize = turretSize * 0.5;
       }
+
       
       // Draw turret base (slightly larger for machine gun turrets)
-      const baseSize = turret.type === 'machine_gun_turret' ? turretSize * 0.6 : turretSize * 0.5;
       ctx.fillStyle = '#666';
       ctx.beginPath();
       ctx.arc(0, 0, baseSize, 0, Math.PI * 2);

@@ -303,15 +303,15 @@ func NewScatterSideCannons(cannonCount int) *ShipUpgrade {
 
 func NewBasicTurrets(turretCount int) *ShipUpgrade {
 	turretCount = int(math.Max(0, float64(turretCount))) // Ensure non-negative
-	turretCannon := Cannon{
-		ID:    1,
-		Angle: 0, // Will be controlled by turret aiming
-		Stats: NewTurretCannon(),
-		Type:  WeaponTypeCannon,
-	}
 
 	turrets := make([]*Turret, turretCount)
 	for i := 0; i < turretCount; i++ {
+		turretCannon := Cannon{
+			ID:    uint32(i),
+			Angle: 0, // Will be controlled by turret aiming
+			Stats: NewTurretCannon(),
+			Type:  WeaponTypeCannon,
+		}
 		turret := &Turret{
 			ID:      uint32(i + 1),
 			Angle:   0, // Will be controlled by turret aiming
@@ -334,7 +334,38 @@ func NewBasicTurrets(turretCount int) *ShipUpgrade {
 	}
 }
 
-func NewMachineGunTurrest(turretCount int) *ShipUpgrade {
+func NewBigTurrets(turretCount int) *ShipUpgrade {
+	turretCount = int(math.Max(0, float64(turretCount))) // Ensure non-negative
+	turrets := make([]*Turret, turretCount)
+	for i := 0; i < turretCount; i++ {
+		turretCannon := Cannon{
+			ID:    uint32(i),
+			Angle: 0, // Will be controlled by turret aiming
+			Stats: NewBigCannon(),
+			Type:  WeaponTypeCannon,
+		}
+		turret := &Turret{
+			ID:      uint32(i + 1),
+			Angle:   0, // Will be controlled by turret aiming
+			Cannons: []Cannon{turretCannon},
+			Type:    WeaponTypeBigTurret,
+		}
+		turrets[i] = turret
+	}
+	return &ShipUpgrade{
+		Type:    UpgradeTypeTop,
+		Name:    "Big Turret",
+		Count:   turretCount,
+		Turrets: turrets,
+		Effect: UpgradeEffect{
+			SpeedMultiplier:     0.9,
+			TurnRateMultiplier:  0.9,
+			ShipWidthMultiplier: 1.05,
+		},
+	}
+}
+
+func NewMachineGunTurret(turretCount int) *ShipUpgrade {
 	turretCount = int(math.Max(0, float64(turretCount))) // Ensure non-negative
 
 	turrets := make([]*Turret, turretCount)
@@ -398,20 +429,25 @@ func NewTopUpgradeTree() *ShipUpgrade {
 	turret3 := NewBasicTurrets(3)
 
 	// Build the machine gun turret upgrade path: 1 -> 2
-	machineGunTurret1 := NewMachineGunTurrest(1)
-	machineGunTurret2 := NewMachineGunTurrest(2)
+	machineGunTurret1 := NewMachineGunTurret(1)
+	machineGunTurret2 := NewMachineGunTurret(2)
+
+	bigTurret1 := NewBigTurrets(1)
+	bigTurret2 := NewBigTurrets(2)
 
 	// Link the upgrade paths
 	// From root, you can choose basic turret or machine gun turret
 	root.NextUpgrades = []*ShipUpgrade{turret1, machineGunTurret1}
 
 	// Basic turret path
-	turret1.NextUpgrades = []*ShipUpgrade{turret2}
+	turret1.NextUpgrades = []*ShipUpgrade{turret2, bigTurret1}
 	turret2.NextUpgrades = []*ShipUpgrade{turret3}
+
+	bigTurret1.NextUpgrades = []*ShipUpgrade{bigTurret2}
 
 	// machine gun path
 	machineGunTurret1.NextUpgrades = []*ShipUpgrade{machineGunTurret2}
-
+	return bigTurret1
 	return root
 }
 
@@ -692,7 +728,7 @@ func GetStatUpgradeEffects(player *Player) map[string]float32 {
 
 	// Cannon Damage effects
 	damageLevel := player.StatUpgrades[StatUpgradeCannonDamage].Level
-	effects["bulletDamage"] = float32(damageLevel) * 0.3
+	effects["bulletDamage"] = float32(damageLevel) * 0.1
 
 	// Reload Speed effects
 	reloadLevel := player.StatUpgrades[StatUpgradeReloadSpeed].Level

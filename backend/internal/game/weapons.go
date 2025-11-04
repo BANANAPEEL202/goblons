@@ -16,6 +16,7 @@ const (
 	WeaponTypeRudder           WeaponType = "rudder"
 	WeaponTypeScatter          WeaponType = "scatter"
 	WeaponTypeRow              WeaponType = "row"
+	WeaponTypeBigTurret        WeaponType = "big_turret"
 )
 
 // CannonStats holds the properties of a cannon
@@ -321,6 +322,18 @@ func NewChaseCannon() CannonStats {
 		SpreadAngle:     0,
 		Range:           0,
 		Size:            0.7,
+	}
+}
+
+func NewBigCannon() CannonStats {
+	return CannonStats{
+		ReloadTime:      2,
+		BulletSpeedMod:  1.2,
+		BulletDamageMod: 5,
+		BulletCount:     1,
+		SpreadAngle:     0,
+		Range:           0,
+		Size:            1.5,
 	}
 }
 

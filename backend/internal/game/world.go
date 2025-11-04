@@ -834,7 +834,7 @@ func (w *World) updateBullets() {
 			// Only do expensive collision check if close enough (player size + some margin)
 			if distSq < 10000 && w.checkBulletPlayerCollision(bullet, player) { // 100^2 = 10000
 				// Apply damage through mechanics system (handles death + rewards)
-				damage := bullet.Damage
+				damage := bullet.Damage + bullet.Damage*int(GetStatUpgradeEffects(attacker)["bulletDamage"])
 				if damage == 0 {
 					damage = BulletDamage // Fallback to default for legacy bullets
 				}
