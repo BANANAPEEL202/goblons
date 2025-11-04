@@ -165,6 +165,25 @@ func (sc *ShipConfiguration) UpdateUpgradePositions() {
 			}
 		}
 	}
+
+	frontUpgrade := sc.FrontUpgrade
+	if frontUpgrade != nil && len(frontUpgrade.Cannons) > 0 {
+		// position the 2 front cannons on the left and right sides of the front of the ship
+		gunWidth := sc.Size * 0.2
+		gunOffsetX := sc.ShipLength/2 + 10
+		// left cannon
+		frontUpgrade.Cannons[0].Position = Position{
+			X: gunOffsetX,
+			Y: sc.ShipWidth/2 - gunWidth/2,
+		}
+		frontUpgrade.Cannons[0].Angle = 0 // Facing forward
+		frontUpgrade.Cannons[1].Position = Position{
+			X: gunOffsetX,
+			Y: -sc.ShipWidth/2 + gunWidth/2,
+		}
+		frontUpgrade.Cannons[1].Angle = 0 // Facing forward
+	}
+
 }
 
 // CalculateShipDimensions calculates ship size based on upgrades
@@ -377,7 +396,6 @@ func NewTopUpgradeTree() *ShipUpgrade {
 	turret1 := NewBasicTurrets(1)
 	turret2 := NewBasicTurrets(2)
 	turret3 := NewBasicTurrets(3)
-	turret4 := NewBasicTurrets(4)
 
 	// Build the machine gun turret upgrade path: 1 -> 2
 	machineGunTurret1 := NewMachineGunTurrest(1)
@@ -390,7 +408,6 @@ func NewTopUpgradeTree() *ShipUpgrade {
 	// Basic turret path
 	turret1.NextUpgrades = []*ShipUpgrade{turret2}
 	turret2.NextUpgrades = []*ShipUpgrade{turret3}
-	turret3.NextUpgrades = []*ShipUpgrade{turret4}
 
 	// machine gun path
 	machineGunTurret1.NextUpgrades = []*ShipUpgrade{machineGunTurret2}
@@ -479,6 +496,37 @@ func NewRamUpgrade() *ShipUpgrade {
 	}
 }
 
+func NewChaseCannonUpgrade() *ShipUpgrade {
+	cannon1 := &Cannon{
+		ID:    1,
+		Angle: 0, // Forward facing
+		Stats: NewChaseCannon(),
+		Type:  WeaponTypeCannon,
+	}
+
+	cannon2 := &Cannon{
+		ID:    2,
+		Angle: 0, // Forward facing
+		Stats: NewChaseCannon(),
+		Type:  WeaponTypeCannon,
+	}
+
+	return &ShipUpgrade{
+		Type:  UpgradeTypeFront,
+		Name:  "Chase Cannons",
+		Count: 2,
+		Cannons: []*Cannon{
+			cannon1,
+			cannon2,
+		},
+		Effect: UpgradeEffect{
+			SpeedMultiplier:     0.95, // Slower due to added weight
+			TurnRateMultiplier:  0.9,
+			ShipWidthMultiplier: 1.0,
+		},
+	}
+}
+
 func NewFrontUpgradeTree() *ShipUpgrade {
 	root := &ShipUpgrade{
 		Type: UpgradeTypeFront,
@@ -486,7 +534,8 @@ func NewFrontUpgradeTree() *ShipUpgrade {
 	}
 
 	ram := NewRamUpgrade()
-	root.NextUpgrades = []*ShipUpgrade{ram}
+	chaseCannons := NewChaseCannonUpgrade()
+	root.NextUpgrades = []*ShipUpgrade{ram, chaseCannons}
 
 	return root
 }
@@ -635,7 +684,7 @@ func GetStatUpgradeEffects(player *Player) map[string]float32 {
 
 	// Auto Repairs effects
 	repairLevel := player.StatUpgrades[StatUpgradeAutoRepairs].Level
-	effects["healthRegen"] = float32(repairLevel) * 0.7
+	effects["healthRegen"] = float32(repairLevel) * 0.6
 
 	// Cannon Range effects
 	rangeLevel := player.StatUpgrades[StatUpgradeCannonRange].Level
@@ -643,7 +692,7 @@ func GetStatUpgradeEffects(player *Player) map[string]float32 {
 
 	// Cannon Damage effects
 	damageLevel := player.StatUpgrades[StatUpgradeCannonDamage].Level
-	effects["bulletDamage"] = float32(damageLevel) * 0.4
+	effects["bulletDamage"] = float32(damageLevel) * 0.3
 
 	// Reload Speed effects
 	reloadLevel := player.StatUpgrades[StatUpgradeReloadSpeed].Level

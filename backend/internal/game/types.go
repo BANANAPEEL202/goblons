@@ -247,7 +247,7 @@ func NewPlayer(id uint32) *Player {
 	shipConfig := ShipConfiguration{
 		SideUpgrade:  NewSideUpgradeTree(),
 		TopUpgrade:   NewTopUpgradeTree(),
-		FrontUpgrade: nil,
+		FrontUpgrade: NewFrontUpgradeTree(),
 		RearUpgrade:  nil,
 		ShipLength:   shipLength,
 		ShipWidth:    shipWidth,
@@ -277,15 +277,6 @@ func NewPlayer(id uint32) *Player {
 	InitializeStatUpgrades(player)
 
 	return player
-}
-
-// calculateCollisionRadius calculates the collision radius based on ship dimensions
-func calculateCollisionRadius(length, width float32) float32 {
-	// Use the larger dimension divided by 2 as the collision radius
-	if length > width {
-		return length / 2
-	}
-	return width / 2
 }
 
 func generateRandomColor() string {
