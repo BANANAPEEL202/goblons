@@ -163,6 +163,13 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 		return
 	}
 
+	// Handle autofire toggle (works even in lobby)
+	if input.ToggleAutofire {
+		player.AutofireEnabled = !player.AutofireEnabled
+		log.Printf("Player %d toggled autofire %s", player.ID, map[bool]string{true: "ON", false: "OFF"}[player.AutofireEnabled])
+		input.ToggleAutofire = false // Clear input
+	}
+
 	if player.State != StateAlive {
 		return
 	}
@@ -334,13 +341,6 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 				player.ID, statUpgradeType, player.Upgrades[statUpgradeType].Level, player.Coins)
 		}
 		input.StatUpgradeType = "" // Clear input
-	}
-
-	// Handle autofire toggle
-	if input.ToggleAutofire {
-		player.AutofireEnabled = !player.AutofireEnabled
-		log.Printf("Player %d toggled autofire %s", player.ID, map[bool]string{true: "ON", false: "OFF"}[player.AutofireEnabled])
-		input.ToggleAutofire = false // Clear input
 	}
 
 	// Handle health regeneration from auto repairs upgrade
