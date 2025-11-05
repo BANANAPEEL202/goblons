@@ -11,6 +11,8 @@ class GameClient {
       color: sanitizeHexColor(options.playerColor),
     };
     this.autoConnect = options.autoConnect !== false;
+    this.shouldStartGame = options.shouldStartGame || false; // Flag to auto-start game
+    this.hasStartedGame = false; // Track if player has already started the game
     this.canvas = document.getElementById('game');
     this.ctx = this.canvas.getContext('2d');
     this.socket = null;
@@ -307,6 +309,13 @@ class GameClient {
       this.isConnected = true;
       this.pendingConnectConfig = null;
       this.updateConnectionStatus(true);
+      
+      // If player has started the game before or should start now, send startGame
+      if (this.shouldStartGame || this.hasStartedGame) {
+        this.sendStartGame();
+        this.shouldStartGame = false; // Reset flag
+      }
+      
       if (!this.controlsLocked) {
         this.sendInput();
       }
@@ -2529,6 +2538,19 @@ drawPlayer(player) {
     }
   }
 
+  sendStartGame() {
+    if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+      this.socket.send(JSON.stringify({
+        type: 'startGame',
+        startGame: true
+      }));
+      this.hasStartedGame = true; // Mark that player has started the game
+      console.log('Sent startGame message to server');
+    } else {
+      console.log('Cannot send startGame: socket not ready');
+    }
+  }
+
   clearActiveInputs() {
     this.input.up = false;
     this.input.down = false;
@@ -2759,12 +2781,35 @@ class StartScreen {
     document.body.classList.add('has-launched');
 
     if (this.client) {
-      this.client.applyProfile(chosenName, chosenColor);
+      // Update profile locally
+      this.client.playerConfig.name = chosenName;
+      this.client.playerConfig.color = chosenColor;
+      
+      // Send profile update to server
+      if (this.client.socket && this.client.socket.readyState === WebSocket.OPEN) {
+        this.client.socket.send(JSON.stringify({
+          type: 'profile',
+          playerName: chosenName,
+          playerColor: chosenColor
+        }));
+      }
+      
+      // Ensure client is connected before sending start game
+      if (!this.client.socket || this.client.socket.readyState !== WebSocket.OPEN) {
+        this.client.connect({ playerName: chosenName, playerColor: chosenColor });
+        // Set flag to send startGame after connection
+        this.client.shouldStartGame = true;
+      } else {
+        // Client is already connected, send startGame immediately
+        this.client.sendStartGame();
+      }
+      
       this.client.setControlsLocked(false);
     } else {
       window.goblonsClient = new GameClient({
         playerName: chosenName,
         playerColor: chosenColor,
+        shouldStartGame: true // Flag to send startGame after connecting
       });
     }
   }

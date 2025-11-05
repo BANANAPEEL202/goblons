@@ -61,6 +61,7 @@ type InputMsg struct {
 	ManualFire     bool `json:"manualFire"`     // Manual fire command
 	// Respawn request
 	RequestRespawn bool   `json:"requestRespawn"` // Player requests to respawn
+	StartGame      bool   `json:"startGame"`      // Player starts the game from lobby
 	PlayerName     string `json:"playerName"`
 	PlayerColor    string `json:"playerColor"`
 	Mouse          struct {

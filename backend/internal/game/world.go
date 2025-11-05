@@ -78,10 +78,10 @@ func (w *World) AddClient(client *Client) bool {
 	w.clients[client.ID] = client
 	w.players[client.ID] = client.Player
 
-	// Spawn player at random safe location
-	client.Player.spawn()
+	// Keep player in dead state until they press "Set Sail"
+	client.Player.State = StateDead
 
-	// Initialize ship dimensions and weapon positions
+	// Initialize ship dimensions and weapon positions (but don't spawn yet)
 	client.Player.updateShipGeometry()
 
 	// Send welcome message to the new client with their player ID
@@ -90,7 +90,7 @@ func (w *World) AddClient(client *Client) bool {
 	// Send available upgrades
 	sendAvailableUpgrades(client)
 
-	log.Printf("Player %d (%s) joined the game (%d/%d players)", client.ID, client.Player.Name, len(w.clients), MaxPlayers)
+	log.Printf("Player %d (%s) joined the lobby (%d/%d players)", client.ID, client.Player.Name, len(w.clients), MaxPlayers)
 	return true
 }
 
@@ -618,6 +618,12 @@ func (w *World) HandleInput(clientID uint32, input InputMsg) {
 		}
 		if sanitizedColor := SanitizePlayerColor(input.PlayerColor); sanitizedColor != "" {
 			client.Player.Color = sanitizedColor
+		}
+	case "startGame":
+		// When player presses "Set Sail", spawn them into the game
+		if client.Player.State == StateDead && input.StartGame {
+			client.Player.spawn()
+			log.Printf("Player %d (%s) set sail and entered the game", client.ID, client.Player.Name)
 		}
 	default:
 		client.Input = input
