@@ -247,10 +247,10 @@ func NewTopUpgradeTree() *ShipModule {
 
 	// Link the upgrade paths
 	// From root, you can choose basic turret or machine gun turret
-	root.NextUpgrades = []*ShipModule{turret1, machineGunTurret1}
+	root.NextUpgrades = []*ShipModule{machineGunTurret1, turret1}
 
 	// Basic turret path
-	turret1.NextUpgrades = []*ShipModule{turret2, bigTurret1}
+	turret1.NextUpgrades = []*ShipModule{bigTurret1, turret2}
 	turret2.NextUpgrades = []*ShipModule{turret3}
 
 	bigTurret1.NextUpgrades = []*ShipModule{bigTurret2}
@@ -321,7 +321,7 @@ func NewRowingUpgrade(oarCount int) *ShipModule {
 		Count:   oarCount,
 		Cannons: oars,
 		Effect: ModuleModifier{
-			SpeedMultiplier:     0.1,
+			SpeedMultiplier:     0.05,
 			TurnRateMultiplier:  -0.05,
 			ShipWidthMultiplier: 1.0, // No effect on width
 		},

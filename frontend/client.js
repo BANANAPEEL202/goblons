@@ -161,11 +161,11 @@ class GameClient {
     // Keyboard input
     document.addEventListener('keydown', (e) => {
       this.handleKeyDown(e);
-    });
+    }, { passive: false });
     
     document.addEventListener('keyup', (e) => {
       this.handleKeyUp(e);
-    });
+    }, { passive: false });
     
     // Mouse input
     this.canvas.addEventListener('mousemove', (e) => {

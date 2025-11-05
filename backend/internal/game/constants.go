@@ -19,7 +19,7 @@ const (
 )
 
 const (
-	HealthIncrease = 50
+	HealthIncrease = 30
 )
 
 // Cannon and bullet constants
