@@ -137,8 +137,8 @@ func NewBasicTurrets(turretCount int) *ShipModule {
 		Count:   turretCount,
 		Turrets: turrets,
 		Effect: ModuleModifier{
-			SpeedMultiplier:     -0.05,
-			TurnRateMultiplier:  -0.05,
+			SpeedMultiplier:     -0.03,
+			TurnRateMultiplier:  -0.03,
 			ShipWidthMultiplier: 1.0,
 		},
 	}

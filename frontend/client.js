@@ -74,6 +74,13 @@ class GameClient {
     this.statUpgradeCooldowns = {}; // key -> timestamp of last upgrade
     this.statUpgradeCooldownMs = 100; // 200ms between stat upgrades
     
+    // Track autofire toggle state
+    this.autofireTogglePending = false;
+    this.lastAutofireToggle = 0;
+    this.autofireToggleCooldownMs = 500; // 500ms between autofire toggles
+    this.clientAutofireState = null; // Client-side predicted state (null = use server state)
+    this.clientAutofireStateTimeout = null; // Timeout to clear prediction
+    
     // Track last mouse screen position for camera movement updates
     this.lastMouseScreen = { x: 0, y: 0 };
     this.lastCameraPos = { x: 0, y: 0 };
@@ -662,9 +669,36 @@ class GameClient {
       }
     }
     if (e.key === 'r' || e.key === 'R') {
-        this.input.toggleAutofire = !this.input.toggleAutofire;
-        inputChanged = true;
+      // Check cooldown to prevent spam
+      const now = Date.now();
+      if (now - this.lastAutofireToggle < this.autofireToggleCooldownMs) {
+        return; // Still on cooldown
+      }
       
+      // Prevent multiple toggles from key repeat
+      if (!this.autofireTogglePending) {
+        this.autofireTogglePending = true;
+        this.lastAutofireToggle = now;
+        
+        // Clear any existing timeout
+        if (this.clientAutofireStateTimeout) {
+          clearTimeout(this.clientAutofireStateTimeout);
+        }
+        
+        // Immediately update client-side state for instant feedback
+        if (this.gameState.myPlayer) {
+          this.clientAutofireState = !this.gameState.myPlayer.autofireEnabled;
+        }
+        
+        // Clear prediction after 1 second (server should have responded by then)
+        this.clientAutofireStateTimeout = setTimeout(() => {
+          this.clientAutofireState = null;
+          this.clientAutofireStateTimeout = null;
+        }, 1000);
+        
+        this.input.toggleAutofire = true;
+        this.sendAutofireToggle();
+      }
     }
     
     if (inputChanged) {
@@ -758,10 +792,8 @@ class GameClient {
       }
     }
     if (e.key === 'r' || e.key === 'R') {
-      if (this.input.toggleAutofire) {
-        this.input.toggleAutofire = false;
-        inputChanged = true;
-      }
+      // Clear pending flag on key release
+      this.autofireTogglePending = false;
     }
     
     if (inputChanged) {
@@ -981,6 +1013,31 @@ class GameClient {
     console.log('Sending upgrade:', this.input.selectUpgrade, this.input.upgradeChoice);
     this.socket.send(JSON.stringify(this.input));
     this.upgradeUI.upgradeSent = true;
+  }
+  
+  sendAutofireToggle() {
+    // Special send for autofire toggle
+    if (this.controlsLocked) {
+      console.log('Controls locked, cannot toggle autofire');
+      this.autofireTogglePending = false;
+      this.input.toggleAutofire = false;
+      return;
+    }
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+      console.log('Socket not ready, cannot toggle autofire');
+      this.autofireTogglePending = false;
+      this.input.toggleAutofire = false;
+      return;
+    }
+    
+    console.log('Toggling autofire');
+    this.socket.send(JSON.stringify(this.input));
+    
+    // Clear the toggle flag after sending
+    setTimeout(() => {
+      this.input.toggleAutofire = false;
+      this.autofireTogglePending = false;
+    }, 100);
   }
 
   updateClientPrediction() {
@@ -1393,7 +1450,6 @@ drawPlayer(player) {
   }
 
   if (player.shipConfig && player.shipConfig.rearUpgrade) {
-    console.log(player.shipConfig.rearUpgrade);
     if (player.shipConfig.rearUpgrade.name == 'Rudder') {
       const rudderLength = size * 0.25;
       const rudderWidth = shaftWidth * 0.3;
@@ -1864,6 +1920,9 @@ drawPlayer(player) {
     
     // Draw upgrade UI
     this.drawUpgradeUI();
+    
+    // Draw autofire status (bottom left)
+    this.drawAutofireStatus();
 
     this.drawKillNotifications();
   }
@@ -2489,6 +2548,47 @@ drawPlayer(player) {
     this.input.statUpgradeType = '';
     this.input.toggleAutofire = false;
   }
+
+  drawAutofireStatus() {
+    if (!this.gameState.myPlayer) return;
+    
+    const player = this.gameState.myPlayer;
+    
+    // Use client-side predicted state if available and timeout hasn't expired, otherwise use server state
+    const serverState = player.autofireEnabled !== false;
+    const autofireEnabled = this.clientAutofireState !== null ? this.clientAutofireState : serverState;
+    
+    // Position at bottom left of screen
+    const padding = 20;
+    const textWidth = 140;
+    const textHeight = 24;
+    const boxX = padding;
+    const boxY = this.screenHeight - padding - textHeight;
+    const textX = padding + textWidth/2;
+    const textY = this.screenHeight - padding - textHeight/2;
+    
+    this.ctx.save();
+    
+    // Draw background box - using game colors
+    this.ctx.fillStyle = autofireEnabled ? 'rgba(76, 175, 80, 0.7)' : 'rgba(255, 68, 68, 0.7)';
+    this.drawRoundedRect(boxX, boxY, textWidth, textHeight, 8);
+    this.ctx.fill();
+    
+    // Draw border - using game colors
+    this.ctx.strokeStyle = autofireEnabled ? '#4CAF50' : '#ff4444';
+    this.ctx.lineWidth = 3;
+    this.drawRoundedRect(boxX, boxY, textWidth, textHeight, 8);
+    this.ctx.stroke();
+    
+    // Draw text
+    this.ctx.fillStyle = '#ffffff';
+    this.ctx.font = 'bold 14px Arial';
+    this.ctx.textAlign = 'center';
+    this.ctx.textBaseline = 'middle';
+    this.ctx.fillText(`Autofire: ${autofireEnabled ? 'ON' : 'OFF'} (R)`, textX, textY);
+    
+    this.ctx.restore();
+  }
 }
 
 function sanitizePlayerName(name) {
@@ -2667,38 +2767,6 @@ class StartScreen {
         playerColor: chosenColor,
       });
     }
-  }
-
-  drawAutofireStatus() {
-    if (!this.gameState.myPlayer) return;
-    
-    const player = this.gameState.myPlayer;
-    const autofireEnabled = player.autofireEnabled !== false; // Default to true if not set
-    
-    // Position at bottom center of screen
-    const x = this.canvas.width / 2;
-    const y = this.canvas.height - 30;
-    
-    this.ctx.save();
-    
-    // Draw background
-    this.ctx.fillStyle = autofireEnabled ? 'rgba(0, 255, 0, 0.3)' : 'rgba(255, 0, 0, 0.3)';
-    this.ctx.strokeStyle = autofireEnabled ? '#00ff00' : '#ff0000';
-    this.ctx.lineWidth = 2;
-    
-    const textWidth = 140;
-    const textHeight = 20;
-    
-    this.ctx.fillRect(x - textWidth/2, y - textHeight/2, textWidth, textHeight);
-    this.ctx.strokeRect(x - textWidth/2, y - textHeight/2, textWidth, textHeight);
-    
-    // Draw text
-    this.ctx.fillStyle = '#ffffff';
-    this.ctx.font = 'bold 14px Arial';
-    this.ctx.textAlign = 'center';
-    this.ctx.fillText(`Autofire: ${autofireEnabled ? 'ON' : 'OFF'} (R)`, x, y + 4);
-    
-    this.ctx.restore();
   }
 }
 
