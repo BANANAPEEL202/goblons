@@ -67,7 +67,7 @@ func NewBasicSideCannons(cannonCount int) *ShipModule {
 		Cannons: cannons,
 		Effect: ModuleModifier{
 			SpeedMultiplier:     -0.05, // Slightly slower due to weight
-			TurnRateMultiplier:  -0.05, // Slower turning due to length
+			TurnRateMultiplier:  0,     // avoid double penalty for length and num cannons
 			ShipWidthMultiplier: 1.0,
 		},
 	}

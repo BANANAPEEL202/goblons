@@ -67,7 +67,12 @@ class GameClient {
       availableUpgrades: {},     // stores available upgrades for each type
       pendingUpgrade: false,     // prevents multiple upgrade selections
       optionPositions: {},       // stores click positions for upgrade options
+      upgradeSent: false,        // tracks if current upgrade was successfully sent
     };
+    
+    // Track stat upgrade cooldowns to prevent spam
+    this.statUpgradeCooldowns = {}; // key -> timestamp of last upgrade
+    this.statUpgradeCooldownMs = 100; // 200ms between stat upgrades
     
     // Track last mouse screen position for camera movement updates
     this.lastMouseScreen = { x: 0, y: 0 };
@@ -336,6 +341,10 @@ class GameClient {
         this.upgradeUI.availableUpgrades = data.upgrades || {};
         // Reset pending upgrade flag since server has processed our request
         this.upgradeUI.pendingUpgrade = false;
+        // Clear the upgrade inputs since server has processed them
+        this.input.selectUpgrade = '';
+        this.input.upgradeChoice = '';
+        this.upgradeUI.upgradeSent = false;
         break;
         
       case 'snapshot':
@@ -565,6 +574,12 @@ class GameClient {
     if (this.controlsLocked) {
       return;
     }
+    
+    // Handle stat upgrade keys (1-8) with cooldown
+    if (e.key >= '1' && e.key <= '8') {
+      this.handleStatUpgradeKey(parseInt(e.key));
+      return; // Don't send other inputs for number keys
+    }
 
     let inputChanged = false;
     
@@ -650,12 +665,6 @@ class GameClient {
         this.input.toggleAutofire = !this.input.toggleAutofire;
         inputChanged = true;
       
-    }
-    
-    // Handle stat upgrade keys (1-8)
-    if (e.key >= '1' && e.key <= '8') {
-      this.handleStatUpgradeKey(parseInt(e.key));
-      // Don't set inputChanged since we handle this separately
     }
     
     if (inputChanged) {
@@ -845,27 +854,40 @@ class GameClient {
     
     // Mark as pending to prevent duplicate selections
     this.upgradeUI.pendingUpgrade = true;
+    this.upgradeUI.upgradeSent = false;
     
-    // Send upgrade selection to server
+    // Set upgrade selection to be sent
     this.input.selectUpgrade = upgradeType;
     this.input.upgradeChoice = upgradeId;
-    this.sendInput();
-    
     
     // Clear selected upgrade type to hide the options
     this.upgradeUI.selectedUpgradeType = null;
     
-    // Reset pending flag after a delay (or when server confirms upgrade)
+    // Attempt to send immediately
+    this.sendUpgradeInput();
+    
+    // Fallback timeout in case server doesn't respond
     setTimeout(() => {
-      this.upgradeUI.pendingUpgrade = false;
-          // Reset upgrade selection inputs immediately to prevent repeated sending
-    this.input.selectUpgrade = '';
-    this.input.upgradeChoice = '';
-    }, 500);
+      // If still pending after timeout, clear everything
+      if (this.upgradeUI.pendingUpgrade) {
+        console.log('Upgrade timeout - clearing state');
+        this.upgradeUI.pendingUpgrade = false;
+        this.input.selectUpgrade = '';
+        this.input.upgradeChoice = '';
+        this.upgradeUI.upgradeSent = false;
+      }
+    }, 2000); // Longer timeout for server response
   }
 
   handleStatUpgradeKey(keyNumber) {
     if (!this.gameState.myPlayer || !this.gameState.myPlayer.statUpgrades) return;
+    
+    // Check cooldown to prevent spam
+    const now = Date.now();
+    const lastUpgrade = this.statUpgradeCooldowns[keyNumber] || 0;
+    if (now - lastUpgrade < this.statUpgradeCooldownMs) {
+      return; // Still on cooldown
+    }
     
     const player = this.gameState.myPlayer;
     
@@ -924,6 +946,9 @@ class GameClient {
       return;
     }
     
+    // Update cooldown timestamp
+    this.statUpgradeCooldowns[keyNumber] = Date.now();
+    
     // Send stat upgrade request
     this.input.statUpgradeType = statKey;
     this.sendInput();
@@ -940,6 +965,22 @@ class GameClient {
       return;
     }
     this.socket.send(JSON.stringify(this.input));
+  }
+  
+  sendUpgradeInput() {
+    // Special send for upgrades that marks them as sent
+    if (this.controlsLocked) {
+      console.log('Controls locked, cannot send upgrade');
+      return;
+    }
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+      console.log('Socket not ready, cannot send upgrade');
+      return;
+    }
+    
+    console.log('Sending upgrade:', this.input.selectUpgrade, this.input.upgradeChoice);
+    this.socket.send(JSON.stringify(this.input));
+    this.upgradeUI.upgradeSent = true;
   }
 
   updateClientPrediction() {
@@ -2201,7 +2242,7 @@ drawPlayer(player) {
     if (player.availableUpgrades > 0) {
       this.ctx.fillStyle = '#FFFFFF';
       this.ctx.font = 'bold 18px Arial';
-      this.ctx.fillText(`${player.availableUpgrades} Upgrade${player.availableUpgrades > 1 ? 's' : ''} Available!`, this.screenWidth / 2, barY - 20);
+      this.ctx.fillText(`${player.availableUpgrades} Modules${player.availableUpgrades > 1 ? 's' : ''} Available!`, this.screenWidth / 2, barY - 20);
     }
   }
   
