@@ -8,13 +8,12 @@ import (
 )
 
 const (
-	botCount                     = 3
+	botCount                     = 5
 	botGuardRadius       float32 = 100.0
 	botAggroRadius       float32 = 1000.0
 	botTargetDistance    float32 = 500.0
 	botPreferredDistance float32 = 200.0
 	botDistanceSlack     float32 = 80.0
-	botMaxHealth         int     = 160
 	botSideCannonsCount  int     = 2
 	botTopTurretCount    int     = 1
 	botDecisionInterval          = 250 * time.Millisecond
@@ -69,8 +68,6 @@ func (w *World) spawnInitialBots() {
 		player.X = spawnPos.X
 		player.Y = spawnPos.Y
 		player.Angle = 0
-		player.Health = botMaxHealth
-		player.MaxHealth = botMaxHealth
 		player.AutofireEnabled = true
 		player.LastRegenTime = now
 		player.LastCollisionDamage = now
@@ -116,6 +113,7 @@ func (w *World) applyBotLoadout(player *Player) {
 		StatUpgradeAutoRepairs:  botRegenLevel,
 	})
 	player.Modifiers.MoveSpeedMultiplier = 0.8 // Slightly slower base speed for bots
+	player.Health = player.MaxHealth
 
 	config := ShipConfiguration{
 		SideUpgrade:  NewBasicSideCannons(botSideCannonsCount),
@@ -304,8 +302,6 @@ func (w *World) respawnBot(bot *Bot, now time.Time) {
 		Y: float32(rand.Intn(int(WorldHeight-200)) + 100),
 	}
 
-	player.Health = botMaxHealth
-	player.MaxHealth = botMaxHealth
 	player.State = StateAlive
 	player.X = spawnPos.X
 	player.Y = spawnPos.Y

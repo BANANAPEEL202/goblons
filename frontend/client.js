@@ -1,6 +1,6 @@
 // Game constants (should match backend)
-const WorldWidth = 3000.0;
-const WorldHeight = 3000.0;
+const WorldWidth = 5000.0;
+const WorldHeight = 5000.0;
 const PRESET_COLORS = ['#FF0040', '#00FF80', '#0080FF', '#FF8000', '#8000FF'];
 const NAME_POOL = ['Pirate', 'Buccaneer', 'Sailor', 'Captain', 'Admiral', 'Navigator', 'Corsair', 'Raider'];
 
@@ -591,13 +591,14 @@ class GameClient {
       return;
     }
     
+    let inputChanged = false;
+    
     // Handle stat upgrade keys (1-8) with cooldown
     if (e.key >= '1' && e.key <= '8') {
-      this.handleStatUpgradeKey(parseInt(e.key));
-      return; // Don't send other inputs for number keys
+      if (this.handleStatUpgradeKey(parseInt(e.key))) {
+        inputChanged = true; // Upgrade was processed, ensure input is sent
+      }
     }
-
-    let inputChanged = false;
     
     if (e.key === 'w' || e.key === 'W' || e.key === 'ArrowUp') {
       if (!this.input.up) {
@@ -712,6 +713,8 @@ class GameClient {
     
     if (inputChanged) {
       this.sendInput();
+      // Clear upgrade input after sending
+      this.input.statUpgradeType = '';
     }
   }
 
@@ -921,13 +924,13 @@ class GameClient {
   }
 
   handleStatUpgradeKey(keyNumber) {
-    if (!this.gameState.myPlayer || !this.gameState.myPlayer.statUpgrades) return;
+    if (!this.gameState.myPlayer || !this.gameState.myPlayer.statUpgrades) return false;
     
     // Check cooldown to prevent spam
     const now = Date.now();
     const lastUpgrade = this.statUpgradeCooldowns[keyNumber] || 0;
     if (now - lastUpgrade < this.statUpgradeCooldownMs) {
-      return; // Still on cooldown
+      return false; // Still on cooldown
     }
     
     const player = this.gameState.myPlayer;
@@ -956,10 +959,10 @@ class GameClient {
     };
     
     const statKey = statKeyMap[keyNumber];
-    if (!statKey) return;
+    if (!statKey) return false;
     
     const statUpgrade = player.statUpgrades[statKey];
-    if (!statUpgrade) return;
+    if (!statUpgrade) return false;
     
     const level = statUpgrade.level || 0;
     const maxLevel = statUpgrade.maxLevel || 15;
@@ -974,27 +977,26 @@ class GameClient {
     
     if (level >= maxLevel) {
       console.log(`${statNames[statKey]} is already at maximum level (${maxLevel})`);
-      return;
+      return false;
     }
     
     if (totalUpgrades >= 75) {
       console.log(`Cannot upgrade ${statNames[statKey]} - Total upgrade limit reached (75/75)`);
-      return;
+      return false;
     }
     
     if (coins < cost) {
       console.log(`Not enough coins to upgrade ${statNames[statKey]}. Need ${cost}, have ${coins}`);
-      return;
+      return false;
     }
     
     // Update cooldown timestamp
     this.statUpgradeCooldowns[keyNumber] = Date.now();
     
-    // Send stat upgrade request
+    // Set stat upgrade request (will be sent by main input logic)
     this.input.statUpgradeType = statKey;
-    this.sendInput();
-    this.input.statUpgradeType = ''; // Clear immediately
     console.log(`Upgrading ${statNames[statKey]} (Level ${level} -> ${level + 1}) for ${cost} coins`);
+    return true;
   }
 
 

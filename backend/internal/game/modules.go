@@ -322,7 +322,7 @@ func NewRowingUpgrade(oarCount int) *ShipModule {
 		Cannons: oars,
 		Effect: ModuleModifier{
 			SpeedMultiplier:     0.05,
-			TurnRateMultiplier:  -0.05,
+			TurnRateMultiplier:  -0.1,
 			ShipWidthMultiplier: 1.0, // No effect on width
 		},
 	}
@@ -347,8 +347,8 @@ func NewRamUpgrade() *ShipModule {
 		Name:  "Ram",
 		Count: 1,
 		Effect: ModuleModifier{
-			SpeedMultiplier:     -0.3, // Slightly slower due to heavy ram
-			TurnRateMultiplier:  -0.3,
+			SpeedMultiplier:     -0.2,
+			TurnRateMultiplier:  -0.2,
 			ShipWidthMultiplier: 1.0,
 		},
 	}

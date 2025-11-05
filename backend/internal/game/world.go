@@ -170,6 +170,16 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 		input.ToggleAutofire = false // Clear input
 	}
 
+	// Handle stat upgrade purchases
+	if input.StatUpgradeType != "" {
+		statUpgradeType := UpgradeType(input.StatUpgradeType)
+		if player.BuyUpgrade(statUpgradeType) {
+			log.Printf("Player %d upgraded %s to level %d, coins remaining: %d",
+				player.ID, statUpgradeType, player.Upgrades[statUpgradeType].Level, player.Coins)
+		}
+		input.StatUpgradeType = "" // Clear input
+	}
+
 	if player.State != StateAlive {
 		return
 	}
@@ -331,16 +341,6 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 		// Clear upgrade input to prevent multiple upgrades per frame
 		input.SelectUpgrade = ""
 		input.UpgradeChoice = ""
-	}
-
-	// Handle stat upgrade purchases
-	if input.StatUpgradeType != "" {
-		statUpgradeType := UpgradeType(input.StatUpgradeType)
-		if player.BuyUpgrade(statUpgradeType) {
-			log.Printf("Player %d upgraded %s to level %d, coins remaining: %d",
-				player.ID, statUpgradeType, player.Upgrades[statUpgradeType].Level, player.Coins)
-		}
-		input.StatUpgradeType = "" // Clear input
 	}
 
 	// Handle health regeneration from auto repairs upgrade
@@ -684,7 +684,7 @@ func (w *World) updateBullets() {
 			// Only do expensive collision check if close enough (player size + some margin)
 			if distSq < 10000 && w.checkBulletPlayerCollision(bullet, player) { // 100^2 = 10000
 				// Apply damage through mechanics system (handles death + rewards)
-				damage := bullet.Damage + bullet.Damage*int(attacker.Modifiers.BodyDamageBonus)
+				damage := bullet.Damage * int(attacker.Modifiers.BulletDamageMultiplier)
 				if damage == 0 {
 					damage = BulletDamage // Fallback to default for legacy bullets
 				}

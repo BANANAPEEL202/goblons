@@ -199,8 +199,9 @@ func (player *Player) updateModifiers() {
 
 	hullLevel := player.Upgrades[StatUpgradeHullStrength].Level
 	moveLevel := player.Upgrades[StatUpgradeMoveSpeed].Level
+	ramLevel := player.Upgrades[StatUpgradeBodyDamage].Level
 	// speed multipler is -1% per hull level, +2% per move level
-	player.Modifiers.MoveSpeedMultiplier = 1.0 - float32(hullLevel)*0.01 + float32(moveLevel)*0.02
+	player.Modifiers.MoveSpeedMultiplier = 1.0 - float32(hullLevel)*0.01 - float32(ramLevel)*0.01 + float32(moveLevel)*0.02
 	player.Modifiers.MoveSpeedMultiplier += moduleSpeedModifier
 
 	repairLevel := player.Upgrades[StatUpgradeAutoRepairs].Level
@@ -216,9 +217,8 @@ func (player *Player) updateModifiers() {
 	player.Modifiers.ReloadSpeedMultiplier = 1.0 - (float32(reloadLevel) * 0.03) // 2% faster per level
 
 	turnLevel := player.Upgrades[StatUpgradeTurnSpeed].Level
-	player.Modifiers.TurnSpeedMultiplier = 1 + float32(turnLevel)*0.02
+	player.Modifiers.TurnSpeedMultiplier = 1 + float32(turnLevel)*0.02 - float32(ramLevel)*0.01
 	player.Modifiers.TurnSpeedMultiplier += moduleTurnSpeedMultiplier
 
-	bodyLevel := player.Upgrades[StatUpgradeBodyDamage].Level
-	player.Modifiers.BodyDamageBonus = float32(bodyLevel) * 0.5
+	player.Modifiers.BodyDamageBonus = float32(ramLevel) * 0.5
 }
