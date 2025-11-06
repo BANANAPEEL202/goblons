@@ -310,7 +310,7 @@ func NewPlayer(id uint32) *Player {
 		Experience:          0,
 		AvailableUpgrades:   0,
 		ShipConfig:          shipConfig,
-		Coins:               10000, // Starting coins
+		Coins:               0, // Starting coins
 		Upgrades:            make(map[UpgradeType]Upgrade),
 		LastRegenTime:       time.Now(),                 // Initialize health regen timer
 		LastProcessedAction: 0,                          // No actions processed yet
