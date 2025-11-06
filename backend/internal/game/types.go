@@ -39,35 +39,43 @@ type Upgrade struct {
 
 // InputMsg represents player input from client
 type InputMsg struct {
-	Type             string `json:"type"`
-	Up               bool   `json:"up"`
-	Down             bool   `json:"down"`
-	Left             bool   `json:"left"`
-	Right            bool   `json:"right"`
-	UpgradeCannons   bool   `json:"upgradeCannons"`
-	DowngradeCannons bool   `json:"downgradeCannons"`
-	UpgradeScatter   bool   `json:"upgradeScatter"`
-	DowngradeScatter bool   `json:"downgradeScatter"`
-	UpgradeTurrets   bool   `json:"upgradeTurrets"`
-	DowngradeTurrets bool   `json:"downgradeTurrets"`
-	// New leveling system inputs
-	DebugLevelUp  bool   `json:"debugLevelUp"`
-	SelectUpgrade string `json:"selectUpgrade"` // "side", "top", "front", "rear"
-	UpgradeChoice string `json:"upgradeChoice"` // Specific upgrade ID/name
-	// Stat upgrade inputs
-	StatUpgradeType string `json:"statUpgradeType"` // Which stat to upgrade
-	// Autofire toggle
-	ToggleAutofire bool `json:"toggleAutofire"` // Toggle autofire on/off
-	ManualFire     bool `json:"manualFire"`     // Manual fire command
-	// Respawn request
-	RequestRespawn bool   `json:"requestRespawn"` // Player requests to respawn
-	StartGame      bool   `json:"startGame"`      // Player starts the game from lobby
-	PlayerName     string `json:"playerName"`
-	PlayerColor    string `json:"playerColor"`
-	Mouse          struct {
+	Type string `json:"type"`
+	// Movement inputs (continuous state)
+	Up    bool `json:"up"`
+	Down  bool `json:"down"`
+	Left  bool `json:"left"`
+	Right bool `json:"right"`
+	// Action inputs (single-fire events with sequence numbers)
+	Actions []InputAction `json:"actions,omitempty"`
+	// Mouse position
+	Mouse struct {
 		X float32 `json:"x"`
 		Y float32 `json:"y"`
 	} `json:"mouse"`
+	// Legacy inputs (deprecated but kept for compatibility)
+	UpgradeCannons   bool   `json:"upgradeCannons,omitempty"`
+	DowngradeCannons bool   `json:"downgradeCannons,omitempty"`
+	UpgradeScatter   bool   `json:"upgradeScatter,omitempty"`
+	DowngradeScatter bool   `json:"downgradeScatter,omitempty"`
+	UpgradeTurrets   bool   `json:"upgradeTurrets,omitempty"`
+	DowngradeTurrets bool   `json:"downgradeTurrets,omitempty"`
+	DebugLevelUp     bool   `json:"debugLevelUp,omitempty"`
+	SelectUpgrade    string `json:"selectUpgrade,omitempty"`
+	UpgradeChoice    string `json:"upgradeChoice,omitempty"`
+	StatUpgradeType  string `json:"statUpgradeType,omitempty"`
+	ToggleAutofire   bool   `json:"toggleAutofire,omitempty"`
+	ManualFire       bool   `json:"manualFire,omitempty"`
+	RequestRespawn   bool   `json:"requestRespawn,omitempty"`
+	StartGame        bool   `json:"startGame,omitempty"`
+	PlayerName       string `json:"playerName,omitempty"`
+	PlayerColor      string `json:"playerColor,omitempty"`
+}
+
+// InputAction represents a single-fire action with deduplication
+type InputAction struct {
+	Type     string `json:"type"`     // "statUpgrade", "toggleAutofire", etc.
+	Sequence uint32 `json:"sequence"` // Client-side sequence number for deduplication
+	Data     string `json:"data"`     // Action-specific data (e.g., stat type for upgrades)
 }
 
 // Position represents the relative position of a single cannon from ship center
@@ -128,6 +136,9 @@ type Player struct {
 	LastCollisionDamage time.Time `json:"-"` // Last collision damage time
 	// Autofire toggle state
 	AutofireEnabled bool `json:"autofireEnabled"` // Whether autofire is currently enabled
+	// Action processing state (for deduplication)
+	LastProcessedAction uint32               `json:"-"` // Last processed action sequence number
+	ActionCooldowns     map[string]time.Time `json:"-"` // Cooldowns per action type
 	// Death tracking
 	KilledBy     uint32    `json:"killedBy"`     // ID of player who killed this player (0 if none)
 	KilledByName string    `json:"killedByName"` // Name of player who killed this player
@@ -301,8 +312,10 @@ func NewPlayer(id uint32) *Player {
 		ShipConfig:          shipConfig,
 		Coins:               10000, // Starting coins
 		Upgrades:            make(map[UpgradeType]Upgrade),
-		LastRegenTime:       time.Now(), // Initialize health regen timer
-		LastCollisionDamage: time.Now(), // Initialize collision damage timer
+		LastRegenTime:       time.Now(),                 // Initialize health regen timer
+		LastProcessedAction: 0,                          // No actions processed yet
+		ActionCooldowns:     make(map[string]time.Time), // Initialize cooldown map
+		LastCollisionDamage: time.Now(),                 // Initialize collision damage timer
 	}
 
 	// Initialize stat upgrades

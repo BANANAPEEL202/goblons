@@ -23,12 +23,18 @@ class GameClient {
       bullets: [],
       myPlayer: null
     };
-    this.input = { 
+    this.input = {
       type: 'input',
-      up: false, 
-      down: false, 
+      // Movement inputs (continuous state)
+      up: false,
+      down: false,
       left: false, 
       right: false,
+      // Action queue (event-based with sequence numbers)
+      actions: [],
+      // Mouse position
+      mouse: { x: 0, y: 0 },
+      // Legacy fields (kept for compatibility during transition)
       shootLeft: false,
       shootRight: false,
       upgradeCannons: false,
@@ -44,7 +50,14 @@ class GameClient {
       toggleAutofire: false,
       manualFire: false,
       requestRespawn: false,
-      mouse: { x: 0, y: 0 }
+    };
+    
+    // Action sequencing for deduplication
+    this.actionSequence = 0;
+    this.pendingActions = new Map(); // actionType -> {sequence, timestamp}
+    this.actionCooldowns = {
+      statUpgrade: 100,     // 150ms between stat upgrades (matches backend)
+      toggleAutofire: 400,  // 400ms between autofire toggles (matches backend)
     };
     
     // Ship physics properties for client-side prediction
@@ -63,7 +76,12 @@ class GameClient {
     this.screenWidth = window.innerWidth;
     this.screenHeight = window.innerHeight;
     
-        // UI state for upgrade system
+    // Input sending interval
+    this.inputSendInterval = null;
+    this.isSendingInput = false; // Prevent concurrent sends
+    this.lastInputSendTime = 0; // Track last send time for throttling
+    
+    // UI state for upgrade system
     this.upgradeUI = {
       selectedUpgradeType: null, // 'side', 'top', 'front', 'rear'
       availableUpgrades: {},     // stores available upgrades for each type
@@ -71,17 +89,6 @@ class GameClient {
       optionPositions: {},       // stores click positions for upgrade options
       upgradeSent: false,        // tracks if current upgrade was successfully sent
     };
-    
-    // Track stat upgrade cooldowns to prevent spam
-    this.statUpgradeCooldowns = {}; // key -> timestamp of last upgrade
-    this.statUpgradeCooldownMs = 100; // 200ms between stat upgrades
-    
-    // Track autofire toggle state
-    this.autofireTogglePending = false;
-    this.lastAutofireToggle = 0;
-    this.autofireToggleCooldownMs = 500; // 500ms between autofire toggles
-    this.clientAutofireState = null; // Client-side predicted state (null = use server state)
-    this.clientAutofireStateTimeout = null; // Timeout to clear prediction
     
     // Track last mouse screen position for camera movement updates
     this.lastMouseScreen = { x: 0, y: 0 };
@@ -310,6 +317,18 @@ class GameClient {
       this.pendingConnectConfig = null;
       this.updateConnectionStatus(true);
       
+      // Start regular input sending interval (30 times per second to match server tick rate)
+      if (this.inputSendInterval) {
+        clearInterval(this.inputSendInterval);
+      }
+      this.inputSendInterval = setInterval(() => {
+        // Send input regularly if we have any movement state or queued actions
+        if (!this.controlsLocked && (this.input.up || this.input.down || this.input.left || 
+            this.input.right || this.input.actions.length > 0)) {
+          this.sendInput();
+        }
+      }, 33); // ~30 FPS (server tick rate)
+      
       // If player has started the game before or should start now, send startGame
       if (this.shouldStartGame || this.hasStartedGame) {
         this.sendStartGame();
@@ -331,6 +350,13 @@ class GameClient {
       this.isConnected = false;
       this.socket = null;
       this.updateConnectionStatus(false);
+      
+      // Clear input send interval
+      if (this.inputSendInterval) {
+        clearInterval(this.inputSendInterval);
+        this.inputSendInterval = null;
+      }
+      
       const reconnectConfig = this.pendingConnectConfig;
       this.pendingConnectConfig = null;
       const delay = reconnectConfig ? 150 : 3000;
@@ -646,13 +672,50 @@ class GameClient {
     
     let inputChanged = false;
     
-    // Handle stat upgrade keys (1-8) with cooldown
+    // Handle stat upgrade keys (1-8) using new action system
+    // queueAction sends immediately, so no need to set inputChanged
     if (e.key >= '1' && e.key <= '8') {
-      if (this.handleStatUpgradeKey(parseInt(e.key))) {
-        inputChanged = true; // Upgrade was processed, ensure input is sent
+      const keyNumber = parseInt(e.key);
+      const statKeyMap = {
+        1: 'hullStrength',
+        2: 'autoRepairs',
+        3: 'cannonRange', 
+        4: 'cannonDamage',
+        5: 'reloadSpeed',
+        6: 'moveSpeed',
+        7: 'turnSpeed',
+        8: 'bodyDamage'
+      };
+      
+      const statKey = statKeyMap[keyNumber];
+      if (statKey) {
+        this.queueAction('statUpgrade', statKey);
       }
+      return; // Early return, action already sent
     }
     
+    // Handle autofire toggle using new action system
+    // queueAction sends immediately, so no need to set inputChanged
+    if (e.key === 'r' || e.key === 'R') {
+      if (this.queueAction('toggleAutofire', '')) {
+        // Optimistic UI update
+        if (this.gameState.myPlayer) {
+          this.clientAutofireState = !this.gameState.myPlayer.autofireEnabled;
+          
+          // Clear prediction after 1 second
+          if (this.clientAutofireStateTimeout) {
+            clearTimeout(this.clientAutofireStateTimeout);
+          }
+          this.clientAutofireStateTimeout = setTimeout(() => {
+            this.clientAutofireState = null;
+            this.clientAutofireStateTimeout = null;
+          }, 1000);
+        }
+      }
+      return; // Early return, action already sent
+    }
+    
+    // Handle movement keys (continuous state)
     if (e.key === 'w' || e.key === 'W' || e.key === 'ArrowUp') {
       if (!this.input.up) {
         this.input.up = true;
@@ -677,6 +740,8 @@ class GameClient {
         inputChanged = true;
       }
     }
+    
+    // Legacy keys (kept for compatibility)
     if (e.key === 'q' || e.key === 'Q') {
       if (!this.input.shootLeft) {
         this.input.shootLeft = true;
@@ -731,43 +796,9 @@ class GameClient {
         inputChanged = true;
       }
     }
-    if (e.key === 'r' || e.key === 'R') {
-      // Check cooldown to prevent spam
-      const now = Date.now();
-      if (now - this.lastAutofireToggle < this.autofireToggleCooldownMs) {
-        return; // Still on cooldown
-      }
-      
-      // Prevent multiple toggles from key repeat
-      if (!this.autofireTogglePending) {
-        this.autofireTogglePending = true;
-        this.lastAutofireToggle = now;
-        
-        // Clear any existing timeout
-        if (this.clientAutofireStateTimeout) {
-          clearTimeout(this.clientAutofireStateTimeout);
-        }
-        
-        // Immediately update client-side state for instant feedback
-        if (this.gameState.myPlayer) {
-          this.clientAutofireState = !this.gameState.myPlayer.autofireEnabled;
-        }
-        
-        // Clear prediction after 1 second (server should have responded by then)
-        this.clientAutofireStateTimeout = setTimeout(() => {
-          this.clientAutofireState = null;
-          this.clientAutofireStateTimeout = null;
-        }, 1000);
-        
-        this.input.toggleAutofire = true;
-        this.sendAutofireToggle();
-      }
-    }
     
     if (inputChanged) {
       this.sendInput();
-      // Clear upgrade input after sending
-      this.input.statUpgradeType = '';
     }
   }
 
@@ -1052,6 +1083,42 @@ class GameClient {
     return true;
   }
 
+  // Queue an action with deduplication and cooldown checking
+  queueAction(actionType, data = '') {
+    const now = Date.now();
+    
+    // Check if there's a pending action of this type
+    const pending = this.pendingActions.get(actionType);
+    if (pending) {
+      const cooldown = this.actionCooldowns[actionType] || 0;
+      if (now - pending.timestamp < cooldown) {
+        return false; // Still on cooldown
+      }
+    }
+    
+    // Create new action with sequence number
+    this.actionSequence++;
+    const action = {
+      type: actionType,
+      sequence: this.actionSequence,
+      data: data
+    };
+    
+    // Track this action
+    this.pendingActions.set(actionType, {
+      sequence: this.actionSequence,
+      timestamp: now
+    });
+    
+    // Add to actions queue (clear old ones first)
+    this.input.actions = this.input.actions.filter(a => a.type !== actionType);
+    this.input.actions.push(action);
+    
+    // Immediately send the input with the queued action
+    this.sendInput();
+    
+    return true;
+  }
 
   sendInput() {
     if (this.controlsLocked) {
@@ -1060,7 +1127,34 @@ class GameClient {
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
       return;
     }
-    this.socket.send(JSON.stringify(this.input));
+    
+    // Prevent concurrent sends
+    if (this.isSendingInput) {
+      return;
+    }
+    
+    // For actions, send immediately. For regular movement, throttle to 30 FPS to match server tick rate
+    const now = Date.now();
+    const hasActions = this.input.actions.length > 0;
+    const timeSinceLastSend = now - this.lastInputSendTime;
+    
+    if (!hasActions && timeSinceLastSend < 33) {
+      // Throttle movement-only updates to 30 FPS (33ms) to match backend tick rate
+      return;
+    }
+    
+    this.isSendingInput = true;
+    this.lastInputSendTime = now;
+    
+    try {
+      // Send the current input state
+      this.socket.send(JSON.stringify(this.input));
+      
+      // Clear actions after successful send
+      this.input.actions = [];
+    } finally {
+      this.isSendingInput = false;
+    }
   }
   
   sendUpgradeInput() {

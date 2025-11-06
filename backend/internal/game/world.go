@@ -155,6 +155,67 @@ func (w *World) update() {
 	}
 }
 
+// processPlayerActions handles event-based actions with deduplication and cooldowns
+func (w *World) processPlayerActions(player *Player, input *InputMsg) {
+	now := time.Now()
+
+	// Define cooldowns for each action type
+	actionCooldowns := map[string]time.Duration{
+		"statUpgrade":    100 * time.Millisecond,
+		"toggleAutofire": 400 * time.Millisecond,
+	}
+
+	for _, action := range input.Actions {
+		// Skip if this action was already processed (deduplication)
+		if action.Sequence <= player.LastProcessedAction {
+			log.Printf("Player %d skipping already processed action seq %d (last: %d)",
+				player.ID, action.Sequence, player.LastProcessedAction)
+			continue
+		}
+
+		// Check cooldown for this action type
+		if lastTime, exists := player.ActionCooldowns[action.Type]; exists {
+			cooldown := actionCooldowns[action.Type]
+			elapsed := now.Sub(lastTime)
+			if elapsed < cooldown {
+				log.Printf("Player %d action %s on cooldown (elapsed: %dms, need: %dms), skipping seq %d",
+					player.ID, action.Type, elapsed.Milliseconds(), cooldown.Milliseconds(), action.Sequence)
+				// Still update last processed to avoid reprocessing
+				player.LastProcessedAction = action.Sequence
+				continue
+			}
+		}
+
+		// Process the action
+		handled := false
+		switch action.Type {
+		case "statUpgrade":
+			statUpgradeType := UpgradeType(action.Data)
+			if player.BuyUpgrade(statUpgradeType) {
+				log.Printf("Player %d upgraded %s to level %d, coins remaining: %d (seq: %d)",
+					player.ID, statUpgradeType, player.Upgrades[statUpgradeType].Level, player.Coins, action.Sequence)
+				handled = true
+			} else {
+				log.Printf("Player %d failed to upgrade %s (seq: %d)", player.ID, statUpgradeType, action.Sequence)
+			}
+
+		case "toggleAutofire":
+			player.AutofireEnabled = !player.AutofireEnabled
+			log.Printf("Player %d toggled autofire %s (seq: %d)", player.ID,
+				map[bool]string{true: "ON", false: "OFF"}[player.AutofireEnabled], action.Sequence)
+			handled = true
+		}
+
+		// Always update last processed sequence to avoid reprocessing
+		player.LastProcessedAction = action.Sequence
+
+		// Update cooldown only if action was successfully handled
+		if handled {
+			player.ActionCooldowns[action.Type] = now
+		}
+	}
+}
+
 // updatePlayer updates a single player's state with realistic ship physics
 func (w *World) updatePlayer(player *Player, input *InputMsg) {
 	// Handle respawn request if player is dead
@@ -163,21 +224,23 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 		return
 	}
 
-	// Handle autofire toggle (works even in lobby)
+	// Process new action-based inputs
+	w.processPlayerActions(player, input)
+
+	// Handle legacy inputs for backward compatibility
 	if input.ToggleAutofire {
 		player.AutofireEnabled = !player.AutofireEnabled
 		log.Printf("Player %d toggled autofire %s", player.ID, map[bool]string{true: "ON", false: "OFF"}[player.AutofireEnabled])
-		input.ToggleAutofire = false // Clear input
+		input.ToggleAutofire = false
 	}
 
-	// Handle stat upgrade purchases
 	if input.StatUpgradeType != "" {
 		statUpgradeType := UpgradeType(input.StatUpgradeType)
 		if player.BuyUpgrade(statUpgradeType) {
 			log.Printf("Player %d upgraded %s to level %d, coins remaining: %d",
 				player.ID, statUpgradeType, player.Upgrades[statUpgradeType].Level, player.Coins)
 		}
-		input.StatUpgradeType = "" // Clear input
+		input.StatUpgradeType = ""
 	}
 
 	if player.State != StateAlive {
@@ -901,16 +964,16 @@ func (w *World) calculateDebugInfo(player *Player) DebugInfo {
 	}
 
 	// Calculate DPS from all cannons
-	cannonDamageMod := float32(player.Upgrades[StatUpgradeCannonDamage].Level) * 0.1
-	reloadSpeedMod := float32(player.Upgrades[StatUpgradeReloadSpeed].Level) * 0.1
+	cannonDamageMod := player.Modifiers.BulletDamageMultiplier
+	reloadSpeedMod := player.Modifiers.ReloadSpeedMultiplier
 
 	// Calculate DPS for each upgrade type
 	if player.ShipConfig.FrontUpgrade != nil {
 		for _, cannon := range player.ShipConfig.FrontUpgrade.Cannons {
 			damage := float32(cannon.Stats.BulletDamageMod * BulletDamage)
 			reloadRate := cannon.Stats.ReloadTime
-			effectiveDamage := damage * (1 + cannonDamageMod)
-			effectiveReloadRate := reloadRate * (1 + reloadSpeedMod)
+			effectiveDamage := damage * (cannonDamageMod)
+			effectiveReloadRate := reloadRate * (reloadSpeedMod)
 			debugInfo.FrontDPS += effectiveDamage * 1 / effectiveReloadRate
 		}
 	}
@@ -919,8 +982,8 @@ func (w *World) calculateDebugInfo(player *Player) DebugInfo {
 		for _, cannon := range player.ShipConfig.SideUpgrade.Cannons {
 			damage := float32(cannon.Stats.BulletDamageMod * BulletDamage)
 			reloadRate := cannon.Stats.ReloadTime
-			effectiveDamage := damage * (1 + cannonDamageMod)
-			effectiveReloadRate := reloadRate * (1 + reloadSpeedMod)
+			effectiveDamage := damage * (cannonDamageMod)
+			effectiveReloadRate := reloadRate * (reloadSpeedMod)
 			debugInfo.SideDPS += effectiveDamage * 1 / effectiveReloadRate
 		}
 	}
@@ -929,8 +992,8 @@ func (w *World) calculateDebugInfo(player *Player) DebugInfo {
 		for _, cannon := range player.ShipConfig.RearUpgrade.Cannons {
 			damage := float32(cannon.Stats.BulletDamageMod * BulletDamage)
 			reloadRate := cannon.Stats.ReloadTime
-			effectiveDamage := damage * (1 + cannonDamageMod)
-			effectiveReloadRate := reloadRate * (1 + reloadSpeedMod)
+			effectiveDamage := damage * (cannonDamageMod)
+			effectiveReloadRate := reloadRate * (reloadSpeedMod)
 			debugInfo.RearDPS += effectiveDamage * 1 / effectiveReloadRate
 		}
 	}
@@ -943,8 +1006,8 @@ func (w *World) calculateDebugInfo(player *Player) DebugInfo {
 
 			damage := float32(turretCannon.Stats.BulletDamageMod * BulletDamage)
 			reloadRate := turretCannon.Stats.ReloadTime
-			effectiveDamage := damage * (1 + cannonDamageMod)
-			effectiveReloadRate := reloadRate * (1 + reloadSpeedMod)
+			effectiveDamage := damage * (cannonDamageMod)
+			effectiveReloadRate := reloadRate * (reloadSpeedMod)
 			debugInfo.TopDPS += effectiveDamage * 1 / effectiveReloadRate
 		}
 	}
