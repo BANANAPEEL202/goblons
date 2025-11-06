@@ -4,22 +4,21 @@ import (
 	"encoding/json"
 	"log"
 	"math"
-	"math/rand"
 	"time"
 )
 
 // NewWorld creates a new game world
 func NewWorld() *World {
 	world := &World{
-		clients:  make(map[uint32]*Client),
-		players:  make(map[uint32]*Player),
-		bots:     make(map[uint32]*Bot),
-		items:    make(map[uint32]*GameItem),
-		bullets:  make(map[uint32]*Bullet),
-		nextID:   1,
-		itemID:   1,
-		bulletID: 1,
-		running:  false,
+		clients:      make(map[uint32]*Client),
+		players:      make(map[uint32]*Player),
+		bots:         make(map[uint32]*Bot),
+		items:        make(map[uint32]*GameItem),
+		bullets:      make(map[uint32]*Bullet),
+		nextPlayerID: 1,
+		itemID:       1,
+		bulletID:     1,
+		running:      false,
 	}
 	world.mechanics = NewGameMechanics(world)
 	return world
@@ -72,26 +71,26 @@ func (w *World) AddClient(client *Client) bool {
 		return false
 	}
 
-	client.ID = w.nextID
-	client.Player.ID = w.nextID
-	w.nextID++
+	client.ID = w.nextPlayerID
+	client.Player.ID = w.nextPlayerID
+	w.nextPlayerID++
 
 	w.clients[client.ID] = client
 	w.players[client.ID] = client.Player
 
-	// Spawn player at random safe location
-	w.spawnPlayer(client.Player)
+	// Keep player in dead state until they press "Set Sail"
+	client.Player.State = StateDead
 
-	// Initialize ship dimensions and weapon positions
-	w.updateShipDimensions(client.Player)
+	// Initialize ship dimensions and weapon positions (but don't spawn yet)
+	client.Player.updateShipGeometry()
 
 	// Send welcome message to the new client with their player ID
 	w.sendWelcomeMessage(client)
 
 	// Send available upgrades
-	w.sendAvailableUpgrades(client)
+	sendAvailableUpgrades(client)
 
-	log.Printf("Player %d (%s) joined the game (%d/%d players)", client.ID, client.Player.Name, len(w.clients), MaxPlayers)
+	log.Printf("Player %d (%s) joined the lobby (%d/%d players)", client.ID, client.Player.Name, len(w.clients), MaxPlayers)
 	return true
 }
 
@@ -156,21 +155,97 @@ func (w *World) update() {
 	}
 }
 
+// processPlayerActions handles event-based actions with deduplication and cooldowns
+func (w *World) processPlayerActions(player *Player, input *InputMsg) {
+	now := time.Now()
+
+	// Define cooldowns for each action type
+	actionCooldowns := map[string]time.Duration{
+		"statUpgrade":    100 * time.Millisecond,
+		"toggleAutofire": 400 * time.Millisecond,
+	}
+
+	for _, action := range input.Actions {
+		// Skip if this action was already processed (deduplication)
+		if action.Sequence <= player.LastProcessedAction {
+			log.Printf("Player %d skipping already processed action seq %d (last: %d)",
+				player.ID, action.Sequence, player.LastProcessedAction)
+			continue
+		}
+
+		// Check cooldown for this action type
+		if lastTime, exists := player.ActionCooldowns[action.Type]; exists {
+			cooldown := actionCooldowns[action.Type]
+			elapsed := now.Sub(lastTime)
+			if elapsed < cooldown {
+				log.Printf("Player %d action %s on cooldown (elapsed: %dms, need: %dms), skipping seq %d",
+					player.ID, action.Type, elapsed.Milliseconds(), cooldown.Milliseconds(), action.Sequence)
+				// Still update last processed to avoid reprocessing
+				player.LastProcessedAction = action.Sequence
+				continue
+			}
+		}
+
+		// Process the action
+		handled := false
+		switch action.Type {
+		case "statUpgrade":
+			statUpgradeType := UpgradeType(action.Data)
+			if player.BuyUpgrade(statUpgradeType) {
+				log.Printf("Player %d upgraded %s to level %d, coins remaining: %d (seq: %d)",
+					player.ID, statUpgradeType, player.Upgrades[statUpgradeType].Level, player.Coins, action.Sequence)
+				handled = true
+			} else {
+				log.Printf("Player %d failed to upgrade %s (seq: %d)", player.ID, statUpgradeType, action.Sequence)
+			}
+
+		case "toggleAutofire":
+			player.AutofireEnabled = !player.AutofireEnabled
+			log.Printf("Player %d toggled autofire %s (seq: %d)", player.ID,
+				map[bool]string{true: "ON", false: "OFF"}[player.AutofireEnabled], action.Sequence)
+			handled = true
+		}
+
+		// Always update last processed sequence to avoid reprocessing
+		player.LastProcessedAction = action.Sequence
+
+		// Update cooldown only if action was successfully handled
+		if handled {
+			player.ActionCooldowns[action.Type] = now
+		}
+	}
+}
+
 // updatePlayer updates a single player's state with realistic ship physics
 func (w *World) updatePlayer(player *Player, input *InputMsg) {
 	// Handle respawn request if player is dead
 	if player.State == StateDead && input.RequestRespawn {
-		w.respawnPlayer(player)
+		player.respawn()
 		return
+	}
+
+	// Process new action-based inputs
+	w.processPlayerActions(player, input)
+
+	// Handle legacy inputs for backward compatibility
+	if input.ToggleAutofire {
+		player.AutofireEnabled = !player.AutofireEnabled
+		log.Printf("Player %d toggled autofire %s", player.ID, map[bool]string{true: "ON", false: "OFF"}[player.AutofireEnabled])
+		input.ToggleAutofire = false
+	}
+
+	if input.StatUpgradeType != "" {
+		statUpgradeType := UpgradeType(input.StatUpgradeType)
+		if player.BuyUpgrade(statUpgradeType) {
+			log.Printf("Player %d upgraded %s to level %d, coins remaining: %d",
+				player.ID, statUpgradeType, player.Upgrades[statUpgradeType].Level, player.Coins)
+		}
+		input.StatUpgradeType = ""
 	}
 
 	if player.State != StateAlive {
 		return
 	}
-
-	// Get stat upgrade effects for movement calculations
-	statEffects := GetStatUpgradeEffects(player)
-	upgradeEffects := player.ShipConfig.GetTotalUpgradeEffects()
 
 	// Handle thrust (W/S keys) - this affects speed, not direction
 	var thrustForce float32 = 0
@@ -190,7 +265,7 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 	}
 
 	// Calculate max speed with move speed upgrade and hull strength reduction
-	maxSpeed := (BaseShipMaxSpeed+statEffects["moveSpeedBonus"])*upgradeEffects.SpeedMultiplier - (BaseShipMaxSpeed * statEffects["speedReduction"])
+	maxSpeed := (BaseShipMaxSpeed * player.Modifiers.MoveSpeedMultiplier)
 	speed := min(float32(math.Sqrt(float64(player.VelX*player.VelX+player.VelY*player.VelY))), maxSpeed)
 
 	// Scale turn speed based on current speed and ship length
@@ -204,22 +279,16 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 	lengthFactor := baseShipLength / player.ShipConfig.ShipLength // Longer ships get smaller factor
 
 	// Apply turn speed upgrade
-	baseTurnSpeed := BaseShipTurnSpeed*player.ShipConfig.GetTotalUpgradeEffects().TurnRateMultiplier + statEffects["turnSpeedBonus"]
+	baseTurnSpeed := BaseShipTurnSpeed * player.Modifiers.TurnSpeedMultiplier
 	scaledTurnSpeed := baseTurnSpeed * turnFactor * lengthFactor
 
 	// Handle turning (A/D keys) and track angular velocity
-	var angularChange float32 = 0
 	if input.Left {
-		angularChange = -scaledTurnSpeed
 		player.Angle -= scaledTurnSpeed
 	}
 	if input.Right {
-		angularChange = scaledTurnSpeed
 		player.Angle += scaledTurnSpeed
 	}
-
-	// Store current angular velocity for physics calculations
-	player.AngularVelocity = angularChange
 
 	// Apply drag/deceleration
 	player.VelX *= ShipDeceleration
@@ -284,7 +353,7 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 		player.DebugLevelUp()
 		// Send updated available upgrades to client
 		if client, exists := w.GetClient(player.ID); exists {
-			w.sendAvailableUpgrades(client)
+			sendAvailableUpgrades(client)
 		}
 	}
 
@@ -302,7 +371,7 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 				return
 			}
 
-			var upgradeType UpgradeType
+			var upgradeType moduleType
 			switch input.SelectUpgrade {
 			case "side":
 				upgradeType = UpgradeTypeSide
@@ -317,13 +386,14 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 			}
 
 			if upgradeType != "" {
-				if player.ShipConfig.ApplyUpgrade(upgradeType, input.UpgradeChoice) {
+				if player.ShipConfig.ApplyModule(upgradeType, input.UpgradeChoice) {
+					player.updateModifiers()
 					player.AvailableUpgrades--
 					client.LastUpgrade = now // Update last upgrade time
 					log.Printf("Player %d applied upgrade %s:%s, remaining upgrades: %d",
 						player.ID, upgradeType, input.UpgradeChoice, player.AvailableUpgrades)
 					// Send updated available upgrades to client
-					w.sendAvailableUpgrades(client)
+					sendAvailableUpgrades(client)
 				}
 			}
 		}
@@ -333,29 +403,11 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 		input.UpgradeChoice = ""
 	}
 
-	// Handle stat upgrade purchases
-	if input.StatUpgradeType != "" {
-		statUpgradeType := StatUpgradeType(input.StatUpgradeType)
-		if UpgradeStatLevel(player, statUpgradeType) {
-			log.Printf("Player %d upgraded %s to level %d, coins remaining: %d",
-				player.ID, statUpgradeType, player.StatUpgrades[statUpgradeType].Level, player.Coins)
-		}
-		input.StatUpgradeType = "" // Clear input
-	}
-
-	// Handle autofire toggle
-	if input.ToggleAutofire {
-		player.AutofireEnabled = !player.AutofireEnabled
-		log.Printf("Player %d toggled autofire %s", player.ID, map[bool]string{true: "ON", false: "OFF"}[player.AutofireEnabled])
-		input.ToggleAutofire = false // Clear input
-	}
-
 	// Handle health regeneration from auto repairs upgrade
-	regenRate := statEffects["healthRegen"]
 	// Regenerate health based on time elapsed
 	elapsedSeconds := float32(now.Sub(player.LastRegenTime).Seconds())
 	if elapsedSeconds >= 0.2 {
-		healthToRegen := int(elapsedSeconds * regenRate)
+		healthToRegen := int(elapsedSeconds * player.Modifiers.HealthRegenPerSec)
 		if healthToRegen > 0 && player.Health < player.MaxHealth {
 			player.Health += healthToRegen
 			if player.Health > player.MaxHealth {
@@ -486,37 +538,6 @@ func (w *World) collectItem(playerID, itemID uint32) {
 	delete(w.items, itemID)
 }
 
-// spawnPlayer spawns a player at a random safe location
-func (w *World) spawnPlayer(player *Player) {
-	// Simple random spawn - could be improved to avoid other players
-	player.X = float32(rand.Intn(int(WorldWidth-100)) + 50)
-	player.Y = float32(rand.Intn(int(WorldHeight-100)) + 50)
-	player.State = StateAlive
-	player.SpawnTime = time.Now() // Track when player spawned
-}
-
-// resetPlayerShipConfig resets a player's ship configuration to default
-func (w *World) resetPlayerShipConfig(player *Player) {
-	// Reset ship configuration to basic setup
-	shipLength := float32(PlayerSize) * 1.2
-	shipWidth := float32(PlayerSize) * 0.6
-
-	player.ShipConfig = ShipConfiguration{
-
-		SideUpgrade:  NewSideUpgradeTree(),
-		TopUpgrade:   NewTopUpgradeTree(),
-		FrontUpgrade: NewFrontUpgradeTree(),
-		RearUpgrade:  NewRearUpgradeTree(),
-		ShipLength:   shipLength,
-		ShipWidth:    shipWidth,
-		Size:         PlayerSize,
-	}
-
-	// Recalculate ship dimensions and positions
-	player.ShipConfig.CalculateShipDimensions()
-	player.ShipConfig.UpdateUpgradePositions()
-}
-
 // handleRespawns checks for dead players that need to respawn
 func (w *World) handleRespawns() {
 	now := time.Now()
@@ -533,65 +554,6 @@ func (w *World) handleRespawns() {
 			// The respawn is handled in processInput when RequestRespawn is true
 		}
 	}
-}
-
-// respawnPlayer respawns a dead player when they request it
-func (w *World) respawnPlayer(player *Player) {
-	now := time.Now()
-
-	// Only respawn if player is dead and respawn time has passed
-	if player.State != StateDead || now.Before(player.RespawnTime) {
-		return
-	}
-
-	// Save half of previous XP and coins
-	respawnXP := player.Experience / 2
-	respawnCoins := player.Coins / 2
-
-	// Save player identity
-	playerID := player.ID
-	playerName := player.Name
-	playerColor := player.Color
-
-	// Reset to fresh player state (similar to NewPlayer)
-	player.Experience = respawnXP
-	player.Coins = respawnCoins
-	player.Level = 1
-	player.AvailableUpgrades = 0
-	player.Score = 0
-	player.Health = 100
-	player.MaxHealth = 100
-	player.State = StateAlive
-	player.LastRegenTime = now
-	player.LastCollisionDamage = now
-
-	// Restore identity
-	player.ID = playerID
-	player.Name = playerName
-	player.Color = playerColor
-
-	// Reset death tracking
-	player.KilledBy = 0
-	player.KilledByName = ""
-	player.ScoreAtDeath = 0
-	player.SurvivalTime = 0
-
-	// Reset autofire to default enabled state
-	player.AutofireEnabled = true
-
-	w.resetPlayerShipConfig(player)
-
-	// Reset stat upgrades
-	InitializeStatUpgrades(player)
-
-	w.spawnPlayer(player)
-
-	// Send updated available upgrades to client
-	if client, exists := w.GetClient(player.ID); exists {
-		w.sendAvailableUpgrades(client)
-	}
-
-	log.Printf("Player %d (%s) respawned with %d XP and %d coins", player.ID, player.Name, respawnXP, respawnCoins)
 }
 
 // spawnItems continuously spawns items in the world (with limits)
@@ -637,6 +599,8 @@ func (w *World) broadcastSnapshot() {
 
 	// Add all players to snapshot
 	for _, player := range w.players {
+		// Calculate debug info for this player
+		player.DebugInfo = w.calculateDebugInfo(player)
 		snapshot.Players = append(snapshot.Players, *player)
 	}
 
@@ -699,64 +663,6 @@ func (w *World) sendWelcomeMessage(client *Client) {
 	}
 }
 
-// sendAvailableUpgrades sends available upgrades to a specific client
-func (w *World) sendAvailableUpgrades(client *Client) {
-	upgrades := make(map[string][]UpgradeInfo)
-
-	// Get available upgrades for each type and convert to simplified format
-	upgradeTypes := []UpgradeType{UpgradeTypeSide, UpgradeTypeTop, UpgradeTypeFront, UpgradeTypeRear}
-
-	for _, upgradeType := range upgradeTypes {
-		availableUpgrades := client.Player.ShipConfig.GetAvailableUpgrades(upgradeType)
-		upgradeInfos := make([]UpgradeInfo, 0, len(availableUpgrades))
-
-		for _, upgrade := range availableUpgrades {
-			if upgrade != nil {
-				upgradeInfos = append(upgradeInfos, UpgradeInfo{
-					Name: upgrade.Name,
-					Type: string(upgrade.Type),
-				})
-			}
-		}
-
-		upgrades[string(upgradeType)] = upgradeInfos
-	}
-
-	upgradesMsg := AvailableUpgradesMsg{
-		Type:     "availableUpgrades",
-		Upgrades: upgrades,
-	}
-
-	data, err := json.Marshal(upgradesMsg)
-	if err != nil {
-		log.Printf("Error marshaling available upgrades message: %v", err)
-		return
-	}
-
-	select {
-	case client.Send <- data:
-	default:
-		// Channel full, skip
-		log.Printf("Could not send available upgrades to client %d", client.ID)
-	}
-}
-
-func (w *World) sendGameEvent(client *Client, event GameEventMsg) {
-	event.Type = MsgTypeGameEvent
-
-	data, err := json.Marshal(event)
-	if err != nil {
-		log.Printf("Error marshaling game event message: %v", err)
-		return
-	}
-
-	select {
-	case client.Send <- data:
-	default:
-		log.Printf("Could not send game event to client %d", client.ID)
-	}
-}
-
 // HandleInput processes input from a client
 func (w *World) HandleInput(clientID uint32, input InputMsg) {
 	client, exists := w.GetClient(clientID)
@@ -774,6 +680,12 @@ func (w *World) HandleInput(clientID uint32, input InputMsg) {
 		}
 		if sanitizedColor := SanitizePlayerColor(input.PlayerColor); sanitizedColor != "" {
 			client.Player.Color = sanitizedColor
+		}
+	case "startGame":
+		// When player presses "Set Sail", spawn them into the game
+		if client.Player.State == StateDead && input.StartGame {
+			client.Player.spawn()
+			log.Printf("Player %d (%s) set sail and entered the game", client.ID, client.Player.Name)
 		}
 	default:
 		client.Input = input
@@ -834,7 +746,7 @@ func (w *World) updateBullets() {
 			// Only do expensive collision check if close enough (player size + some margin)
 			if distSq < 10000 && w.checkBulletPlayerCollision(bullet, player) { // 100^2 = 10000
 				// Apply damage through mechanics system (handles death + rewards)
-				damage := bullet.Damage + bullet.Damage*int(GetStatUpgradeEffects(attacker)["bulletDamage"])
+				damage := bullet.Damage * int(attacker.Modifiers.BulletDamageMultiplier)
 				if damage == 0 {
 					damage = BulletDamage // Fallback to default for legacy bullets
 				}
@@ -895,15 +807,6 @@ func (w *World) checkPlayerItemCollision(player *Player, item *GameItem) bool {
 	// Check if bounding boxes overlap
 	return itemBbox.MinX < playerBbox.MaxX && itemBbox.MaxX > playerBbox.MinX &&
 		itemBbox.MinY < playerBbox.MaxY && itemBbox.MaxY > playerBbox.MinY
-}
-
-// updateShipDimensions updates ship dimensions based on cannon and turret count
-func (w *World) updateShipDimensions(player *Player) {
-	sc := &player.ShipConfig
-	sc.CalculateShipDimensions()
-
-	// Update positions for all upgrades
-	sc.UpdateUpgradePositions()
 }
 
 // fireModularUpgrades fires weapons based on upgrade categories with per-category cooldowns
@@ -1030,7 +933,7 @@ func (w *World) updateModularTurretAiming(player *Player, input *InputMsg) {
 	mouseWorldY := input.Mouse.Y
 
 	// Update turrets in all upgrade categories
-	upgrades := []*ShipUpgrade{player.ShipConfig.TopUpgrade, player.ShipConfig.FrontUpgrade, player.ShipConfig.RearUpgrade}
+	upgrades := []*ShipModule{player.ShipConfig.TopUpgrade, player.ShipConfig.FrontUpgrade, player.ShipConfig.RearUpgrade}
 
 	for _, upgrade := range upgrades {
 		if upgrade != nil {
@@ -1040,4 +943,76 @@ func (w *World) updateModularTurretAiming(player *Player, input *InputMsg) {
 			}
 		}
 	}
+}
+
+// calculateDebugInfo computes debug values for client display
+func (w *World) calculateDebugInfo(player *Player) DebugInfo {
+	baseShipLength := float32(PlayerSize * 1.2)                   // 1 cannon ship has no length multiplier
+	lengthFactor := baseShipLength / player.ShipConfig.ShipLength // Longer ships get smaller factor
+	debugInfo := DebugInfo{
+		Health:            player.MaxHealth,
+		RegenRate:         player.Modifiers.HealthRegenPerSec,
+		MoveSpeedModifier: player.Modifiers.MoveSpeedMultiplier,
+		TurnSpeedModifier: player.Modifiers.TurnSpeedMultiplier * lengthFactor,
+		BodyDamage:        player.Modifiers.BodyDamageBonus,
+		FrontDPS:          0,
+		SideDPS:           0,
+		RearDPS:           0,
+		TopDPS:            0,
+		TotalDPS:          0,
+	}
+
+	// Calculate DPS from all cannons
+	cannonDamageMod := player.Modifiers.BulletDamageMultiplier
+	reloadSpeedMod := player.Modifiers.ReloadSpeedMultiplier
+
+	// Calculate DPS for each upgrade type
+	if player.ShipConfig.FrontUpgrade != nil {
+		for _, cannon := range player.ShipConfig.FrontUpgrade.Cannons {
+			damage := float32(cannon.Stats.BulletDamageMod * BulletDamage)
+			reloadRate := cannon.Stats.ReloadTime
+			effectiveDamage := damage * (cannonDamageMod)
+			effectiveReloadRate := reloadRate * (reloadSpeedMod)
+			debugInfo.FrontDPS += effectiveDamage * 1 / effectiveReloadRate
+		}
+	}
+
+	if player.ShipConfig.SideUpgrade != nil {
+		for _, cannon := range player.ShipConfig.SideUpgrade.Cannons {
+			damage := float32(cannon.Stats.BulletDamageMod * BulletDamage)
+			reloadRate := cannon.Stats.ReloadTime
+			effectiveDamage := damage * (cannonDamageMod)
+			effectiveReloadRate := reloadRate * (reloadSpeedMod)
+			debugInfo.SideDPS += effectiveDamage * 1 / effectiveReloadRate
+		}
+	}
+
+	if player.ShipConfig.RearUpgrade != nil {
+		for _, cannon := range player.ShipConfig.RearUpgrade.Cannons {
+			damage := float32(cannon.Stats.BulletDamageMod * BulletDamage)
+			reloadRate := cannon.Stats.ReloadTime
+			effectiveDamage := damage * (cannonDamageMod)
+			effectiveReloadRate := reloadRate * (reloadSpeedMod)
+			debugInfo.RearDPS += effectiveDamage * 1 / effectiveReloadRate
+		}
+	}
+
+	if player.ShipConfig.TopUpgrade != nil {
+		for _, turret := range player.ShipConfig.TopUpgrade.Turrets {
+			// only calculated based on first cannon
+			// machine gun dual cannon shares reload
+			turretCannon := turret.Cannons[0]
+
+			damage := float32(turretCannon.Stats.BulletDamageMod * BulletDamage)
+			reloadRate := turretCannon.Stats.ReloadTime
+			effectiveDamage := damage * (cannonDamageMod)
+			effectiveReloadRate := reloadRate * (reloadSpeedMod)
+			debugInfo.TopDPS += effectiveDamage * 1 / effectiveReloadRate
+		}
+	}
+
+	// Calculate total DPS
+	debugInfo.TotalDPS = debugInfo.FrontDPS + debugInfo.SideDPS + debugInfo.RearDPS + debugInfo.TopDPS
+
+	return debugInfo
 }

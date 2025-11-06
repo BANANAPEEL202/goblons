@@ -215,11 +215,8 @@ func (gm *GameMechanics) applyCollisionDamage(player1, player2 *Player, now time
 
 	// Check if enough time has passed since last collision damage for player1
 	if now.Sub(player1.LastCollisionDamage) >= cooldown {
-		// Get body damage stats for player1
-		effects1 := GetStatUpgradeEffects(player1)
-
 		// Calculate damage from player1 to player2
-		damageToPlayer2 := BaseCollisionDamage + int(effects1["bodyDamage"])
+		damageToPlayer2 := BaseCollisionDamage + int(player1.Modifiers.BodyDamageBonus)
 		gm.ApplyDamage(player2, damageToPlayer2, player1, KillCauseCollision, now)
 
 		player1.LastCollisionDamage = now
@@ -227,11 +224,8 @@ func (gm *GameMechanics) applyCollisionDamage(player1, player2 *Player, now time
 
 	// Check if enough time has passed since last collision damage for player2
 	if now.Sub(player2.LastCollisionDamage) >= cooldown {
-		// Get body damage stats for player2
-		effects2 := GetStatUpgradeEffects(player2)
-
 		// Calculate damage from player2 to player1
-		damageToPlayer1 := BaseCollisionDamage + int(effects2["bodyDamage"])
+		damageToPlayer1 := BaseCollisionDamage + int(player2.Modifiers.BodyDamageBonus)
 		gm.ApplyDamage(player1, damageToPlayer1, player2, KillCauseCollision, now)
 
 		player2.LastCollisionDamage = now
@@ -249,8 +243,8 @@ func (gm *GameMechanics) SpawnFoodItems() {
 	}{
 		{ItemTypeGrayCircle, 10, 10, 30},   // Most common
 		{ItemTypeYellowCircle, 10, 10, 20}, // Common
-		{ItemTypeOrangeCircle, 10, 10, 20}, // Uncommon
-		{ItemTypeBlueDiamond, 30, 20, 10},  // Rare
+		{ItemTypeOrangeCircle, 30, 10, 20}, // Uncommon
+		{ItemTypeBlueDiamond, 50, 20, 10},  // Rare
 	}
 
 	// Calculate total weight

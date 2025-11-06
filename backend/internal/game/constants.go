@@ -2,9 +2,9 @@ package game
 
 // Game world constants
 const (
-	WorldWidth  = 2000 //5000.0
-	WorldHeight = 2000 //5000.0
-	TickRate    = 30   // Server updates per second (reduced for performance)
+	WorldWidth  = 5000.0
+	WorldHeight = 5000.0
+	TickRate    = 30 // Server updates per second (reduced for performance)
 	PlayerSpeed = 2.0
 	PlayerSize  = 50.0
 	MaxPlayers  = 32
@@ -16,6 +16,10 @@ const (
 	BaseShipTurnSpeed = 0.08 // Turning speed in radians per frame (doubled for 30 TPS)
 	ShipDeceleration  = 0.84 // Drag/friction factor (adjusted for 30 TPS)
 	BaseShipMaxSpeed  = 4    // Maximum speed (doubled for 30 TPS)
+)
+
+const (
+	HealthIncrease = 30
 )
 
 // Cannon and bullet constants

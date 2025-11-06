@@ -10,63 +10,72 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// StatUpgradeType defines the category of stat upgrade
-type StatUpgradeType string
+// UpgradeType defines the category of stat upgrade
+type UpgradeType string
 
 const (
-	StatUpgradeHullStrength StatUpgradeType = "hullStrength" // Increases health and widens ship
-	StatUpgradeAutoRepairs  StatUpgradeType = "autoRepairs"  // Health regeneration
-	StatUpgradeCannonRange  StatUpgradeType = "cannonRange"  // Bullet speed and cannon length
-	StatUpgradeCannonDamage StatUpgradeType = "cannonDamage" // Bullet damage and width
-	StatUpgradeReloadSpeed  StatUpgradeType = "reloadSpeed"  // Reduces cooldown time
-	StatUpgradeMoveSpeed    StatUpgradeType = "moveSpeed"    // Movement speed
-	StatUpgradeTurnSpeed    StatUpgradeType = "turnSpeed"    // Turn rate
-	StatUpgradeBodyDamage   StatUpgradeType = "bodyDamage"   // Collision damage
+	StatUpgradeHullStrength UpgradeType = "hullStrength" // Increases health and widens ship
+	StatUpgradeAutoRepairs  UpgradeType = "autoRepairs"  // Health regeneration
+	StatUpgradeCannonRange  UpgradeType = "cannonRange"  // Bullet speed and cannon length
+	StatUpgradeCannonDamage UpgradeType = "cannonDamage" // Bullet damage and width
+	StatUpgradeReloadSpeed  UpgradeType = "reloadSpeed"  // Reduces cooldown time
+	StatUpgradeMoveSpeed    UpgradeType = "moveSpeed"    // Movement speed
+	StatUpgradeTurnSpeed    UpgradeType = "turnSpeed"    // Turn rate
+	StatUpgradeBodyDamage   UpgradeType = "bodyDamage"   // Collision damage
 )
 
 const maxPlayerNameLength = 16
 
 var colorHexPattern = regexp.MustCompile(`^#?([0-9a-fA-F]{6})$`)
 
-// StatUpgrade represents a single stat upgrade level
-type StatUpgrade struct {
-	Type        StatUpgradeType `json:"type"`
-	Level       int             `json:"level"`       // Current level (0-75)
-	MaxLevel    int             `json:"maxLevel"`    // Maximum level (75)
-	BaseCost    int             `json:"baseCost"`    // Base cost (10)
-	CurrentCost int             `json:"currentCost"` // Current upgrade cost
+// Upgrade represents a single stat upgrade level
+type Upgrade struct {
+	Type        UpgradeType `json:"type"`
+	Level       int         `json:"level"`       // Current level (0-75)
+	MaxLevel    int         `json:"maxLevel"`    // Maximum level (75)
+	BaseCost    int         `json:"baseCost"`    // Base cost (10)
+	CurrentCost int         `json:"currentCost"` // Current upgrade cost
 }
 
 // InputMsg represents player input from client
 type InputMsg struct {
-	Type             string `json:"type"`
-	Up               bool   `json:"up"`
-	Down             bool   `json:"down"`
-	Left             bool   `json:"left"`
-	Right            bool   `json:"right"`
-	UpgradeCannons   bool   `json:"upgradeCannons"`
-	DowngradeCannons bool   `json:"downgradeCannons"`
-	UpgradeScatter   bool   `json:"upgradeScatter"`
-	DowngradeScatter bool   `json:"downgradeScatter"`
-	UpgradeTurrets   bool   `json:"upgradeTurrets"`
-	DowngradeTurrets bool   `json:"downgradeTurrets"`
-	// New leveling system inputs
-	DebugLevelUp  bool   `json:"debugLevelUp"`
-	SelectUpgrade string `json:"selectUpgrade"` // "side", "top", "front", "rear"
-	UpgradeChoice string `json:"upgradeChoice"` // Specific upgrade ID/name
-	// Stat upgrade inputs
-	StatUpgradeType string `json:"statUpgradeType"` // Which stat to upgrade
-	// Autofire toggle
-	ToggleAutofire bool `json:"toggleAutofire"` // Toggle autofire on/off
-	ManualFire     bool `json:"manualFire"`     // Manual fire command
-	// Respawn request
-	RequestRespawn bool   `json:"requestRespawn"` // Player requests to respawn
-	PlayerName     string `json:"playerName"`
-	PlayerColor    string `json:"playerColor"`
-	Mouse          struct {
+	Type string `json:"type"`
+	// Movement inputs (continuous state)
+	Up    bool `json:"up"`
+	Down  bool `json:"down"`
+	Left  bool `json:"left"`
+	Right bool `json:"right"`
+	// Action inputs (single-fire events with sequence numbers)
+	Actions []InputAction `json:"actions,omitempty"`
+	// Mouse position
+	Mouse struct {
 		X float32 `json:"x"`
 		Y float32 `json:"y"`
 	} `json:"mouse"`
+	// Legacy inputs (deprecated but kept for compatibility)
+	UpgradeCannons   bool   `json:"upgradeCannons,omitempty"`
+	DowngradeCannons bool   `json:"downgradeCannons,omitempty"`
+	UpgradeScatter   bool   `json:"upgradeScatter,omitempty"`
+	DowngradeScatter bool   `json:"downgradeScatter,omitempty"`
+	UpgradeTurrets   bool   `json:"upgradeTurrets,omitempty"`
+	DowngradeTurrets bool   `json:"downgradeTurrets,omitempty"`
+	DebugLevelUp     bool   `json:"debugLevelUp,omitempty"`
+	SelectUpgrade    string `json:"selectUpgrade,omitempty"`
+	UpgradeChoice    string `json:"upgradeChoice,omitempty"`
+	StatUpgradeType  string `json:"statUpgradeType,omitempty"`
+	ToggleAutofire   bool   `json:"toggleAutofire,omitempty"`
+	ManualFire       bool   `json:"manualFire,omitempty"`
+	RequestRespawn   bool   `json:"requestRespawn,omitempty"`
+	StartGame        bool   `json:"startGame,omitempty"`
+	PlayerName       string `json:"playerName,omitempty"`
+	PlayerColor      string `json:"playerColor,omitempty"`
+}
+
+// InputAction represents a single-fire action with deduplication
+type InputAction struct {
+	Type     string `json:"type"`     // "statUpgrade", "toggleAutofire", etc.
+	Sequence uint32 `json:"sequence"` // Client-side sequence number for deduplication
+	Data     string `json:"data"`     // Action-specific data (e.g., stat type for upgrades)
 }
 
 // Position represents the relative position of a single cannon from ship center
@@ -75,23 +84,38 @@ type Position struct {
 	Y float32 `json:"y"` // Relative Y position from ship center
 }
 
+// DebugInfo contains calculated debug values for client display
+type DebugInfo struct {
+	Health            int     `json:"health"`
+	MoveSpeedModifier float32 `json:"moveSpeedModifier"`
+	TurnSpeedModifier float32 `json:"turnSpeedModifier"`
+	RegenRate         float32 `json:"regenRate"`
+	BodyDamage        float32 `json:"bodyDamage"`
+	FrontDPS          float32 `json:"frontDps"`
+	SideDPS           float32 `json:"sideDps"`
+	RearDPS           float32 `json:"rearDps"`
+	TopDPS            float32 `json:"topDps"`
+	TotalDPS          float32 `json:"totalDps"`
+}
+
 // Player represents a game player
 type Player struct {
-	ID              uint32    `json:"id"`
-	X               float32   `json:"x"`
-	Y               float32   `json:"y"`
-	VelX            float32   `json:"velX"`
-	VelY            float32   `json:"velY"`
-	Angle           float32   `json:"angle"` // Ship facing direction in radians
-	AngularVelocity float32   `json:"-"`     // Current angular velocity (radians per update)
-	Score           int       `json:"score"`
-	State           int       `json:"state"`
-	Name            string    `json:"name"`
-	Color           string    `json:"color"`
-	IsBot           bool      `json:"isBot"`
-	Health          int       `json:"health"`
-	MaxHealth       int       `json:"maxHealth"`
-	RespawnTime     time.Time `json:"-"` // When the player can respawn
+	ID          uint32    `json:"id"`
+	X           float32   `json:"x"`
+	Y           float32   `json:"y"`
+	VelX        float32   `json:"velX"`
+	VelY        float32   `json:"velY"`
+	Angle       float32   `json:"angle"` // Ship facing direction in radians
+	Score       int       `json:"score"`
+	State       int       `json:"state"`
+	Name        string    `json:"name"`
+	Color       string    `json:"color"`
+	IsBot       bool      `json:"isBot"`
+	Health      int       `json:"health"`
+	MaxHealth   int       `json:"maxHealth"`
+	RespawnTime time.Time `json:"-"` // When the player can respawn
+
+	Client *Client `json:"-"` // Back-reference to owning client (not serialized)
 	// Leveling system
 	Level             int `json:"level"`             // Current player level
 	Experience        int `json:"experience"`        // Current experience points
@@ -104,12 +128,17 @@ type Player struct {
 	ShipConfig           ShipConfiguration `json:"shipConfig"` // New modular upgrade system
 
 	// Stat upgrades
-	Coins               int                             `json:"coins"`        // Currency for stat upgrades
-	StatUpgrades        map[StatUpgradeType]StatUpgrade `json:"statUpgrades"` // Applied stat upgrades
-	LastRegenTime       time.Time                       `json:"-"`            // Last health regeneration time
-	LastCollisionDamage time.Time                       `json:"-"`            // Last collision damage time
+	Coins     int                     `json:"coins"`        // Currency for stat upgrades
+	Upgrades  map[UpgradeType]Upgrade `json:"statUpgrades"` // Applied stat upgrades
+	Modifiers Mods                    `json:"-"`            // Calculated stat modifiers (not serialized)
+
+	LastRegenTime       time.Time `json:"-"` // Last health regeneration time
+	LastCollisionDamage time.Time `json:"-"` // Last collision damage time
 	// Autofire toggle state
 	AutofireEnabled bool `json:"autofireEnabled"` // Whether autofire is currently enabled
+	// Action processing state (for deduplication)
+	LastProcessedAction uint32               `json:"-"` // Last processed action sequence number
+	ActionCooldowns     map[string]time.Time `json:"-"` // Cooldowns per action type
 	// Death tracking
 	KilledBy     uint32    `json:"killedBy"`     // ID of player who killed this player (0 if none)
 	KilledByName string    `json:"killedByName"` // Name of player who killed this player
@@ -117,6 +146,7 @@ type Player struct {
 	ScoreAtDeath int       `json:"scoreAtDeath"` // Score when player died
 	SurvivalTime float64   `json:"survivalTime"` // How long the player was alive (in seconds)
 	SpawnTime    time.Time `json:"-"`            // When the player spawned
+	DebugInfo    DebugInfo `json:"debugInfo"`    // Calculated debug values for client
 }
 
 // Bot wraps an AI-controlled player with simple state required for decision making.
@@ -210,30 +240,33 @@ type Client struct {
 
 // World represents the game world and all its entities
 type World struct {
-	mu          sync.RWMutex
-	clients     map[uint32]*Client
-	players     map[uint32]*Player
-	bots        map[uint32]*Bot
-	items       map[uint32]*GameItem
-	bullets     map[uint32]*Bullet
-	mechanics   *GameMechanics
-	nextID      uint32
-	itemID      uint32
-	bulletID    uint32
-	running     bool
-	tickCounter uint32 // For performance optimizations
-	botsSpawned bool
+	mu           sync.RWMutex
+	clients      map[uint32]*Client
+	players      map[uint32]*Player
+	bots         map[uint32]*Bot
+	items        map[uint32]*GameItem
+	bullets      map[uint32]*Bullet
+	mechanics    *GameMechanics
+	nextPlayerID uint32
+	itemID       uint32
+	bulletID     uint32
+	running      bool
+	tickCounter  uint32 // For performance optimizations
+	botsSpawned  bool
 }
 
 // NewClient creates a new client
 func NewClient(id uint32, conn *websocket.Conn) *Client {
-	return &Client{
+	player := NewPlayer(id)
+	client := &Client{
 		ID:       id,
 		Conn:     conn,
-		Player:   NewPlayer(id),
+		Player:   player,
 		Send:     make(chan []byte, 256),
 		LastSeen: time.Now(),
 	}
+	player.Client = client
+	return client
 }
 
 // NewPlayer creates a new player with default values
@@ -252,6 +285,17 @@ func NewPlayer(id uint32) *Player {
 		Size:         PlayerSize,
 	}
 
+	mods := Mods{
+		SpeedMultiplier:        1.0,
+		HealthRegenPerSec:      1.0,
+		BulletSpeedMultiplier:  1.0,
+		BulletDamageMultiplier: 1.0,
+		ReloadSpeedMultiplier:  1.0,
+		MoveSpeedMultiplier:    1.0,
+		TurnSpeedMultiplier:    1.0,
+		BodyDamageBonus:        1.0,
+	}
+
 	player := &Player{
 		ID:                  id,
 		X:                   WorldWidth / 2,
@@ -259,16 +303,19 @@ func NewPlayer(id uint32) *Player {
 		State:               StateAlive,
 		Health:              100,
 		MaxHealth:           100,
+		Modifiers:           mods,
 		Color:               generateRandomColor(),
 		Name:                generateRandomName(),
 		Level:               1,
 		Experience:          0,
 		AvailableUpgrades:   0,
 		ShipConfig:          shipConfig,
-		Coins:               10000, // Starting coins
-		StatUpgrades:        make(map[StatUpgradeType]StatUpgrade),
-		LastRegenTime:       time.Now(), // Initialize health regen timer
-		LastCollisionDamage: time.Now(), // Initialize collision damage timer
+		Coins:               0, // Starting coins
+		Upgrades:            make(map[UpgradeType]Upgrade),
+		LastRegenTime:       time.Now(),                 // Initialize health regen timer
+		LastProcessedAction: 0,                          // No actions processed yet
+		ActionCooldowns:     make(map[string]time.Time), // Initialize cooldown map
+		LastCollisionDamage: time.Now(),                 // Initialize collision damage timer
 	}
 
 	// Initialize stat upgrades
@@ -419,9 +466,9 @@ func (p *Player) DebugLevelUp() {
 
 // InitializeStatUpgrades initializes the stat upgrade system for a player
 func InitializeStatUpgrades(player *Player) {
-	player.StatUpgrades = make(map[StatUpgradeType]StatUpgrade)
+	player.Upgrades = make(map[UpgradeType]Upgrade)
 
-	upgradeTypes := []StatUpgradeType{
+	upgradeTypes := []UpgradeType{
 		StatUpgradeHullStrength,
 		StatUpgradeAutoRepairs,
 		StatUpgradeCannonRange,
@@ -433,7 +480,7 @@ func InitializeStatUpgrades(player *Player) {
 	}
 
 	for _, upgradeType := range upgradeTypes {
-		player.StatUpgrades[upgradeType] = StatUpgrade{
+		player.Upgrades[upgradeType] = Upgrade{
 			Type:        upgradeType,
 			Level:       0,
 			MaxLevel:    15,
@@ -441,47 +488,4 @@ func InitializeStatUpgrades(player *Player) {
 			CurrentCost: 10,
 		}
 	}
-}
-
-// ForceStatUpgrades applies stat upgrade levels directly without consuming coins.
-func ForceStatUpgrades(player *Player, levels map[StatUpgradeType]int) {
-	if player == nil || len(levels) == 0 {
-		return
-	}
-
-	if player.StatUpgrades == nil {
-		InitializeStatUpgrades(player)
-	}
-
-	for upgradeType, level := range levels {
-		forceStatUpgradeLevel(player, upgradeType, level)
-	}
-}
-
-func forceStatUpgradeLevel(player *Player, upgradeType StatUpgradeType, level int) {
-	upgrade, exists := player.StatUpgrades[upgradeType]
-	if !exists {
-		return
-	}
-
-	if level < 0 {
-		level = 0
-	}
-	if level > upgrade.MaxLevel {
-		level = upgrade.MaxLevel
-	}
-
-	if level <= upgrade.Level {
-		upgrade.CurrentCost = upgrade.BaseCost * (upgrade.Level + 1)
-		player.StatUpgrades[upgradeType] = upgrade
-		return
-	}
-
-	for upgrade.Level < level {
-		upgrade.Level++
-		applyStatUpgradeEffects(player, upgradeType)
-	}
-
-	upgrade.CurrentCost = upgrade.BaseCost * (upgrade.Level + 1)
-	player.StatUpgrades[upgradeType] = upgrade
 }

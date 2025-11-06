@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"sync/atomic"
 	"time"
 
 	"goblons/internal/game"
@@ -21,14 +22,23 @@ var upgrader = websocket.Upgrader{
 
 // Server handles HTTP and WebSocket connections
 type Server struct {
-	world *game.World
+	world         *game.World
+	bytesSent     int64 // Total bytes sent
+	bytesReceived int64 // Total bytes received
+	messagesSent  int64 // Total messages sent
+	messagesRecv  int64 // Total messages received
 }
 
 // NewServer creates a new server instance
 func NewServer() *Server {
-	return &Server{
+	server := &Server{
 		world: game.NewWorld(),
 	}
+	
+	// Start network monitoring
+	go server.monitorNetworkUsage()
+	
+	return server
 }
 
 // Start starts the server on the specified address
@@ -42,6 +52,35 @@ func (s *Server) Start(addr string) error {
 
 	log.Printf("Server starting on %s", addr)
 	return http.ListenAndServe(addr, nil)
+}
+
+// monitorNetworkUsage logs network statistics every 10 seconds
+func (s *Server) monitorNetworkUsage() {
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+	
+	var lastSent, lastRecv int64
+	var lastMsgSent, lastMsgRecv int64
+	
+	for range ticker.C {
+		currentSent := atomic.LoadInt64(&s.bytesSent)
+		currentRecv := atomic.LoadInt64(&s.bytesReceived)
+		currentMsgSent := atomic.LoadInt64(&s.messagesSent)
+		currentMsgRecv := atomic.LoadInt64(&s.messagesRecv)
+		
+		sentRate := float64(currentSent-lastSent) / 10.0
+		recvRate := float64(currentRecv-lastRecv) / 10.0
+		msgSentRate := float64(currentMsgSent-lastMsgSent) / 10.0
+		msgRecvRate := float64(currentMsgRecv-lastMsgRecv) / 10.0
+		
+		log.Printf("Network Stats - Sent: %.1f B/s (%d total), Recv: %.1f B/s (%d total), Msg Sent: %.1f/s (%d total), Msg Recv: %.1f/s (%d total)",
+			sentRate, currentSent, recvRate, currentRecv, msgSentRate, currentMsgSent, msgRecvRate, currentMsgRecv)
+		
+		lastSent = currentSent
+		lastRecv = currentRecv
+		lastMsgSent = currentMsgSent
+		lastMsgRecv = currentMsgRecv
+	}
 }
 
 // handleWebSocket handles WebSocket connections
@@ -100,6 +139,10 @@ func (s *Server) handleClientReads(client *game.Client) {
 			break
 		}
 
+		// Track received bytes and messages
+		atomic.AddInt64(&s.bytesReceived, int64(len(messageBytes)))
+		atomic.AddInt64(&s.messagesRecv, 1)
+
 		var input game.InputMsg
 		if err := json.Unmarshal(messageBytes, &input); err != nil {
 			log.Printf("Error unmarshaling input: %v", err)
@@ -127,6 +170,10 @@ func (s *Server) handleClientWrites(client *game.Client) {
 				client.Conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
 			}
+
+			// Track sent bytes and messages
+			atomic.AddInt64(&s.bytesSent, int64(len(message)))
+			atomic.AddInt64(&s.messagesSent, 1)
 
 			if err := client.Conn.WriteMessage(websocket.TextMessage, message); err != nil {
 				log.Printf("Write error: %v", err)
