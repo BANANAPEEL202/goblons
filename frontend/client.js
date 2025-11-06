@@ -586,6 +586,59 @@ class GameClient {
     ctx.fillText('RESPAWN', centerX, buttonY + 32);
   }
 
+  drawDebugStatus() {
+    if (!this.gameState.myPlayer) return;
+
+    const player = this.gameState.myPlayer;
+    const ctx = this.ctx;
+
+    // Use values from backend-calculated debugInfo
+    const debugInfo = player.debugInfo || {};
+    const health = debugInfo.health || 0;
+    const moveSpeedMod = debugInfo.moveSpeedModifier || 0;
+    const turnSpeedMod = debugInfo.turnSpeedModifier || 0;
+    const regenRate = debugInfo.regenRate || 0;
+    const bodyDamage = debugInfo.bodyDamage || 0;
+    const frontDps = debugInfo.frontDps || 0;
+    const sideDps = debugInfo.sideDps || 0;
+    const rearDps = debugInfo.rearDps || 0;
+    const topDps = debugInfo.topDps || 0;
+    const totalDps = debugInfo.totalDps || 0;
+
+    // Position at bottom left, above autofire status
+    const padding = 20;
+    const lineHeight = 20;
+    const totalLines = 10;
+    const totalHeight = (totalLines - 1) * lineHeight + 16; // 16px font height
+    const autofireHeight = 24; // Height of autofire status box
+    const margin = 10; // Space between debug status and autofire status
+    
+    let y = this.screenHeight - padding - autofireHeight - margin - totalHeight;
+
+    // Draw the debug info
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '16px Arial';
+    ctx.textAlign = 'left';
+    ctx.fillText(`Health: ${health}`, padding, y); y += lineHeight;
+    ctx.fillText(`Regen Rate: +${regenRate.toFixed(2)}`, padding, y); y += lineHeight;
+    
+    // Calculate percentage change for move speed (1.0 = 0%, 0.8 = -20%, 1.2 = +20%)
+    const moveSpeedPercent = ((moveSpeedMod - 1) * 100).toFixed(0);
+    const moveSpeedSign = moveSpeedPercent >= 0 ? '+' : '';
+    ctx.fillText(`Move Speed Mod: ${moveSpeedSign}${moveSpeedPercent}%`, padding, y); y += lineHeight;
+    
+    // Calculate percentage change for turn speed
+    const turnSpeedPercent = ((turnSpeedMod - 1) * 100).toFixed(0);
+    const turnSpeedSign = turnSpeedPercent >= 0 ? '+' : '';
+    ctx.fillText(`Turn Speed Mod: ${turnSpeedSign}${turnSpeedPercent}%`, padding, y); y += lineHeight;
+    ctx.fillText(`Body Damage: +${(bodyDamage).toFixed(2)}`, padding, y); y += lineHeight;
+    ctx.fillText(`Front DPS: ${frontDps.toFixed(1)}`, padding, y); y += lineHeight;
+        ctx.fillText(`Top DPS: ${topDps.toFixed(1)}`, padding, y); y += lineHeight;
+    ctx.fillText(`Side DPS: ${sideDps.toFixed(1)}`, padding, y); y += lineHeight;
+    ctx.fillText(`Rear DPS: ${rearDps.toFixed(1)}`, padding, y); y += lineHeight;
+    ctx.fillText(`Total DPS: ${totalDps.toFixed(1)}`, padding, y);
+  }
+
   handleKeyDown(e) {
     if (this.controlsLocked) {
       return;
@@ -1196,6 +1249,9 @@ class GameClient {
     
     // Draw UI
     this.drawUI();
+
+    // Draw debug status
+    this.drawDebugStatus();
     
     // Draw death screen on top of everything
     this.drawDeathScreen();

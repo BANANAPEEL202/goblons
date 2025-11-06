@@ -76,6 +76,20 @@ type Position struct {
 	Y float32 `json:"y"` // Relative Y position from ship center
 }
 
+// DebugInfo contains calculated debug values for client display
+type DebugInfo struct {
+	Health            int     `json:"health"`
+	MoveSpeedModifier float32 `json:"moveSpeedModifier"`
+	TurnSpeedModifier float32 `json:"turnSpeedModifier"`
+	RegenRate         float32 `json:"regenRate"`
+	BodyDamage        float32 `json:"bodyDamage"`
+	FrontDPS          float32 `json:"frontDps"`
+	SideDPS           float32 `json:"sideDps"`
+	RearDPS           float32 `json:"rearDps"`
+	TopDPS            float32 `json:"topDps"`
+	TotalDPS          float32 `json:"totalDps"`
+}
+
 // Player represents a game player
 type Player struct {
 	ID          uint32    `json:"id"`
@@ -121,6 +135,7 @@ type Player struct {
 	ScoreAtDeath int       `json:"scoreAtDeath"` // Score when player died
 	SurvivalTime float64   `json:"survivalTime"` // How long the player was alive (in seconds)
 	SpawnTime    time.Time `json:"-"`            // When the player spawned
+	DebugInfo    DebugInfo `json:"debugInfo"`    // Calculated debug values for client
 }
 
 // Bot wraps an AI-controlled player with simple state required for decision making.

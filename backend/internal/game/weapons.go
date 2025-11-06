@@ -211,7 +211,7 @@ func NewMachineGunCannon() CannonStats {
 	return CannonStats{
 		ReloadTime:      0.3,
 		BulletSpeedMod:  0.7,
-		BulletDamageMod: 0.25,
+		BulletDamageMod: 0.3,
 		BulletCount:     1,
 		SpreadAngle:     0,
 		Range:           0,

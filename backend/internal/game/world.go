@@ -539,6 +539,8 @@ func (w *World) broadcastSnapshot() {
 
 	// Add all players to snapshot
 	for _, player := range w.players {
+		// Calculate debug info for this player
+		player.DebugInfo = w.calculateDebugInfo(player)
 		snapshot.Players = append(snapshot.Players, *player)
 	}
 
@@ -881,4 +883,74 @@ func (w *World) updateModularTurretAiming(player *Player, input *InputMsg) {
 			}
 		}
 	}
+}
+
+// calculateDebugInfo computes debug values for client display
+func (w *World) calculateDebugInfo(player *Player) DebugInfo {
+	debugInfo := DebugInfo{
+		Health:            player.MaxHealth,
+		RegenRate:         player.Modifiers.HealthRegenPerSec,
+		MoveSpeedModifier: player.Modifiers.MoveSpeedMultiplier,
+		TurnSpeedModifier: player.Modifiers.TurnSpeedMultiplier,
+		BodyDamage:        player.Modifiers.BodyDamageBonus,
+		FrontDPS:          0,
+		SideDPS:           0,
+		RearDPS:           0,
+		TopDPS:            0,
+		TotalDPS:          0,
+	}
+
+	// Calculate DPS from all cannons
+	cannonDamageMod := float32(player.Upgrades[StatUpgradeCannonDamage].Level) * 0.1
+	reloadSpeedMod := float32(player.Upgrades[StatUpgradeReloadSpeed].Level) * 0.1
+
+	// Calculate DPS for each upgrade type
+	if player.ShipConfig.FrontUpgrade != nil {
+		for _, cannon := range player.ShipConfig.FrontUpgrade.Cannons {
+			damage := float32(cannon.Stats.BulletDamageMod * BulletDamage)
+			reloadRate := cannon.Stats.ReloadTime
+			effectiveDamage := damage * (1 + cannonDamageMod)
+			effectiveReloadRate := reloadRate * (1 + reloadSpeedMod)
+			debugInfo.FrontDPS += effectiveDamage * 1 / effectiveReloadRate
+		}
+	}
+
+	if player.ShipConfig.SideUpgrade != nil {
+		for _, cannon := range player.ShipConfig.SideUpgrade.Cannons {
+			damage := float32(cannon.Stats.BulletDamageMod * BulletDamage)
+			reloadRate := cannon.Stats.ReloadTime
+			effectiveDamage := damage * (1 + cannonDamageMod)
+			effectiveReloadRate := reloadRate * (1 + reloadSpeedMod)
+			debugInfo.SideDPS += effectiveDamage * 1 / effectiveReloadRate
+		}
+	}
+
+	if player.ShipConfig.RearUpgrade != nil {
+		for _, cannon := range player.ShipConfig.RearUpgrade.Cannons {
+			damage := float32(cannon.Stats.BulletDamageMod * BulletDamage)
+			reloadRate := cannon.Stats.ReloadTime
+			effectiveDamage := damage * (1 + cannonDamageMod)
+			effectiveReloadRate := reloadRate * (1 + reloadSpeedMod)
+			debugInfo.RearDPS += effectiveDamage * 1 / effectiveReloadRate
+		}
+	}
+
+	if player.ShipConfig.TopUpgrade != nil {
+		for _, turret := range player.ShipConfig.TopUpgrade.Turrets {
+			// only calculated based on first cannon
+			// machine gun dual cannon shares reload
+			turretCannon := turret.Cannons[0]
+
+			damage := float32(turretCannon.Stats.BulletDamageMod * BulletDamage)
+			reloadRate := turretCannon.Stats.ReloadTime
+			effectiveDamage := damage * (1 + cannonDamageMod)
+			effectiveReloadRate := reloadRate * (1 + reloadSpeedMod)
+			debugInfo.TopDPS += effectiveDamage * 1 / effectiveReloadRate
+		}
+	}
+
+	// Calculate total DPS
+	debugInfo.TotalDPS = debugInfo.FrontDPS + debugInfo.SideDPS + debugInfo.RearDPS + debugInfo.TopDPS
+
+	return debugInfo
 }
