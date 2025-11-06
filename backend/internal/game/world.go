@@ -266,9 +266,6 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 
 	// Calculate max speed with move speed upgrade and hull strength reduction
 	maxSpeed := (BaseShipMaxSpeed * player.Modifiers.MoveSpeedMultiplier)
-	if !player.IsBot {
-		//fmt.Println("Player", player.ID, "max speed:", maxSpeed)
-	}
 	speed := min(float32(math.Sqrt(float64(player.VelX*player.VelX+player.VelY*player.VelY))), maxSpeed)
 
 	// Scale turn speed based on current speed and ship length
@@ -950,11 +947,13 @@ func (w *World) updateModularTurretAiming(player *Player, input *InputMsg) {
 
 // calculateDebugInfo computes debug values for client display
 func (w *World) calculateDebugInfo(player *Player) DebugInfo {
+	baseShipLength := float32(PlayerSize * 1.2)                   // 1 cannon ship has no length multiplier
+	lengthFactor := baseShipLength / player.ShipConfig.ShipLength // Longer ships get smaller factor
 	debugInfo := DebugInfo{
 		Health:            player.MaxHealth,
 		RegenRate:         player.Modifiers.HealthRegenPerSec,
 		MoveSpeedModifier: player.Modifiers.MoveSpeedMultiplier,
-		TurnSpeedModifier: player.Modifiers.TurnSpeedMultiplier,
+		TurnSpeedModifier: player.Modifiers.TurnSpeedMultiplier * lengthFactor,
 		BodyDamage:        player.Modifiers.BodyDamageBonus,
 		FrontDPS:          0,
 		SideDPS:           0,
