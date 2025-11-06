@@ -211,7 +211,7 @@ func (player *Player) updateModifiers() {
 	player.Modifiers.BulletSpeedMultiplier = 1.0 + (float32(rangeLevel) * 0.05)
 
 	damageLevel := player.Upgrades[StatUpgradeCannonDamage].Level
-	player.Modifiers.BulletDamageMultiplier = 1.0 + (float32(damageLevel) * 0.1)
+	player.Modifiers.BulletDamageMultiplier = 1.0 + (float32(damageLevel) * 0.08)
 
 	reloadLevel := player.Upgrades[StatUpgradeReloadSpeed].Level
 	player.Modifiers.ReloadSpeedMultiplier = 1.0 - (float32(reloadLevel) * 0.03) // 2% faster per level
