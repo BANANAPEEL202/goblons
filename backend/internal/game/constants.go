@@ -32,15 +32,15 @@ const (
 
 // Message types for client-server communication
 const (
-	MsgTypeInput        = "input"
-	MsgTypeSnapshot     = "snapshot"
+	MsgTypeInput         = "input"
+	MsgTypeSnapshot      = "snapshot"
 	MsgTypeDeltaSnapshot = "deltaSnapshot"
-	MsgTypeJoin         = "join"
-	MsgTypeLeave        = "leave"
-	MsgTypeScore        = "score"
-	MsgTypeShoot        = "shoot"
-	MsgTypeWelcome      = "welcome"
-	MsgTypeGameEvent    = "gameEvent"
+	MsgTypeJoin          = "join"
+	MsgTypeLeave         = "leave"
+	MsgTypeScore         = "score"
+	MsgTypeShoot         = "shoot"
+	MsgTypeWelcome       = "welcome"
+	MsgTypeGameEvent     = "gameEvent"
 )
 
 // Combat constants

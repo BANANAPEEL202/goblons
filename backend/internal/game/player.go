@@ -192,8 +192,6 @@ func (player *Player) updateModifiers() {
 		}
 	}
 
-	fmt.Println("Module speed modifier:", moduleSpeedModifier)
-
 	healthLevel := player.Upgrades[StatUpgradeHullStrength].Level
 	player.MaxHealth = 100 + (healthLevel * HealthIncrease)
 

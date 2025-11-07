@@ -200,12 +200,12 @@ type Snapshot struct {
 
 // DeltaSnapshot represents only the changes in game state since last snapshot
 type DeltaSnapshot struct {
-	Type       string     `json:"type"`
-	Players    []Player   `json:"players,omitempty"`    // Full player list (always sent)
-	ItemsAdded []GameItem `json:"itemsAdded,omitempty"` // Items that were added
-	ItemsRemoved []uint32 `json:"itemsRemoved,omitempty"` // IDs of items that were removed
-	Bullets    []Bullet   `json:"bullets,omitempty"`    // Full bullet list (always sent)
-	Time       int64      `json:"time"`
+	Type         string     `json:"type"`
+	Players      []Player   `json:"players,omitempty"`      // Full player list (always sent)
+	ItemsAdded   []GameItem `json:"itemsAdded,omitempty"`   // Items that were added
+	ItemsRemoved []uint32   `json:"itemsRemoved,omitempty"` // IDs of items that were removed
+	Bullets      []Bullet   `json:"bullets,omitempty"`      // Full bullet list (always sent)
+	Time         int64      `json:"time"`
 }
 
 // WelcomeMsg represents a welcome message sent to a new client
@@ -238,32 +238,34 @@ type GameEventMsg struct {
 
 // Client represents a connected game client
 type Client struct {
-	ID          uint32
-	Conn        *websocket.Conn
-	Player      *Player
-	Input       InputMsg
-	Send        chan []byte
-	LastSeen    time.Time
-	LastUpgrade time.Time // Prevents rapid upgrade applications
-	lastSnapshot Snapshot // Store the last sent snapshot for delta calculations
-	mu          sync.RWMutex
+	ID           uint32
+	Conn         *websocket.Conn
+	Player       *Player
+	Input        InputMsg
+	Send         chan []byte
+	LastSeen     time.Time
+	LastUpgrade  time.Time // Prevents rapid upgrade applications
+	lastSnapshot Snapshot  // Store the last sent snapshot for delta calculations
+	mu           sync.RWMutex
 }
 
 // World represents the game world and all its entities
 type World struct {
-	mu           sync.RWMutex
-	clients      map[uint32]*Client
-	players      map[uint32]*Player
-	bots         map[uint32]*Bot
-	items        map[uint32]*GameItem
-	bullets      map[uint32]*Bullet
-	mechanics    *GameMechanics
-	nextPlayerID uint32
-	itemID       uint32
-	bulletID     uint32
-	running      bool
-	tickCounter  uint32 // For performance optimizations
-	botsSpawned  bool
+	mu                sync.RWMutex
+	clients           map[uint32]*Client
+	players           map[uint32]*Player
+	bots              map[uint32]*Bot
+	items             map[uint32]*GameItem
+	bullets           map[uint32]*Bullet
+	mechanics         *GameMechanics
+	nextPlayerID      uint32
+	itemID            uint32
+	bulletID          uint32
+	running           bool
+	tickCounter       uint32 // For performance optimizations
+	botsSpawned       bool
+	snapshotCount     int64 // Total snapshots sent
+	totalSnapshotSize int64 // Total size of all snapshots
 }
 
 // NewClient creates a new client

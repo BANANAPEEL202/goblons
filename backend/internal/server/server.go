@@ -61,25 +61,37 @@ func (s *Server) monitorNetworkUsage() {
 
 	var lastSent, lastRecv int64
 	var lastMsgSent, lastMsgRecv int64
+	var lastSnapshotCount int64
+	var lastTotalSnapshotSize int64
 
 	for range ticker.C {
 		currentSent := atomic.LoadInt64(&s.bytesSent)
 		currentRecv := atomic.LoadInt64(&s.bytesReceived)
 		currentMsgSent := atomic.LoadInt64(&s.messagesSent)
 		currentMsgRecv := atomic.LoadInt64(&s.messagesRecv)
+		currentSnapshotCount, currentTotalSnapshotSize := s.world.GetSnapshotStats()
 
 		sentRate := float64(currentSent-lastSent) / 10.0 / 1000000.0
 		recvRate := float64(currentRecv-lastRecv) / 10.0 / 1000000.0
 		msgSentRate := float64(currentMsgSent-lastMsgSent) / 10.0
 		msgRecvRate := float64(currentMsgRecv-lastMsgRecv) / 10.0
 
-		log.Printf("Network Stats - Sent: %.3f MB/s (%d total), Recv: %.3f MB/s (%d total), Msg Sent: %.1f/s (%d total), Msg Recv: %.1f/s (%d total)",
-			sentRate, currentSent, recvRate, currentRecv, msgSentRate, currentMsgSent, msgRecvRate, currentMsgRecv)
+		var avgSnapshotSize float64
+		snapshotsInPeriod := currentSnapshotCount - lastSnapshotCount
+		if snapshotsInPeriod > 0 {
+			sizeInPeriod := currentTotalSnapshotSize - lastTotalSnapshotSize
+			avgSnapshotSize = float64(sizeInPeriod) / float64(snapshotsInPeriod)
+		}
+
+		log.Printf("Network Stats - Sent: %.3f MB/s, Recv: %.3f MB/s, Msg Sent: %.1f/s, Msg Recv: %.1f/s, Avg Snapshot: %.1f KB (%d total)",
+			sentRate, recvRate, msgSentRate, msgRecvRate, avgSnapshotSize/1024.0, currentSnapshotCount)
 
 		lastSent = currentSent
 		lastRecv = currentRecv
 		lastMsgSent = currentMsgSent
 		lastMsgRecv = currentMsgRecv
+		lastSnapshotCount = currentSnapshotCount
+		lastTotalSnapshotSize = currentTotalSnapshotSize
 	}
 }
 

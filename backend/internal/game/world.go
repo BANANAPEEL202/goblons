@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"math"
+	"sync/atomic"
 	"time"
 )
 
@@ -616,6 +617,11 @@ func (w *World) calculateItemDeltas(currentItems []GameItem, lastSnapshot Snapsh
 	return itemsAdded, itemsRemoved
 }
 
+// GetSnapshotStats returns the current snapshot statistics
+func (w *World) GetSnapshotStats() (count int64, totalSize int64) {
+	return atomic.LoadInt64(&w.snapshotCount), atomic.LoadInt64(&w.totalSnapshotSize)
+}
+
 // broadcastSnapshot sends the current game state to all clients (optimized)
 func (w *World) broadcastSnapshot() {
 	// Limit data to reduce bandwidth
@@ -705,6 +711,9 @@ func (w *World) broadcastSnapshot() {
 			// Send to client
 			select {
 			case c.Send <- data:
+				// Track snapshot size
+				atomic.AddInt64(&w.snapshotCount, 1)
+				atomic.AddInt64(&w.totalSnapshotSize, int64(len(data)))
 			case <-time.After(10 * time.Millisecond):
 				// Skip slow clients to prevent blocking
 			}
