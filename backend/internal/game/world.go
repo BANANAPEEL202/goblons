@@ -583,13 +583,46 @@ func (w *World) spawnItems() {
 	}
 }
 
+// calculateItemDeltas compares current items with client's last snapshot to find added/removed items
+func (w *World) calculateItemDeltas(currentItems []GameItem, lastSnapshot Snapshot) ([]GameItem, []uint32) {
+	// Create maps for efficient lookup
+	lastItemMap := make(map[uint32]GameItem)
+	for _, item := range lastSnapshot.Items {
+		lastItemMap[item.ID] = item
+	}
+
+	currentItemMap := make(map[uint32]GameItem)
+	for _, item := range currentItems {
+		currentItemMap[item.ID] = item
+	}
+
+	var itemsAdded []GameItem
+	var itemsRemoved []uint32
+
+	// Find added items (in current but not in last)
+	for _, item := range currentItems {
+		if _, exists := lastItemMap[item.ID]; !exists {
+			itemsAdded = append(itemsAdded, item)
+		}
+	}
+
+	// Find removed items (in last but not in current)
+	for _, item := range lastSnapshot.Items {
+		if _, exists := currentItemMap[item.ID]; !exists {
+			itemsRemoved = append(itemsRemoved, item.ID)
+		}
+	}
+
+	return itemsAdded, itemsRemoved
+}
+
 // broadcastSnapshot sends the current game state to all clients (optimized)
 func (w *World) broadcastSnapshot() {
 	// Limit data to reduce bandwidth
 	maxItems := MaxItems * 2
 	maxBullets := 300
 
-	snapshot := Snapshot{
+	currentSnapshot := Snapshot{
 		Type:    MsgTypeSnapshot,
 		Players: make([]Player, 0, len(w.players)),
 		Items:   make([]GameItem, 0, min(len(w.items), maxItems)),
@@ -601,7 +634,7 @@ func (w *World) broadcastSnapshot() {
 	for _, player := range w.players {
 		// Calculate debug info for this player
 		player.DebugInfo = w.calculateDebugInfo(player)
-		snapshot.Players = append(snapshot.Players, *player)
+		currentSnapshot.Players = append(currentSnapshot.Players, *player)
 	}
 
 	// Add limited items to snapshot (prioritize closer items for performance)
@@ -610,7 +643,7 @@ func (w *World) broadcastSnapshot() {
 		if itemCount >= maxItems {
 			break
 		}
-		snapshot.Items = append(snapshot.Items, *item)
+		currentSnapshot.Items = append(currentSnapshot.Items, *item)
 		itemCount++
 	}
 
@@ -620,19 +653,56 @@ func (w *World) broadcastSnapshot() {
 		if bulletCount >= maxBullets {
 			break
 		}
-		snapshot.Bullets = append(snapshot.Bullets, *bullet)
+		currentSnapshot.Bullets = append(currentSnapshot.Bullets, *bullet)
 		bulletCount++
-	}
-
-	data, err := json.Marshal(snapshot)
-	if err != nil {
-		log.Printf("Error marshaling snapshot: %v", err)
-		return
 	}
 
 	// Send to all clients concurrently (non-blocking)
 	for _, client := range w.clients {
 		go func(c *Client) {
+			var data []byte
+			var err error
+
+			c.mu.RLock()
+			isFirstSnapshot := c.lastSnapshot.Time == 0
+			c.mu.RUnlock()
+
+			if isFirstSnapshot {
+				// First snapshot for this client - send full snapshot
+				data, err = json.Marshal(currentSnapshot)
+				if err != nil {
+					log.Printf("Error marshaling snapshot for client %d: %v", c.ID, err)
+					return
+				}
+			} else {
+				// Calculate delta changes for items based on client's last snapshot
+				c.mu.RLock()
+				itemsAdded, itemsRemoved := w.calculateItemDeltas(currentSnapshot.Items, c.lastSnapshot)
+				c.mu.RUnlock()
+
+				// Create delta snapshot
+				deltaSnapshot := DeltaSnapshot{
+					Type:         MsgTypeDeltaSnapshot,
+					Players:      currentSnapshot.Players,
+					ItemsAdded:   itemsAdded,
+					ItemsRemoved: itemsRemoved,
+					Bullets:      currentSnapshot.Bullets,
+					Time:         currentSnapshot.Time,
+				}
+
+				data, err = json.Marshal(deltaSnapshot)
+				if err != nil {
+					log.Printf("Error marshaling delta snapshot for client %d: %v", c.ID, err)
+					return
+				}
+			}
+
+			// Store current snapshot for this client's next delta calculation
+			c.mu.Lock()
+			c.lastSnapshot = currentSnapshot
+			c.mu.Unlock()
+
+			// Send to client
 			select {
 			case c.Send <- data:
 			case <-time.After(10 * time.Millisecond):

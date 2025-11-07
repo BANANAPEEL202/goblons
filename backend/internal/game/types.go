@@ -198,6 +198,16 @@ type Snapshot struct {
 	Time    int64      `json:"time"`
 }
 
+// DeltaSnapshot represents only the changes in game state since last snapshot
+type DeltaSnapshot struct {
+	Type       string     `json:"type"`
+	Players    []Player   `json:"players,omitempty"`    // Full player list (always sent)
+	ItemsAdded []GameItem `json:"itemsAdded,omitempty"` // Items that were added
+	ItemsRemoved []uint32 `json:"itemsRemoved,omitempty"` // IDs of items that were removed
+	Bullets    []Bullet   `json:"bullets,omitempty"`    // Full bullet list (always sent)
+	Time       int64      `json:"time"`
+}
+
 // WelcomeMsg represents a welcome message sent to a new client
 type WelcomeMsg struct {
 	Type     string `json:"type"`
@@ -235,6 +245,7 @@ type Client struct {
 	Send        chan []byte
 	LastSeen    time.Time
 	LastUpgrade time.Time // Prevents rapid upgrade applications
+	lastSnapshot Snapshot // Store the last sent snapshot for delta calculations
 	mu          sync.RWMutex
 }
 

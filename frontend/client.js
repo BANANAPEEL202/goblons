@@ -454,6 +454,87 @@ class GameClient {
           }
         }
         break;
+
+      case 'deltaSnapshot':
+        // Update players (always full list)
+        this.gameState.players = data.players || [];
+        
+        // Update bullets (always full list)
+        this.gameState.bullets = data.bullets || [];
+        
+        // Apply item deltas
+        if (data.itemsAdded) {
+          // Add new items
+          for (const item of data.itemsAdded) {
+            this.gameState.items.push(item);
+          }
+        }
+        if (data.itemsRemoved) {
+          // Remove items by ID
+          const removedIds = new Set(data.itemsRemoved);
+          this.gameState.items = this.gameState.items.filter(item => !removedIds.has(item.id));
+        }
+        
+        // Find our player by the ID we received in the welcome message
+        if (this.myPlayerId) {
+          const serverPlayer = this.gameState.players.find(p => p.id === this.myPlayerId);
+          if (serverPlayer) {
+            // Initialize our player if this is the first time we found them
+            if (!this.gameState.myPlayer) {
+              console.log('Found our player:', serverPlayer);
+              this.gameState.myPlayer = serverPlayer;
+              
+              // Initialize predicted position and ship physics with server data
+              this.predictedPlayerPos.x = serverPlayer.x;
+              this.predictedPlayerPos.y = serverPlayer.y;
+              
+              if (serverPlayer.angle !== undefined) {
+                this.shipPhysics.angle = serverPlayer.angle;
+              }
+              
+              // Initialize velocity from server
+              this.shipPhysics.velocity.x = serverPlayer.velX || 0;
+              this.shipPhysics.velocity.y = serverPlayer.velY || 0;
+            } else {
+              // Update our player with server data
+              const prevState = this.gameState.myPlayer.state;
+              this.gameState.myPlayer = serverPlayer;
+              
+              // Check if player just died (transition from alive to dead)
+              if (serverPlayer.state === 1 && prevState === 0 && !this.deathScreen.visible) { // State 1 = Dead, State 0 = Alive
+                this.showDeathScreen(serverPlayer);
+              }
+              // Don't hide death screen when player respawns - let the respawn button control that
+              
+              // Sync angle with server
+              if (serverPlayer.angle !== undefined) {
+                this.shipPhysics.angle = serverPlayer.angle;
+              }
+              
+              // Reconcile predicted position with server position
+              const serverPos = { x: serverPlayer.x, y: serverPlayer.y };
+              const distance = Math.sqrt(
+                Math.pow(this.predictedPlayerPos.x - serverPos.x, 2) + 
+                Math.pow(this.predictedPlayerPos.y - serverPos.y, 2)
+              );
+              
+              // If prediction is too far off, snap to server position
+              if (distance > 25) {
+                this.predictedPlayerPos.x = serverPos.x;
+                this.predictedPlayerPos.y = serverPos.y;
+                // Also sync velocity to prevent further drift
+                this.shipPhysics.velocity.x = serverPlayer.velX || 0;
+                this.shipPhysics.velocity.y = serverPlayer.velY || 0;
+              } else if (distance > 5) {
+                // Gradually correct prediction towards server position
+                const correctionFactor = 0.15;
+                this.predictedPlayerPos.x += (serverPos.x - this.predictedPlayerPos.x) * correctionFactor;
+                this.predictedPlayerPos.y += (serverPos.y - this.predictedPlayerPos.y) * correctionFactor;
+              }
+            }
+          }
+        }
+        break;
         
       case 'playerJoined':
         console.log(`Player ${data.playerId} joined the game`);
