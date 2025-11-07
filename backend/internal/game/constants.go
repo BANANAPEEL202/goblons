@@ -2,12 +2,13 @@ package game
 
 // Game world constants
 const (
-	WorldWidth  = 5000.0
-	WorldHeight = 5000.0
-	TickRate    = 30 // Server updates per second (reduced for performance)
-	PlayerSpeed = 2.0
-	PlayerSize  = 50.0
-	MaxPlayers  = 32
+	WorldWidth         = 5000.0
+	WorldHeight        = 5000.0
+	TickRate           = 30 // Server updates per second (reduced for performance)
+	PlayerSpeed        = 2.0
+	PlayerSize         = 50.0
+	MaxPlayers         = 32
+	BulletVisibleRange = 1500.0 // Maximum distance to send bullets to clients
 )
 
 // Ship physics constants

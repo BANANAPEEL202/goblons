@@ -622,17 +622,42 @@ func (w *World) GetSnapshotStats() (count int64, totalSize int64) {
 	return atomic.LoadInt64(&w.snapshotCount), atomic.LoadInt64(&w.totalSnapshotSize)
 }
 
+// getBulletsInRange returns bullets within visible range of a player
+func (w *World) getBulletsInRange(player *Player) []Bullet {
+	bullets := make([]Bullet, 0, 50) // Pre-allocate reasonable capacity
+	maxBullets := 200                // Limit bullets per client to prevent overload
+
+	bulletCount := 0
+	for _, bullet := range w.bullets {
+		if bulletCount >= maxBullets {
+			break
+		}
+
+		// Calculate distance squared (avoid sqrt for performance)
+		dx := bullet.X - player.X
+		dy := bullet.Y - player.Y
+		distSq := dx*dx + dy*dy
+
+		// Include bullet if within visible range
+		if distSq <= BulletVisibleRange*BulletVisibleRange {
+			bullets = append(bullets, *bullet)
+			bulletCount++
+		}
+	}
+
+	return bullets
+}
+
 // broadcastSnapshot sends the current game state to all clients (optimized)
 func (w *World) broadcastSnapshot() {
 	// Limit data to reduce bandwidth
 	maxItems := MaxItems * 2
-	maxBullets := 300
 
 	currentSnapshot := Snapshot{
 		Type:    MsgTypeSnapshot,
 		Players: make([]Player, 0, len(w.players)),
 		Items:   make([]GameItem, 0, min(len(w.items), maxItems)),
-		Bullets: make([]Bullet, 0, min(len(w.bullets), maxBullets)),
+		Bullets: []Bullet{},
 		Time:    time.Now().UnixMilli(),
 	}
 
@@ -653,16 +678,6 @@ func (w *World) broadcastSnapshot() {
 		itemCount++
 	}
 
-	// Add limited bullets to snapshot
-	bulletCount := 0
-	for _, bullet := range w.bullets {
-		if bulletCount >= maxBullets {
-			break
-		}
-		currentSnapshot.Bullets = append(currentSnapshot.Bullets, *bullet)
-		bulletCount++
-	}
-
 	// Send to all clients concurrently (non-blocking)
 	for _, client := range w.clients {
 		go func(c *Client) {
@@ -673,9 +688,13 @@ func (w *World) broadcastSnapshot() {
 			isFirstSnapshot := c.lastSnapshot.Time == 0
 			c.mu.RUnlock()
 
+			// Create client-specific snapshot with filtered bullets
+			clientSnapshot := currentSnapshot
+			clientSnapshot.Bullets = w.getBulletsInRange(c.Player)
+
 			if isFirstSnapshot {
 				// First snapshot for this client - send full snapshot
-				data, err = json.Marshal(currentSnapshot)
+				data, err = json.Marshal(clientSnapshot)
 				if err != nil {
 					log.Printf("Error marshaling snapshot for client %d: %v", c.ID, err)
 					return
@@ -683,17 +702,17 @@ func (w *World) broadcastSnapshot() {
 			} else {
 				// Calculate delta changes for items based on client's last snapshot
 				c.mu.RLock()
-				itemsAdded, itemsRemoved := w.calculateItemDeltas(currentSnapshot.Items, c.lastSnapshot)
+				itemsAdded, itemsRemoved := w.calculateItemDeltas(clientSnapshot.Items, c.lastSnapshot)
 				c.mu.RUnlock()
 
 				// Create delta snapshot
 				deltaSnapshot := DeltaSnapshot{
 					Type:         MsgTypeDeltaSnapshot,
-					Players:      currentSnapshot.Players,
+					Players:      clientSnapshot.Players,
 					ItemsAdded:   itemsAdded,
 					ItemsRemoved: itemsRemoved,
-					Bullets:      currentSnapshot.Bullets,
-					Time:         currentSnapshot.Time,
+					Bullets:      clientSnapshot.Bullets,
+					Time:         clientSnapshot.Time,
 				}
 
 				data, err = json.Marshal(deltaSnapshot)
@@ -705,7 +724,7 @@ func (w *World) broadcastSnapshot() {
 
 			// Store current snapshot for this client's next delta calculation
 			c.mu.Lock()
-			c.lastSnapshot = currentSnapshot
+			c.lastSnapshot = clientSnapshot
 			c.mu.Unlock()
 
 			// Send to client
@@ -1052,7 +1071,9 @@ func (w *World) calculateDebugInfo(player *Player) DebugInfo {
 			reloadRate := cannon.Stats.ReloadTime
 			effectiveDamage := damage * (cannonDamageMod)
 			effectiveReloadRate := reloadRate * (reloadSpeedMod)
-			debugInfo.FrontDPS += effectiveDamage * 1 / effectiveReloadRate
+			if effectiveReloadRate > 0 {
+				debugInfo.FrontDPS += effectiveDamage * 1 / effectiveReloadRate
+			}
 		}
 	}
 
@@ -1062,7 +1083,9 @@ func (w *World) calculateDebugInfo(player *Player) DebugInfo {
 			reloadRate := cannon.Stats.ReloadTime
 			effectiveDamage := damage * (cannonDamageMod)
 			effectiveReloadRate := reloadRate * (reloadSpeedMod)
-			debugInfo.SideDPS += effectiveDamage * 1 / effectiveReloadRate
+			if effectiveReloadRate > 0 {
+				debugInfo.SideDPS += effectiveDamage * 1 / effectiveReloadRate
+			}
 		}
 	}
 
@@ -1072,7 +1095,9 @@ func (w *World) calculateDebugInfo(player *Player) DebugInfo {
 			reloadRate := cannon.Stats.ReloadTime
 			effectiveDamage := damage * (cannonDamageMod)
 			effectiveReloadRate := reloadRate * (reloadSpeedMod)
-			debugInfo.RearDPS += effectiveDamage * 1 / effectiveReloadRate
+			if effectiveReloadRate > 0 {
+				debugInfo.RearDPS += effectiveDamage * 1 / effectiveReloadRate
+			}
 		}
 	}
 
@@ -1086,7 +1111,9 @@ func (w *World) calculateDebugInfo(player *Player) DebugInfo {
 			reloadRate := turretCannon.Stats.ReloadTime
 			effectiveDamage := damage * (cannonDamageMod)
 			effectiveReloadRate := reloadRate * (reloadSpeedMod)
-			debugInfo.TopDPS += effectiveDamage * 1 / effectiveReloadRate
+			if effectiveReloadRate > 0 {
+				debugInfo.TopDPS += effectiveDamage * 1 / effectiveReloadRate
+			}
 		}
 	}
 
