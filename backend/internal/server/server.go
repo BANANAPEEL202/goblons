@@ -34,10 +34,10 @@ func NewServer() *Server {
 	server := &Server{
 		world: game.NewWorld(),
 	}
-	
+
 	// Start network monitoring
 	go server.monitorNetworkUsage()
-	
+
 	return server
 }
 
@@ -58,24 +58,24 @@ func (s *Server) Start(addr string) error {
 func (s *Server) monitorNetworkUsage() {
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
-	
+
 	var lastSent, lastRecv int64
 	var lastMsgSent, lastMsgRecv int64
-	
+
 	for range ticker.C {
 		currentSent := atomic.LoadInt64(&s.bytesSent)
 		currentRecv := atomic.LoadInt64(&s.bytesReceived)
 		currentMsgSent := atomic.LoadInt64(&s.messagesSent)
 		currentMsgRecv := atomic.LoadInt64(&s.messagesRecv)
-		
-		sentRate := float64(currentSent-lastSent) / 10.0
-		recvRate := float64(currentRecv-lastRecv) / 10.0
+
+		sentRate := float64(currentSent-lastSent) / 10.0 / 1000000.0
+		recvRate := float64(currentRecv-lastRecv) / 10.0 / 1000000.0
 		msgSentRate := float64(currentMsgSent-lastMsgSent) / 10.0
 		msgRecvRate := float64(currentMsgRecv-lastMsgRecv) / 10.0
-		
-		log.Printf("Network Stats - Sent: %.1f B/s (%d total), Recv: %.1f B/s (%d total), Msg Sent: %.1f/s (%d total), Msg Recv: %.1f/s (%d total)",
+
+		log.Printf("Network Stats - Sent: %.3f MB/s (%d total), Recv: %.3f MB/s (%d total), Msg Sent: %.1f/s (%d total), Msg Recv: %.1f/s (%d total)",
 			sentRate, currentSent, recvRate, currentRecv, msgSentRate, currentMsgSent, msgRecvRate, currentMsgRecv)
-		
+
 		lastSent = currentSent
 		lastRecv = currentRecv
 		lastMsgSent = currentMsgSent
