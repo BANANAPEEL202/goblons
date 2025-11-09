@@ -71,3 +71,7 @@ const (
 	StateDead
 	StateSpawning
 )
+
+const (
+	DEV = false
+)

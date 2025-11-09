@@ -169,6 +169,8 @@ func (w *World) processPlayerActions(player *Player, input *InputMsg) {
 		if action.Sequence <= player.LastProcessedAction {
 			log.Printf("Player %d skipping already processed action seq %d (last: %d)",
 				player.ID, action.Sequence, player.LastProcessedAction)
+			// Update last processed to prevent reprocessing this sequence
+			player.LastProcessedAction = action.Sequence
 			continue
 		}
 
@@ -315,34 +317,35 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 		player.AvailableUpgrades++
 	}
 
-	// Handle ship upgrades - use new modular system
-	if input.UpgradeCannons {
-		player.ShipConfig.SideUpgrade = NewBasicSideCannons(player.ShipConfig.SideUpgrade.Count + 1)
-		player.ShipConfig.CalculateShipDimensions()
-		player.ShipConfig.UpdateUpgradePositions()
-	}
-	if input.DowngradeCannons {
-		player.ShipConfig.SideUpgrade = NewBasicSideCannons(player.ShipConfig.SideUpgrade.Count - 1)
-		player.ShipConfig.CalculateShipDimensions()
-		player.ShipConfig.UpdateUpgradePositions()
-	}
-	if input.UpgradeTurrets {
-		player.ShipConfig.TopUpgrade = NewBasicTurrets(player.ShipConfig.TopUpgrade.Count + 1)
-		player.ShipConfig.CalculateShipDimensions()
-		player.ShipConfig.UpdateUpgradePositions()
-	}
-	if input.DowngradeTurrets {
-		player.ShipConfig.TopUpgrade = NewBasicTurrets(player.ShipConfig.TopUpgrade.Count - 1)
-		player.ShipConfig.CalculateShipDimensions()
-		player.ShipConfig.UpdateUpgradePositions()
-	}
+	if DEV {
+		if input.UpgradeCannons {
+			player.ShipConfig.SideUpgrade = NewBasicSideCannons(player.ShipConfig.SideUpgrade.Count + 1)
+			player.ShipConfig.CalculateShipDimensions()
+			player.ShipConfig.UpdateUpgradePositions()
+		}
+		if input.DowngradeCannons {
+			player.ShipConfig.SideUpgrade = NewBasicSideCannons(player.ShipConfig.SideUpgrade.Count - 1)
+			player.ShipConfig.CalculateShipDimensions()
+			player.ShipConfig.UpdateUpgradePositions()
+		}
+		if input.UpgradeTurrets {
+			player.ShipConfig.TopUpgrade = NewBasicTurrets(player.ShipConfig.TopUpgrade.Count + 1)
+			player.ShipConfig.CalculateShipDimensions()
+			player.ShipConfig.UpdateUpgradePositions()
+		}
+		if input.DowngradeTurrets {
+			player.ShipConfig.TopUpgrade = NewBasicTurrets(player.ShipConfig.TopUpgrade.Count - 1)
+			player.ShipConfig.CalculateShipDimensions()
+			player.ShipConfig.UpdateUpgradePositions()
+		}
 
-	// Handle leveling system
-	if input.DebugLevelUp {
-		player.DebugLevelUp()
-		// Send updated available upgrades to client
-		if client, exists := w.GetClient(player.ID); exists {
-			client.sendAvailableUpgrades()
+		// Handle leveling system
+		if input.DebugLevelUp {
+			player.DebugLevelUp()
+			// Send updated available upgrades to client
+			if client, exists := w.GetClient(player.ID); exists {
+				client.sendAvailableUpgrades()
+			}
 		}
 	}
 
