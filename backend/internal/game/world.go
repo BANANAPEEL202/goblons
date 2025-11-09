@@ -328,16 +328,6 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 		player.ShipConfig.CalculateShipDimensions()
 		player.ShipConfig.UpdateUpgradePositions()
 	}
-	if input.UpgradeScatter {
-		player.ShipConfig.SideUpgrade = NewScatterSideCannons(player.ShipConfig.SideUpgrade.Count + 1)
-		player.ShipConfig.CalculateShipDimensions()
-		player.ShipConfig.UpdateUpgradePositions()
-	}
-	if input.DowngradeScatter {
-		player.ShipConfig.SideUpgrade = NewScatterSideCannons(player.ShipConfig.SideUpgrade.Count - 1)
-		player.ShipConfig.CalculateShipDimensions()
-		player.ShipConfig.UpdateUpgradePositions()
-	}
 	if input.UpgradeTurrets {
 		player.ShipConfig.TopUpgrade = NewBasicTurrets(player.ShipConfig.TopUpgrade.Count + 1)
 		player.ShipConfig.CalculateShipDimensions()
@@ -646,29 +636,6 @@ func (w *World) getBulletsInRange(player *Player) []Bullet {
 	}
 
 	return bullets
-}
-
-// copyPlayer creates a deep copy of a Player including maps
-func copyPlayer(player Player) Player {
-	copy := player
-
-	// Deep copy the Upgrades map
-	if player.Upgrades != nil {
-		copy.Upgrades = make(map[UpgradeType]Upgrade)
-		for k, v := range player.Upgrades {
-			copy.Upgrades[k] = v
-		}
-	}
-
-	// Deep copy the ActionCooldowns map
-	if player.ActionCooldowns != nil {
-		copy.ActionCooldowns = make(map[string]time.Time)
-		for k, v := range player.ActionCooldowns {
-			copy.ActionCooldowns[k] = v
-		}
-	}
-
-	return copy
 }
 
 // broadcastSnapshot sends the current game state to all clients (optimized)
@@ -1281,28 +1248,6 @@ func debugInfoEqual(a, b DebugInfo) bool {
 		a.TotalDPS == b.TotalDPS
 }
 
-// shipConfigEqual compares two ShipConfiguration structs
-func shipConfigEqual(a, b ShipConfiguration) bool {
-	return a.ShipLength == b.ShipLength &&
-		a.ShipWidth == b.ShipWidth &&
-		a.Size == b.Size &&
-		shipModuleEqual(a.SideUpgrade, b.SideUpgrade) &&
-		shipModuleEqual(a.TopUpgrade, b.TopUpgrade) &&
-		shipModuleEqual(a.FrontUpgrade, b.FrontUpgrade) &&
-		shipModuleEqual(a.RearUpgrade, b.RearUpgrade)
-}
-
-// shipModuleEqual compares two ShipModule pointers
-func shipModuleEqual(a, b *ShipModule) bool {
-	if a == nil && b == nil {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return a.Type == b.Type && a.Count == b.Count
-}
-
 // upgradesEqual compares two upgrade maps
 func upgradesEqual(a, b map[UpgradeType]Upgrade) bool {
 	if a == nil && b == nil {
@@ -1324,26 +1269,4 @@ func upgradesEqual(a, b map[UpgradeType]Upgrade) bool {
 		}
 	}
 	return true
-}
-
-// hasPlayerChanges checks if a delta player has any changed fields
-func hasPlayerChanges(delta DeltaPlayer) bool {
-	return delta.X != nil ||
-		delta.Y != nil ||
-		delta.VelX != nil ||
-		delta.VelY != nil ||
-		delta.Angle != nil ||
-		delta.Score != nil ||
-		delta.State != nil ||
-		delta.Name != nil ||
-		delta.Color != nil ||
-		delta.Health != nil ||
-		delta.MaxHealth != nil ||
-		delta.Level != nil ||
-		delta.Experience != nil ||
-		delta.AvailableUpgrades != nil ||
-		delta.Coins != nil ||
-		delta.Upgrades != nil ||
-		delta.AutofireEnabled != nil ||
-		delta.DebugInfo != nil
 }

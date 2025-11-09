@@ -124,6 +124,51 @@ func (player *Player) resetPlayerShipConfig() {
 	player.updateShipGeometry()
 }
 
+// copyPlayer creates a deep copy of a Player including maps
+func copyPlayer(player Player) Player {
+	copy := player
+
+	// Deep copy the Upgrades map
+	if player.Upgrades != nil {
+		copy.Upgrades = make(map[UpgradeType]Upgrade)
+		for k, v := range player.Upgrades {
+			copy.Upgrades[k] = v
+		}
+	}
+
+	// Deep copy the ActionCooldowns map
+	if player.ActionCooldowns != nil {
+		copy.ActionCooldowns = make(map[string]time.Time)
+		for k, v := range player.ActionCooldowns {
+			copy.ActionCooldowns[k] = v
+		}
+	}
+
+	return copy
+}
+
+// hasPlayerChanges checks if a delta player has any changed fields
+func hasPlayerChanges(delta DeltaPlayer) bool {
+	return delta.X != nil ||
+		delta.Y != nil ||
+		delta.VelX != nil ||
+		delta.VelY != nil ||
+		delta.Angle != nil ||
+		delta.Score != nil ||
+		delta.State != nil ||
+		delta.Name != nil ||
+		delta.Color != nil ||
+		delta.Health != nil ||
+		delta.MaxHealth != nil ||
+		delta.Level != nil ||
+		delta.Experience != nil ||
+		delta.AvailableUpgrades != nil ||
+		delta.Coins != nil ||
+		delta.Upgrades != nil ||
+		delta.AutofireEnabled != nil ||
+		delta.DebugInfo != nil
+}
+
 // BuyUpgrade attempts to upgrade a specific stat for a player
 func (player *Player) BuyUpgrade(upgradeType UpgradeType) bool {
 	if player.Upgrades == nil {

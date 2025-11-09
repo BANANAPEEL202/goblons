@@ -55,8 +55,6 @@ type InputMsg struct {
 	// Legacy inputs (deprecated but kept for compatibility)
 	UpgradeCannons   bool   `json:"upgradeCannons,omitempty"`
 	DowngradeCannons bool   `json:"downgradeCannons,omitempty"`
-	UpgradeScatter   bool   `json:"upgradeScatter,omitempty"`
-	DowngradeScatter bool   `json:"downgradeScatter,omitempty"`
 	UpgradeTurrets   bool   `json:"upgradeTurrets,omitempty"`
 	DowngradeTurrets bool   `json:"downgradeTurrets,omitempty"`
 	DebugLevelUp     bool   `json:"debugLevelUp,omitempty"`
