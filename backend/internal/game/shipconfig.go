@@ -184,3 +184,75 @@ func (sc *ShipConfiguration) CalculateShipDimensions() {
 	sc.ShipLength = max(sideLength, turretLength)
 	sc.ShipWidth = max(baseWidth, sc.ShipWidth)
 }
+
+// ToMinimalShipConfig converts a ShipConfiguration to MinimalShipConfig for delta snapshots
+func (sc *ShipConfiguration) ToMinimalShipConfig() MinimalShipConfig {
+	minimal := MinimalShipConfig{
+		ShipLength: sc.ShipLength,
+		ShipWidth:  sc.ShipWidth,
+	}
+
+	// Convert side upgrade
+	if sc.SideUpgrade != nil {
+		minimal.SideUpgrade = &MinimalShipModule{
+			Name:    sc.SideUpgrade.Name,
+			Cannons: make([]MinimalCannon, len(sc.SideUpgrade.Cannons)),
+		}
+		for i, cannon := range sc.SideUpgrade.Cannons {
+			minimal.SideUpgrade.Cannons[i] = MinimalCannon{
+				Position:   cannon.Position,
+				Type:       string(cannon.Type),
+				RecoilTime: cannon.RecoilTime,
+			}
+		}
+	}
+
+	// Convert front upgrade
+	if sc.FrontUpgrade != nil {
+		minimal.FrontUpgrade = &MinimalShipModule{
+			Name:    sc.FrontUpgrade.Name,
+			Cannons: make([]MinimalCannon, len(sc.FrontUpgrade.Cannons)),
+		}
+		for i, cannon := range sc.FrontUpgrade.Cannons {
+			minimal.FrontUpgrade.Cannons[i] = MinimalCannon{
+				Position:   cannon.Position,
+				Type:       string(cannon.Type),
+				RecoilTime: cannon.RecoilTime,
+			}
+		}
+	}
+
+	// Convert rear upgrade
+	if sc.RearUpgrade != nil {
+		minimal.RearUpgrade = &MinimalShipModule{
+			Name: sc.RearUpgrade.Name,
+		}
+	}
+
+	// Convert top upgrade (turrets)
+	if sc.TopUpgrade != nil {
+		minimal.TopUpgrade = &MinimalShipModule{
+			Turrets: make([]MinimalTurret, len(sc.TopUpgrade.Turrets)),
+		}
+		for i, turret := range sc.TopUpgrade.Turrets {
+			minimalTurret := MinimalTurret{
+				Position:        turret.Position,
+				Angle:           turret.Angle,
+				Type:            string(turret.Type),
+				RecoilTime:      turret.RecoilTime,
+				NextCannonIndex: turret.NextCannonIndex,
+				Cannons:         make([]MinimalCannon, len(turret.Cannons)),
+			}
+			for j, cannon := range turret.Cannons {
+				minimalTurret.Cannons[j] = MinimalCannon{
+					Position:   cannon.Position,
+					Type:       string(cannon.Type),
+					RecoilTime: cannon.RecoilTime,
+				}
+			}
+			minimal.TopUpgrade.Turrets[i] = minimalTurret
+		}
+	}
+
+	return minimal
+}

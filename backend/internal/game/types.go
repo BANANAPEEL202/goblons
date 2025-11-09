@@ -200,12 +200,70 @@ type Snapshot struct {
 
 // DeltaSnapshot represents only the changes in game state since last snapshot
 type DeltaSnapshot struct {
-	Type         string     `json:"type"`
-	Players      []Player   `json:"players,omitempty"`      // Full player list (always sent)
-	ItemsAdded   []GameItem `json:"itemsAdded,omitempty"`   // Items that were added
-	ItemsRemoved []uint32   `json:"itemsRemoved,omitempty"` // IDs of items that were removed
-	Bullets      []Bullet   `json:"bullets,omitempty"`      // Full bullet list (always sent)
-	Time         int64      `json:"time"`
+	Type         string        `json:"type"`
+	Players      []DeltaPlayer `json:"players,omitempty"`      // Delta player updates
+	ItemsAdded   []GameItem    `json:"itemsAdded,omitempty"`   // Items that were added
+	ItemsRemoved []uint32      `json:"itemsRemoved,omitempty"` // IDs of items that were removed
+	Bullets      []Bullet      `json:"bullets,omitempty"`      // Full bullet list (always sent)
+	Time         int64         `json:"time"`
+}
+
+// DeltaPlayer represents only the changed fields of a player since last snapshot
+type DeltaPlayer struct {
+	ID                uint32                   `json:"id"`          // Always sent
+	X                 *float32                 `json:"x,omitempty"` // Position changes frequently
+	Y                 *float32                 `json:"y,omitempty"`
+	VelX              *float32                 `json:"velX,omitempty"`
+	VelY              *float32                 `json:"velY,omitempty"`
+	Angle             *float32                 `json:"angle,omitempty"`
+	Score             *int                     `json:"score,omitempty"`             // Changes occasionally
+	State             *int                     `json:"state,omitempty"`             // Alive/dead state
+	Name              *string                  `json:"name,omitempty"`              // Changes rarely
+	Color             *string                  `json:"color,omitempty"`             // Changes rarely
+	Health            *int                     `json:"health,omitempty"`            // Changes frequently
+	MaxHealth         *int                     `json:"maxHealth,omitempty"`         // Changes with upgrades
+	Level             *int                     `json:"level,omitempty"`             // Changes occasionally
+	Experience        *int                     `json:"experience,omitempty"`        // Changes frequently
+	AvailableUpgrades *int                     `json:"availableUpgrades,omitempty"` // Changes occasionally
+	ShipConfig        MinimalShipConfig        `json:"shipConfig"`                  // Always sent (minimal data for rendering)
+	Coins             *int                     `json:"coins,omitempty"`             // Changes with items/spending
+	Upgrades          *map[UpgradeType]Upgrade `json:"statUpgrades,omitempty"`      // Changes with stat upgrades
+	AutofireEnabled   *bool                    `json:"autofireEnabled,omitempty"`   // Changes rarely
+	DebugInfo         *DebugInfo               `json:"debugInfo,omitempty"`         // Changes frequently for display
+}
+
+// MinimalShipConfig contains only the fields needed by the frontend for rendering
+type MinimalShipConfig struct {
+	ShipLength   float32            `json:"shipLength"`             // For hull dimensions
+	ShipWidth    float32            `json:"shipWidth"`              // For hull dimensions
+	SideUpgrade  *MinimalShipModule `json:"sideUpgrade,omitempty"`  // Side cannons
+	FrontUpgrade *MinimalShipModule `json:"frontUpgrade,omitempty"` // Front upgrades (ram/cannons)
+	RearUpgrade  *MinimalShipModule `json:"rearUpgrade,omitempty"`  // Rear upgrades (rudder)
+	TopUpgrade   *MinimalShipModule `json:"topUpgrade,omitempty"`   // Top turrets
+}
+
+// MinimalShipModule contains only the fields needed by the frontend
+type MinimalShipModule struct {
+	Name    string          `json:"name"`              // Upgrade name (for ram/rudder)
+	Cannons []MinimalCannon `json:"cannons,omitempty"` // Cannons with minimal data
+	Turrets []MinimalTurret `json:"turrets,omitempty"` // Turrets with minimal data
+}
+
+// MinimalCannon contains only the fields needed by the frontend for rendering
+type MinimalCannon struct {
+	Position   Position  `json:"position"`   // Relative position for drawing
+	Type       string    `json:"type"`       // Cannon type for rendering style
+	RecoilTime time.Time `json:"recoilTime"` // For recoil animation
+}
+
+// MinimalTurret contains only the fields needed by the frontend for rendering
+type MinimalTurret struct {
+	Position        Position        `json:"position"`        // Relative position for drawing
+	Angle           float32         `json:"angle"`           // Current aiming angle
+	Type            string          `json:"type"`            // Turret type for rendering style
+	RecoilTime      time.Time       `json:"recoilTime"`      // For recoil animation
+	NextCannonIndex int             `json:"nextCannonIndex"` // For alternating recoil
+	Cannons         []MinimalCannon `json:"cannons"`         // Turret cannons (minimal data)
 }
 
 // WelcomeMsg represents a welcome message sent to a new client

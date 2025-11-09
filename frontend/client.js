@@ -456,8 +456,20 @@ class GameClient {
         break;
 
       case 'deltaSnapshot':
-        // Update players (always full list)
-        this.gameState.players = data.players || [];
+        // Apply player deltas to existing players
+        if (data.players) {
+          for (const deltaPlayer of data.players) {
+            const existingPlayerIndex = this.gameState.players.findIndex(p => p.id === deltaPlayer.id);
+            if (existingPlayerIndex >= 0) {
+              // Update existing player with delta
+              this.gameState.players[existingPlayerIndex] = this.mergeDeltaPlayer(this.gameState.players[existingPlayerIndex], deltaPlayer);
+            } else {
+              // New player - convert delta to full player
+              const fullPlayer = this.deltaToFullPlayer(deltaPlayer);
+              this.gameState.players.push(fullPlayer);
+            }
+          }
+        }
         
         // Update bullets (always full list)
         this.gameState.bullets = data.bullets || [];
@@ -1742,7 +1754,7 @@ drawPlayer(player) {
 
 
   // --- Center circle ---
-  if (player.shipConfig && player.shipConfig.topUpgrade && player.shipConfig.topUpgrade.turrets && player.shipConfig.topUpgrade.turrets.length == 0) {
+  if (player.shipConfig && player.shipConfig.topUpgrade && player.shipConfig.topUpgrade.turrets && player.shipConfig.topUpgrade.turrets.length == 0 || !player.shipConfig.topUpgrade.turrets) {
     ctx.beginPath();
     ctx.arc(0, 0, shaftWidth * 0.2, 0, Math.PI * 2);
     ctx.fillStyle = '#444';
@@ -2843,6 +2855,61 @@ drawPlayer(player) {
     this.ctx.fillText(`Autofire: ${autofireEnabled ? 'ON' : 'OFF'} (R)`, textX, textY);
     
     this.ctx.restore();
+  }
+
+  // Merges a delta player update into an existing full player object
+  mergeDeltaPlayer(existingPlayer, deltaPlayer) {
+    const merged = { ...existingPlayer };
+
+    // Apply only the changed fields from the delta
+    if (deltaPlayer.x !== undefined) merged.x = deltaPlayer.x;
+    if (deltaPlayer.y !== undefined) merged.y = deltaPlayer.y;
+    if (deltaPlayer.velX !== undefined) merged.velX = deltaPlayer.velX;
+    if (deltaPlayer.velY !== undefined) merged.velY = deltaPlayer.velY;
+    if (deltaPlayer.angle !== undefined) merged.angle = deltaPlayer.angle;
+    if (deltaPlayer.score !== undefined) merged.score = deltaPlayer.score;
+    if (deltaPlayer.state !== undefined) merged.state = deltaPlayer.state;
+    if (deltaPlayer.name !== undefined) merged.name = deltaPlayer.name;
+    if (deltaPlayer.color !== undefined) merged.color = deltaPlayer.color;
+    if (deltaPlayer.health !== undefined) merged.health = deltaPlayer.health;
+    if (deltaPlayer.maxHealth !== undefined) merged.maxHealth = deltaPlayer.maxHealth;
+    if (deltaPlayer.level !== undefined) merged.level = deltaPlayer.level;
+    if (deltaPlayer.experience !== undefined) merged.experience = deltaPlayer.experience;
+    if (deltaPlayer.availableUpgrades !== undefined) merged.availableUpgrades = deltaPlayer.availableUpgrades;
+    if (deltaPlayer.shipConfig !== undefined) merged.shipConfig = deltaPlayer.shipConfig; // Always present now
+    if (deltaPlayer.coins !== undefined) merged.coins = deltaPlayer.coins;
+    if (deltaPlayer.statUpgrades !== undefined) merged.statUpgrades = deltaPlayer.statUpgrades;
+    if (deltaPlayer.autofireEnabled !== undefined) merged.autofireEnabled = deltaPlayer.autofireEnabled;
+    if (deltaPlayer.debugInfo !== undefined) merged.debugInfo = deltaPlayer.debugInfo;
+
+    return merged;
+  }
+
+  // Converts a delta player to a full player object (for new players)
+  deltaToFullPlayer(deltaPlayer) {
+    return {
+      id: deltaPlayer.id,
+      x: deltaPlayer.x || 0,
+      y: deltaPlayer.y || 0,
+      velX: deltaPlayer.velX || 0,
+      velY: deltaPlayer.velY || 0,
+      angle: deltaPlayer.angle || 0,
+      score: deltaPlayer.score || 0,
+      state: deltaPlayer.state || 0,
+      name: deltaPlayer.name || `Player ${deltaPlayer.id}`,
+      color: deltaPlayer.color || '#FF6B6B',
+      isBot: false, // Delta players are never bots
+      health: deltaPlayer.health || 100,
+      maxHealth: deltaPlayer.maxHealth || 100,
+      level: deltaPlayer.level || 1,
+      experience: deltaPlayer.experience || 0,
+      availableUpgrades: deltaPlayer.availableUpgrades || 0,
+      shipConfig: deltaPlayer.shipConfig || {}, // Always present now
+      coins: deltaPlayer.coins || 0,
+      statUpgrades: deltaPlayer.statUpgrades || {},
+      autofireEnabled: deltaPlayer.autofireEnabled || false,
+      debugInfo: deltaPlayer.debugInfo || {}
+    };
   }
 }
 

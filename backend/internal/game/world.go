@@ -648,6 +648,29 @@ func (w *World) getBulletsInRange(player *Player) []Bullet {
 	return bullets
 }
 
+// copyPlayer creates a deep copy of a Player including maps
+func copyPlayer(player Player) Player {
+	copy := player
+
+	// Deep copy the Upgrades map
+	if player.Upgrades != nil {
+		copy.Upgrades = make(map[UpgradeType]Upgrade)
+		for k, v := range player.Upgrades {
+			copy.Upgrades[k] = v
+		}
+	}
+
+	// Deep copy the ActionCooldowns map
+	if player.ActionCooldowns != nil {
+		copy.ActionCooldowns = make(map[string]time.Time)
+		for k, v := range player.ActionCooldowns {
+			copy.ActionCooldowns[k] = v
+		}
+	}
+
+	return copy
+}
+
 // broadcastSnapshot sends the current game state to all clients (optimized)
 func (w *World) broadcastSnapshot() {
 	// Limit data to reduce bandwidth
@@ -665,7 +688,7 @@ func (w *World) broadcastSnapshot() {
 	for _, player := range w.players {
 		// Calculate debug info for this player
 		player.DebugInfo = w.calculateDebugInfo(player)
-		currentSnapshot.Players = append(currentSnapshot.Players, *player)
+		currentSnapshot.Players = append(currentSnapshot.Players, copyPlayer(*player))
 	}
 
 	// Add limited items to snapshot (prioritize closer items for performance)
@@ -705,10 +728,52 @@ func (w *World) broadcastSnapshot() {
 				itemsAdded, itemsRemoved := w.calculateItemDeltas(clientSnapshot.Items, c.lastSnapshot)
 				c.mu.RUnlock()
 
+				// Calculate player deltas based on client's last snapshot
+				var playerDeltas []DeltaPlayer
+				lastPlayerMap := make(map[uint32]*Player)
+				for i := range c.lastSnapshot.Players {
+					lastPlayerMap[c.lastSnapshot.Players[i].ID] = &c.lastSnapshot.Players[i]
+				}
+
+				for _, currentPlayer := range clientSnapshot.Players {
+					if lastPlayer, exists := lastPlayerMap[currentPlayer.ID]; exists {
+						delta := calculatePlayerDeltas(lastPlayer, &currentPlayer)
+						// Only include deltas that have changes (at least one field changed)
+						if hasPlayerChanges(delta) {
+							playerDeltas = append(playerDeltas, delta)
+						}
+					} else {
+						// New player - send all fields
+						delta := DeltaPlayer{
+							ID:                currentPlayer.ID,
+							X:                 &currentPlayer.X,
+							Y:                 &currentPlayer.Y,
+							VelX:              &currentPlayer.VelX,
+							VelY:              &currentPlayer.VelY,
+							Angle:             &currentPlayer.Angle,
+							Score:             &currentPlayer.Score,
+							State:             &currentPlayer.State,
+							Name:              &currentPlayer.Name,
+							Color:             &currentPlayer.Color,
+							Health:            &currentPlayer.Health,
+							MaxHealth:         &currentPlayer.MaxHealth,
+							Level:             &currentPlayer.Level,
+							Experience:        &currentPlayer.Experience,
+							AvailableUpgrades: &currentPlayer.AvailableUpgrades,
+							ShipConfig:        currentPlayer.ShipConfig.ToMinimalShipConfig(),
+							Coins:             &currentPlayer.Coins,
+							Upgrades:          &currentPlayer.Upgrades,
+							AutofireEnabled:   &currentPlayer.AutofireEnabled,
+							DebugInfo:         &currentPlayer.DebugInfo,
+						}
+						playerDeltas = append(playerDeltas, delta)
+					}
+				}
+
 				// Create delta snapshot
 				deltaSnapshot := DeltaSnapshot{
 					Type:         MsgTypeDeltaSnapshot,
-					Players:      clientSnapshot.Players,
+					Players:      playerDeltas,
 					ItemsAdded:   itemsAdded,
 					ItemsRemoved: itemsRemoved,
 					Bullets:      clientSnapshot.Bullets,
@@ -1117,8 +1182,168 @@ func (w *World) calculateDebugInfo(player *Player) DebugInfo {
 		}
 	}
 
-	// Calculate total DPS
-	debugInfo.TotalDPS = debugInfo.FrontDPS + debugInfo.SideDPS + debugInfo.RearDPS + debugInfo.TopDPS
-
 	return debugInfo
+}
+
+// calculatePlayerDeltas compares two players and returns only the changed fields
+func calculatePlayerDeltas(oldPlayer, newPlayer *Player) DeltaPlayer {
+	delta := DeltaPlayer{
+		ID:         newPlayer.ID,                               // Always include ID
+		ShipConfig: newPlayer.ShipConfig.ToMinimalShipConfig(), // Always include minimal ship config (important for rendering)
+	}
+
+	// Compare position and movement (changes frequently)
+	if oldPlayer.X != newPlayer.X {
+		delta.X = &newPlayer.X
+	}
+	if oldPlayer.Y != newPlayer.Y {
+		delta.Y = &newPlayer.Y
+	}
+	if oldPlayer.VelX != newPlayer.VelX {
+		delta.VelX = &newPlayer.VelX
+	}
+	if oldPlayer.VelY != newPlayer.VelY {
+		delta.VelY = &newPlayer.VelY
+	}
+	if oldPlayer.Angle != newPlayer.Angle {
+		delta.Angle = &newPlayer.Angle
+	}
+
+	// Compare state and score (changes occasionally)
+	if oldPlayer.Score != newPlayer.Score {
+		delta.Score = &newPlayer.Score
+	}
+	if oldPlayer.State != newPlayer.State {
+		delta.State = &newPlayer.State
+	}
+
+	// Compare name and color (changes rarely)
+	if oldPlayer.Name != newPlayer.Name {
+		delta.Name = &newPlayer.Name
+	}
+	if oldPlayer.Color != newPlayer.Color {
+		delta.Color = &newPlayer.Color
+	}
+
+	// Compare health (changes frequently)
+	if oldPlayer.Health != newPlayer.Health {
+		delta.Health = &newPlayer.Health
+	}
+	if oldPlayer.MaxHealth != newPlayer.MaxHealth {
+		delta.MaxHealth = &newPlayer.MaxHealth
+	}
+
+	// Compare leveling (changes occasionally/frequently)
+	if oldPlayer.Level != newPlayer.Level {
+		delta.Level = &newPlayer.Level
+	}
+	if oldPlayer.Experience != newPlayer.Experience {
+		delta.Experience = &newPlayer.Experience
+	}
+	if oldPlayer.AvailableUpgrades != newPlayer.AvailableUpgrades {
+		delta.AvailableUpgrades = &newPlayer.AvailableUpgrades
+	}
+
+	// Compare coins (changes with items/spending)
+	if oldPlayer.Coins != newPlayer.Coins {
+		delta.Coins = &newPlayer.Coins
+	}
+
+	// Compare upgrades (changes with stat upgrades)
+	if !upgradesEqual(oldPlayer.Upgrades, newPlayer.Upgrades) {
+		delta.Upgrades = &newPlayer.Upgrades
+	}
+
+	// Compare autofire (changes rarely)
+	if oldPlayer.AutofireEnabled != newPlayer.AutofireEnabled {
+		delta.AutofireEnabled = &newPlayer.AutofireEnabled
+	}
+
+	// Compare debug info (changes frequently for display)
+	if !debugInfoEqual(oldPlayer.DebugInfo, newPlayer.DebugInfo) {
+		delta.DebugInfo = &newPlayer.DebugInfo
+	}
+
+	return delta
+}
+
+// debugInfoEqual compares two DebugInfo structs
+func debugInfoEqual(a, b DebugInfo) bool {
+	return a.Health == b.Health &&
+		a.RegenRate == b.RegenRate &&
+		a.MoveSpeedModifier == b.MoveSpeedModifier &&
+		a.TurnSpeedModifier == b.TurnSpeedModifier &&
+		a.BodyDamage == b.BodyDamage &&
+		a.FrontDPS == b.FrontDPS &&
+		a.SideDPS == b.SideDPS &&
+		a.RearDPS == b.RearDPS &&
+		a.TopDPS == b.TopDPS &&
+		a.TotalDPS == b.TotalDPS
+}
+
+// shipConfigEqual compares two ShipConfiguration structs
+func shipConfigEqual(a, b ShipConfiguration) bool {
+	return a.ShipLength == b.ShipLength &&
+		a.ShipWidth == b.ShipWidth &&
+		a.Size == b.Size &&
+		shipModuleEqual(a.SideUpgrade, b.SideUpgrade) &&
+		shipModuleEqual(a.TopUpgrade, b.TopUpgrade) &&
+		shipModuleEqual(a.FrontUpgrade, b.FrontUpgrade) &&
+		shipModuleEqual(a.RearUpgrade, b.RearUpgrade)
+}
+
+// shipModuleEqual compares two ShipModule pointers
+func shipModuleEqual(a, b *ShipModule) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Type == b.Type && a.Count == b.Count
+}
+
+// upgradesEqual compares two upgrade maps
+func upgradesEqual(a, b map[UpgradeType]Upgrade) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	if len(a) != len(b) {
+		return false
+	}
+	for key, valA := range a {
+		valB, exists := b[key]
+		if !exists {
+			return false
+		}
+		if valA != valB {
+			return false
+		}
+	}
+	return true
+}
+
+// hasPlayerChanges checks if a delta player has any changed fields
+func hasPlayerChanges(delta DeltaPlayer) bool {
+	return delta.X != nil ||
+		delta.Y != nil ||
+		delta.VelX != nil ||
+		delta.VelY != nil ||
+		delta.Angle != nil ||
+		delta.Score != nil ||
+		delta.State != nil ||
+		delta.Name != nil ||
+		delta.Color != nil ||
+		delta.Health != nil ||
+		delta.MaxHealth != nil ||
+		delta.Level != nil ||
+		delta.Experience != nil ||
+		delta.AvailableUpgrades != nil ||
+		delta.Coins != nil ||
+		delta.Upgrades != nil ||
+		delta.AutofireEnabled != nil ||
+		delta.DebugInfo != nil
 }
