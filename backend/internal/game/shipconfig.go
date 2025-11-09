@@ -6,13 +6,13 @@ import (
 
 // ShipConfiguration holds all upgrades for a ship
 type ShipConfiguration struct {
-	SideUpgrade  *ShipModule `msgpack:"sideUpgrade"`   // Side cannons upgrade (single)
-	TopUpgrade   *ShipModule `msgpack:"topUpgrade"`     // Top turrets upgrade (single)
+	SideUpgrade  *ShipModule `msgpack:"sideUpgrade"`  // Side cannons upgrade (single)
+	TopUpgrade   *ShipModule `msgpack:"topUpgrade"`   // Top turrets upgrade (single)
 	FrontUpgrade *ShipModule `msgpack:"frontUpgrade"` // Front weapons upgrade (single)
-	RearUpgrade  *ShipModule `msgpack:"rearUpgrade"`   // Rear weapons upgrade (single)
-	ShipLength   float64     `msgpack:"shipLength"`     // Calculated ship length based on upgrades
-	ShipWidth    float64     `msgpack:"shipWidth"`       // Calculated ship width based on upgrades
-	Size         float64     `msgpack:"size"`                 // Base size of the ship
+	RearUpgrade  *ShipModule `msgpack:"rearUpgrade"`  // Rear weapons upgrade (single)
+	ShipLength   float64     `msgpack:"shipLength"`   // Calculated ship length based on upgrades
+	ShipWidth    float64     `msgpack:"shipWidth"`    // Calculated ship width based on upgrades
+	Size         float64     `msgpack:"size"`         // Base size of the ship
 }
 
 // GetTotalEffect calculates the combined effect of all upgrades
@@ -186,20 +186,20 @@ func (sc *ShipConfiguration) CalculateShipDimensions() {
 }
 
 // ToMinimalShipConfig converts a ShipConfiguration to MinimalShipConfig for delta snapshots
-func (sc *ShipConfiguration) ToMinimalShipConfig() MinimalShipConfig {
-	minimal := MinimalShipConfig{
+func (sc *ShipConfiguration) ToMinimalShipConfig() ShipConfigDelta {
+	minimal := ShipConfigDelta{
 		ShipLength: sc.ShipLength,
 		ShipWidth:  sc.ShipWidth,
 	}
 
 	// Convert side upgrade
 	if sc.SideUpgrade != nil {
-		minimal.SideUpgrade = &MinimalShipModule{
+		minimal.SideUpgrade = &ShipModuleDelta{
 			Name:    sc.SideUpgrade.Name,
-			Cannons: make([]MinimalCannon, len(sc.SideUpgrade.Cannons)),
+			Cannons: make([]CannonDelta, len(sc.SideUpgrade.Cannons)),
 		}
 		for i, cannon := range sc.SideUpgrade.Cannons {
-			minimal.SideUpgrade.Cannons[i] = MinimalCannon{
+			minimal.SideUpgrade.Cannons[i] = CannonDelta{
 				Position:   cannon.Position,
 				Type:       string(cannon.Type),
 				RecoilTime: cannon.RecoilTime,
@@ -209,12 +209,12 @@ func (sc *ShipConfiguration) ToMinimalShipConfig() MinimalShipConfig {
 
 	// Convert front upgrade
 	if sc.FrontUpgrade != nil {
-		minimal.FrontUpgrade = &MinimalShipModule{
+		minimal.FrontUpgrade = &ShipModuleDelta{
 			Name:    sc.FrontUpgrade.Name,
-			Cannons: make([]MinimalCannon, len(sc.FrontUpgrade.Cannons)),
+			Cannons: make([]CannonDelta, len(sc.FrontUpgrade.Cannons)),
 		}
 		for i, cannon := range sc.FrontUpgrade.Cannons {
-			minimal.FrontUpgrade.Cannons[i] = MinimalCannon{
+			minimal.FrontUpgrade.Cannons[i] = CannonDelta{
 				Position:   cannon.Position,
 				Type:       string(cannon.Type),
 				RecoilTime: cannon.RecoilTime,
@@ -224,27 +224,27 @@ func (sc *ShipConfiguration) ToMinimalShipConfig() MinimalShipConfig {
 
 	// Convert rear upgrade
 	if sc.RearUpgrade != nil {
-		minimal.RearUpgrade = &MinimalShipModule{
+		minimal.RearUpgrade = &ShipModuleDelta{
 			Name: sc.RearUpgrade.Name,
 		}
 	}
 
 	// Convert top upgrade (turrets)
 	if sc.TopUpgrade != nil {
-		minimal.TopUpgrade = &MinimalShipModule{
-			Turrets: make([]MinimalTurret, len(sc.TopUpgrade.Turrets)),
+		minimal.TopUpgrade = &ShipModuleDelta{
+			Turrets: make([]TurretDelta, len(sc.TopUpgrade.Turrets)),
 		}
 		for i, turret := range sc.TopUpgrade.Turrets {
-			minimalTurret := MinimalTurret{
+			minimalTurret := TurretDelta{
 				Position:        turret.Position,
 				Angle:           turret.Angle,
 				Type:            string(turret.Type),
 				RecoilTime:      turret.RecoilTime,
 				NextCannonIndex: turret.NextCannonIndex,
-				Cannons:         make([]MinimalCannon, len(turret.Cannons)),
+				Cannons:         make([]CannonDelta, len(turret.Cannons)),
 			}
 			for j, cannon := range turret.Cannons {
-				minimalTurret.Cannons[j] = MinimalCannon{
+				minimalTurret.Cannons[j] = CannonDelta{
 					Position:   cannon.Position,
 					Type:       string(cannon.Type),
 					RecoilTime: cannon.RecoilTime,

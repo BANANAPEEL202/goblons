@@ -6,7 +6,7 @@ import (
 )
 
 // sendAvailableUpgrades sends available upgrades to a specific client
-func sendAvailableUpgrades(client *Client) {
+func (client *Client) sendAvailableUpgrades() {
 	upgrades := make(map[string][]UpgradeInfo)
 
 	// Get available upgrades for each type and convert to simplified format
@@ -47,7 +47,7 @@ func sendAvailableUpgrades(client *Client) {
 	}
 }
 
-func sendGameEvent(client *Client, event GameEventMsg) {
+func (client *Client) sendGameEvent(event GameEventMsg) {
 	event.Type = MsgTypeGameEvent
 
 	data, err := msgpack.Marshal(event)
@@ -60,5 +60,25 @@ func sendGameEvent(client *Client, event GameEventMsg) {
 	case client.Send <- data:
 	default:
 		log.Printf("Could not send game event to client %d", client.ID)
+	}
+}
+
+func (client *Client) sendWelcomeMessage() {
+	welcomeMsg := WelcomeMsg{
+		Type:     MsgTypeWelcome,
+		PlayerId: client.ID,
+	}
+
+	data, err := msgpack.Marshal(welcomeMsg)
+	if err != nil {
+		log.Printf("Error marshaling welcome message: %v", err)
+		return
+	}
+
+	select {
+	case client.Send <- data:
+	default:
+		// Channel full, skip
+		log.Printf("Could not send welcome message to client %d", client.ID)
 	}
 }

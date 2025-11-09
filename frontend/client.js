@@ -2853,11 +2853,51 @@ class GameClient {
     if (deltaPlayer.level !== undefined) merged.level = deltaPlayer.level;
     if (deltaPlayer.experience !== undefined) merged.experience = deltaPlayer.experience;
     if (deltaPlayer.availableUpgrades !== undefined) merged.availableUpgrades = deltaPlayer.availableUpgrades;
-    if (deltaPlayer.shipConfig !== undefined) merged.shipConfig = deltaPlayer.shipConfig; // Always present now
+    if (deltaPlayer.shipConfig !== undefined) merged.shipConfig = this.mergeShipConfigDelta(merged.shipConfig || {}, deltaPlayer.shipConfig);
     if (deltaPlayer.coins !== undefined) merged.coins = deltaPlayer.coins;
     if (deltaPlayer.statUpgrades !== undefined) merged.statUpgrades = deltaPlayer.statUpgrades;
     if (deltaPlayer.autofireEnabled !== undefined) merged.autofireEnabled = deltaPlayer.autofireEnabled;
     if (deltaPlayer.debugInfo !== undefined) merged.debugInfo = deltaPlayer.debugInfo;
+
+    return merged;
+  }
+
+  // Merges a ship config delta into an existing ship config
+  mergeShipConfigDelta(existingConfig, deltaConfig) {
+    const merged = { ...existingConfig };
+
+    // Apply changed fields from delta
+    if (deltaConfig.shipLength !== undefined) merged.shipLength = deltaConfig.shipLength;
+    if (deltaConfig.shipWidth !== undefined) merged.shipWidth = deltaConfig.shipWidth;
+
+    // Merge module deltas
+    if (deltaConfig.sideUpgrade !== undefined) {
+      merged.sideUpgrade = this.mergeShipModuleDelta(merged.sideUpgrade, deltaConfig.sideUpgrade);
+    }
+    if (deltaConfig.frontUpgrade !== undefined) {
+      merged.frontUpgrade = this.mergeShipModuleDelta(merged.frontUpgrade, deltaConfig.frontUpgrade);
+    }
+    if (deltaConfig.rearUpgrade !== undefined) {
+      merged.rearUpgrade = this.mergeShipModuleDelta(merged.rearUpgrade, deltaConfig.rearUpgrade);
+    }
+    if (deltaConfig.topUpgrade !== undefined) {
+      merged.topUpgrade = this.mergeShipModuleDelta(merged.topUpgrade, deltaConfig.topUpgrade);
+    }
+
+    return merged;
+  }
+
+  // Merges a ship module delta into an existing ship module
+  mergeShipModuleDelta(existingModule, deltaModule) {
+    if (!deltaModule) return existingModule;
+    if (!existingModule) return deltaModule;
+
+    const merged = { ...existingModule };
+
+    // Apply changed fields
+    if (deltaModule.name !== undefined) merged.name = deltaModule.name;
+    if (deltaModule.cannons !== undefined) merged.cannons = deltaModule.cannons;
+    if (deltaModule.turrets !== undefined) merged.turrets = deltaModule.turrets;
 
     return merged;
   }
@@ -2881,7 +2921,7 @@ class GameClient {
       level: deltaPlayer.level || 1,
       experience: deltaPlayer.experience || 0,
       availableUpgrades: deltaPlayer.availableUpgrades || 0,
-      shipConfig: deltaPlayer.shipConfig || {}, // Always present now
+      shipConfig: deltaPlayer.shipConfig || {}, // Full minimal config for new players
       coins: deltaPlayer.coins || 0,
       statUpgrades: deltaPlayer.statUpgrades || {},
       autofireEnabled: deltaPlayer.autofireEnabled || false,

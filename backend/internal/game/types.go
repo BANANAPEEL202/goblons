@@ -31,9 +31,9 @@ var colorHexPattern = regexp.MustCompile(`^#?([0-9a-fA-F]{6})$`)
 // Upgrade represents a single stat upgrade level
 type Upgrade struct {
 	Type        UpgradeType `msgpack:"type"`
-	Level       int         `msgpack:"level"`             // Current level (0-75)
-	MaxLevel    int         `msgpack:"maxLevel"`       // Maximum level (75)
-	BaseCost    int         `msgpack:"baseCost"`       // Base cost (10)
+	Level       int         `msgpack:"level"`       // Current level (0-75)
+	MaxLevel    int         `msgpack:"maxLevel"`    // Maximum level (75)
+	BaseCost    int         `msgpack:"baseCost"`    // Base cost (10)
 	CurrentCost int         `msgpack:"currentCost"` // Current upgrade cost
 }
 
@@ -71,9 +71,9 @@ type InputMsg struct {
 
 // InputAction represents a single-fire action with deduplication
 type InputAction struct {
-	Type     string `msgpack:"type"`         // "statUpgrade", "toggleAutofire", etc.
+	Type     string `msgpack:"type"`     // "statUpgrade", "toggleAutofire", etc.
 	Sequence uint32 `msgpack:"sequence"` // Client-side sequence number for deduplication
-	Data     string `msgpack:"data"`         // Action-specific data (e.g., stat type for upgrades)
+	Data     string `msgpack:"data"`     // Action-specific data (e.g., stat type for upgrades)
 }
 
 // Position represents the relative position of a single cannon from ship center
@@ -115,20 +115,20 @@ type Player struct {
 
 	Client *Client `msgpack:"-"` // Back-reference to owning client (not serialized)
 	// Leveling system
-	Level             int `msgpack:"level"`                         // Current player level
-	Experience        int `msgpack:"experience"`               // Current experience points
+	Level             int `msgpack:"level"`             // Current player level
+	Experience        int `msgpack:"experience"`        // Current experience points
 	AvailableUpgrades int `msgpack:"availableUpgrades"` // Number of pending upgrade points
 	// Category-specific reload times
-	LastSideUpgradeShot  time.Time         `msgpack:"-"`                   // When side upgrades last fired
-	LastTopUpgradeShot   time.Time         `msgpack:"-"`                   // When top upgrades last fired
-	LastFrontUpgradeShot time.Time         `msgpack:"-"`                   // When front upgrades last fired
-	LastRearUpgradeShot  time.Time         `msgpack:"-"`                   // When rear upgrades last fired
+	LastSideUpgradeShot  time.Time         `msgpack:"-"`          // When side upgrades last fired
+	LastTopUpgradeShot   time.Time         `msgpack:"-"`          // When top upgrades last fired
+	LastFrontUpgradeShot time.Time         `msgpack:"-"`          // When front upgrades last fired
+	LastRearUpgradeShot  time.Time         `msgpack:"-"`          // When rear upgrades last fired
 	ShipConfig           ShipConfiguration `msgpack:"shipConfig"` // New modular upgrade system
 
 	// Stat upgrades
-	Coins     int                     `msgpack:"coins"`               // Currency for stat upgrades
+	Coins     int                     `msgpack:"coins"`        // Currency for stat upgrades
 	Upgrades  map[UpgradeType]Upgrade `msgpack:"statUpgrades"` // Applied stat upgrades
-	Modifiers Mods                    `msgpack:"-"`                       // Calculated stat modifiers (not serialized)
+	Modifiers Mods                    `msgpack:"-"`            // Calculated stat modifiers (not serialized)
 
 	LastRegenTime       time.Time `msgpack:"-"` // Last health regeneration time
 	LastCollisionDamage time.Time `msgpack:"-"` // Last collision damage time
@@ -138,13 +138,13 @@ type Player struct {
 	LastProcessedAction uint32               `msgpack:"-"` // Last processed action sequence number
 	ActionCooldowns     map[string]time.Time `msgpack:"-"` // Cooldowns per action type
 	// Death tracking
-	KilledBy     uint32    `msgpack:"killedBy"`         // ID of player who killed this player (0 if none)
+	KilledBy     uint32    `msgpack:"killedBy"`     // ID of player who killed this player (0 if none)
 	KilledByName string    `msgpack:"killedByName"` // Name of player who killed this player
-	DeathTime    time.Time `msgpack:"-"`                       // When the player died
+	DeathTime    time.Time `msgpack:"-"`            // When the player died
 	ScoreAtDeath int       `msgpack:"scoreAtDeath"` // Score when player died
 	SurvivalTime float64   `msgpack:"survivalTime"` // How long the player was alive (in seconds)
-	SpawnTime    time.Time `msgpack:"-"`                       // When the player spawned
-	DebugInfo    DebugInfo `msgpack:"debugInfo"`       // Calculated debug values for client
+	SpawnTime    time.Time `msgpack:"-"`            // When the player spawned
+	DebugInfo    DebugInfo `msgpack:"debugInfo"`    // Calculated debug values for client
 }
 
 // Bot wraps an AI-controlled player with simple state required for decision making.
@@ -199,69 +199,69 @@ type Snapshot struct {
 // DeltaSnapshot represents only the changes in game state since last snapshot
 type DeltaSnapshot struct {
 	Type         string        `msgpack:"type"`
-	Players      []DeltaPlayer `msgpack:"players,omitempty"`           // Delta player updates
-	ItemsAdded   []GameItem    `msgpack:"itemsAdded,omitempty"`     // Items that were added
+	Players      []PlayerDelta `msgpack:"players,omitempty"`      // Delta player updates
+	ItemsAdded   []GameItem    `msgpack:"itemsAdded,omitempty"`   // Items that were added
 	ItemsRemoved []uint32      `msgpack:"itemsRemoved,omitempty"` // IDs of items that were removed
-	Bullets      []Bullet      `msgpack:"bullets,omitempty"`           // Full bullet list (always sent)
+	Bullets      []Bullet      `msgpack:"bullets,omitempty"`      // Full bullet list (always sent)
 	Time         int64         `msgpack:"time"`
 }
 
-// DeltaPlayer represents only the changed fields of a player since last snapshot
-type DeltaPlayer struct {
-	ID                uint32                   `msgpack:"id"`                   // Always sent
+// PlayerDelta represents only the changed fields of a player since last snapshot
+type PlayerDelta struct {
+	ID                uint32                   `msgpack:"id"`          // Always sent
 	X                 *float64                 `msgpack:"x,omitempty"` // Position changes frequently
 	Y                 *float64                 `msgpack:"y,omitempty"`
 	VelX              *float64                 `msgpack:"velX,omitempty"`
 	VelY              *float64                 `msgpack:"velY,omitempty"`
 	Angle             *float64                 `msgpack:"angle,omitempty"`
-	Score             *int                     `msgpack:"score,omitempty"`                         // Changes occasionally
-	State             *int                     `msgpack:"state,omitempty"`                         // Alive/dead state
-	Name              *string                  `msgpack:"name,omitempty"`                           // Changes rarely
-	Color             *string                  `msgpack:"color,omitempty"`                         // Changes rarely
-	Health            *int                     `msgpack:"health,omitempty"`                       // Changes frequently
-	MaxHealth         *int                     `msgpack:"maxHealth,omitempty"`                 // Changes with upgrades
-	Level             *int                     `msgpack:"level,omitempty"`                         // Changes occasionally
-	Experience        *int                     `msgpack:"experience,omitempty"`               // Changes frequently
+	Score             *int                     `msgpack:"score,omitempty"`             // Changes occasionally
+	State             *int                     `msgpack:"state,omitempty"`             // Alive/dead state
+	Name              *string                  `msgpack:"name,omitempty"`              // Changes rarely
+	Color             *string                  `msgpack:"color,omitempty"`             // Changes rarely
+	Health            *int                     `msgpack:"health,omitempty"`            // Changes frequently
+	MaxHealth         *int                     `msgpack:"maxHealth,omitempty"`         // Changes with upgrades
+	Level             *int                     `msgpack:"level,omitempty"`             // Changes occasionally
+	Experience        *int                     `msgpack:"experience,omitempty"`        // Changes frequently
 	AvailableUpgrades *int                     `msgpack:"availableUpgrades,omitempty"` // Changes occasionally
-	ShipConfig        MinimalShipConfig        `msgpack:"shipConfig"`                                   // Always sent (minimal data for rendering)
-	Coins             *int                     `msgpack:"coins,omitempty"`                         // Changes with items/spending
-	Upgrades          *map[UpgradeType]Upgrade `msgpack:"statUpgrades,omitempty"`           // Changes with stat upgrades
-	AutofireEnabled   *bool                    `msgpack:"autofireEnabled,omitempty"`     // Changes rarely
-	DebugInfo         *DebugInfo               `msgpack:"debugInfo,omitempty"`                 // Changes frequently for display
+	ShipConfig        ShipConfigDelta          `msgpack:"shipConfig"`                  // Always sent (minimal data for rendering)
+	Coins             *int                     `msgpack:"coins,omitempty"`             // Changes with items/spending
+	Upgrades          *map[UpgradeType]Upgrade `msgpack:"statUpgrades,omitempty"`      // Changes with stat upgrades
+	AutofireEnabled   *bool                    `msgpack:"autofireEnabled,omitempty"`   // Changes rarely
+	DebugInfo         *DebugInfo               `msgpack:"debugInfo,omitempty"`         // Changes frequently for display
 }
 
-// MinimalShipConfig contains only the fields needed by the frontend for rendering
-type MinimalShipConfig struct {
-	ShipLength   float64            `msgpack:"shipLength"`                         // For hull dimensions
-	ShipWidth    float64            `msgpack:"shipWidth"`                           // For hull dimensions
-	SideUpgrade  *MinimalShipModule `msgpack:"sideUpgrade,omitempty"`   // Side cannons
-	FrontUpgrade *MinimalShipModule `msgpack:"frontUpgrade,omitempty"` // Front upgrades (ram/cannons)
-	RearUpgrade  *MinimalShipModule `msgpack:"rearUpgrade,omitempty"`   // Rear upgrades (rudder)
-	TopUpgrade   *MinimalShipModule `msgpack:"topUpgrade,omitempty"`     // Top turrets
+// ShipConfigDelta contains only the fields needed by the frontend for rendering
+type ShipConfigDelta struct {
+	ShipLength   float64          `msgpack:"shipLength,omitempty"`   // For hull dimensions
+	ShipWidth    float64          `msgpack:"shipWidth,omitempty"`    // For hull dimensions
+	SideUpgrade  *ShipModuleDelta `msgpack:"sideUpgrade,omitempty"`  // Side cannons
+	FrontUpgrade *ShipModuleDelta `msgpack:"frontUpgrade,omitempty"` // Front upgrades (ram/cannons)
+	RearUpgrade  *ShipModuleDelta `msgpack:"rearUpgrade,omitempty"`  // Rear upgrades (rudder)
+	TopUpgrade   *ShipModuleDelta `msgpack:"topUpgrade,omitempty"`   // Top turrets
 }
 
-// MinimalShipModule contains only the fields needed by the frontend
-type MinimalShipModule struct {
-	Name    string          `msgpack:"name"`                           // Upgrade name (for ram/rudder)
-	Cannons []MinimalCannon `msgpack:"cannons,omitempty"` // Cannons with minimal data
-	Turrets []MinimalTurret `msgpack:"turrets,omitempty"` // Turrets with minimal data
+// ShipModuleDelta contains only the fields needed by the frontend
+type ShipModuleDelta struct {
+	Name    string        `msgpack:"name"`              // Upgrade name (for ram/rudder)
+	Cannons []CannonDelta `msgpack:"cannons,omitempty"` // Cannons with minimal data
+	Turrets []TurretDelta `msgpack:"turrets,omitempty"` // Turrets with minimal data
 }
 
-// MinimalCannon contains only the fields needed by the frontend for rendering
-type MinimalCannon struct {
-	Position   Position  `msgpack:"position"`     // Relative position for drawing
-	Type       string    `msgpack:"type"`             // Cannon type for rendering style
-	RecoilTime time.Time `msgpack:"recoilTime"` // For recoil animation
+// CannonDelta contains only the fields needed by the frontend for rendering
+type CannonDelta struct {
+	Position   Position  `msgpack:"position,omitempty"`   // Relative position for drawing
+	Type       string    `msgpack:"type,omitempty"`       // Cannon type for rendering style
+	RecoilTime time.Time `msgpack:"recoilTime,omitempty"` // For recoil animation
 }
 
-// MinimalTurret contains only the fields needed by the frontend for rendering
-type MinimalTurret struct {
-	Position        Position        `msgpack:"position"`               // Relative position for drawing
-	Angle           float64         `msgpack:"angle"`                     // Current aiming angle
-	Type            string          `msgpack:"type"`                       // Turret type for rendering style
-	RecoilTime      time.Time       `msgpack:"recoilTime"`           // For recoil animation
-	NextCannonIndex int             `msgpack:"nextCannonIndex"` // For alternating recoil
-	Cannons         []MinimalCannon `msgpack:"cannons"`                 // Turret cannons (minimal data)
+// TurretDelta contains only the fields needed by the frontend for rendering
+type TurretDelta struct {
+	Position        Position      `msgpack:"position,omitempty"`        // Relative position for drawing
+	Angle           float64       `msgpack:"angle,omitempty"`           // Current aiming angle
+	Type            string        `msgpack:"type,omitempty"`            // Turret type for rendering style
+	RecoilTime      time.Time     `msgpack:"recoilTime,omitempty"`      // For recoil animation
+	NextCannonIndex int           `msgpack:"nextCannonIndex,omitempty"` // For alternating recoil
+	Cannons         []CannonDelta `msgpack:"cannons,omitempty"`         // Turret cannons (minimal data)
 }
 
 // WelcomeMsg represents a welcome message sent to a new client

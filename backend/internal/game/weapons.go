@@ -34,7 +34,7 @@ type CannonStats struct {
 type Cannon struct {
 	ID           uint32      `msgpack:"id"`
 	Position     Position    `msgpack:"position"` // Relative position from ship center
-	Angle        float64     `msgpack:"angle"`       // Fixed firing angle relative to ship
+	Angle        float64     `msgpack:"angle"`    // Fixed firing angle relative to ship
 	Stats        CannonStats `msgpack:"stats"`
 	LastFireTime time.Time   `msgpack:"-"` // Not serialized
 	Type         WeaponType  `msgpack:"type"`
@@ -111,12 +111,12 @@ type Turret struct {
 	ID              uint32     `msgpack:"id"`
 	Angle           float64    `msgpack:"angle"` // Current aiming angle in world space
 	Cannons         []Cannon   `msgpack:"cannons"`
-	Position        Position   `msgpack:"position"`   // Relative position from ship center
+	Position        Position   `msgpack:"position"`  // Relative position from ship center
 	TurnSpeed       float64    `msgpack:"turnSpeed"` // How fast turret can rotate (rad/s)
-	LastFireTime    time.Time  `msgpack:"-"`                 // Not serialized
+	LastFireTime    time.Time  `msgpack:"-"`         // Not serialized
 	Type            WeaponType `msgpack:"type"`
 	NextCannonIndex int        `msgpack:"nextCannonIndex"` // For alternating fire
-	RecoilTime      time.Time  `msgpack:"recoilTime"`           // When the turret last fired (for recoil animation)
+	RecoilTime      time.Time  `msgpack:"recoilTime"`      // When the turret last fired (for recoil animation)
 }
 
 // UpdateAiming updates the turret's angle to aim at target position

@@ -16,8 +16,8 @@ const (
 
 // ModuleModifier represents the effects an upgrade has on ship stats
 type ModuleModifier struct {
-	SpeedMultiplier     float64 `msgpack:"speedMultiplier"`         // Speed modification (1.0 = no change)
-	TurnRateMultiplier  float64 `msgpack:"turnRateMultiplier"`   // Turn rate modification (1.0 = no change)
+	SpeedMultiplier     float64 `msgpack:"speedMultiplier"`     // Speed modification (1.0 = no change)
+	TurnRateMultiplier  float64 `msgpack:"turnRateMultiplier"`  // Turn rate modification (1.0 = no change)
 	ShipWidthMultiplier float64 `msgpack:"shipWidthMultiplier"` // Width modification (1.0 = no change)
 }
 
@@ -26,8 +26,8 @@ type ShipModule struct {
 	ID      uint32         `msgpack:"id"`
 	Type    moduleType     `msgpack:"type"`
 	Name    string         `msgpack:"name"`
-	Count   int            `msgpack:"level"`     // Upgrade level (1, 2, 3, etc.)
-	Effect  ModuleModifier `msgpack:"effect"`   // Stat modifications
+	Count   int            `msgpack:"level"`   // Upgrade level (1, 2, 3, etc.)
+	Effect  ModuleModifier `msgpack:"effect"`  // Stat modifications
 	Cannons []*Cannon      `msgpack:"cannons"` // Weapons (if applicable)
 	Turrets []*Turret      `msgpack:"turrets"` // Turret weapons (if applicable)
 

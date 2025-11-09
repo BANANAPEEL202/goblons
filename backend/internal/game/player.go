@@ -89,7 +89,7 @@ func (player *Player) respawn() {
 	player.spawn()
 
 	// Send updated available upgrades to client
-	sendAvailableUpgrades(player.Client)
+	player.Client.sendAvailableUpgrades()
 
 	log.Printf("Player %d (%s) respawned with %d XP and %d coins", player.ID, player.Name, respawnXP, respawnCoins)
 }
@@ -148,7 +148,7 @@ func copyPlayer(player Player) Player {
 }
 
 // hasPlayerChanges checks if a delta player has any changed fields
-func hasPlayerChanges(delta DeltaPlayer) bool {
+func hasPlayerChanges(delta PlayerDelta) bool {
 	return delta.X != nil ||
 		delta.Y != nil ||
 		delta.VelX != nil ||

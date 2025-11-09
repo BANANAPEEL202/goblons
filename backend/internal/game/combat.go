@@ -65,7 +65,7 @@ func (gm *GameMechanics) handlePlayerDeath(victim *Player, killer *Player, cause
 
 		if killer.ID != victim.ID && !killer.IsBot {
 			if client, exists := gm.world.GetClient(killer.ID); exists {
-				sendGameEvent(client, GameEventMsg{
+				client.sendGameEvent(GameEventMsg{
 					EventType:  "playerSunk",
 					KillerID:   killer.ID,
 					KillerName: killer.Name,
