@@ -1,12 +1,15 @@
 package server
 
 import (
-	"github.com/vmihailenco/msgpack/v5"
+	"bytes"
+	"compress/gzip"
 	"goblons/internal/game"
 	"log"
 	"net/http"
 	"sync/atomic"
 	"time"
+
+	"github.com/vmihailenco/msgpack/v5"
 
 	"github.com/gorilla/websocket"
 )
@@ -186,7 +189,13 @@ func (s *Server) handleClientWrites(client *game.Client) {
 			atomic.AddInt64(&s.bytesSent, int64(len(message)))
 			atomic.AddInt64(&s.messagesSent, 1)
 
-			if err := client.Conn.WriteMessage(websocket.BinaryMessage, message); err != nil {
+			compressedMsg, err := compressMessage(message)
+			if err != nil {
+				log.Printf("Compression error: %v", err)
+				compressedMsg = message // fallback to uncompressed
+			}
+
+			if err := client.Conn.WriteMessage(websocket.BinaryMessage, compressedMsg); err != nil {
 				log.Printf("Write error: %v", err)
 				return
 			}
@@ -198,4 +207,17 @@ func (s *Server) handleClientWrites(client *game.Client) {
 			}
 		}
 	}
+}
+
+// compressMessage compresses a byte slice using gzip
+func compressMessage(data []byte) ([]byte, error) {
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	if _, err := gz.Write(data); err != nil {
+		return nil, err
+	}
+	if err := gz.Close(); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }

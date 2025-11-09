@@ -1,4 +1,5 @@
 import { decode, encode } from "@msgpack/msgpack";
+import pako from 'pako';
 
 // Game constants (should match backend)
 const WorldWidth = 5000.0;
@@ -342,7 +343,9 @@ class GameClient {
     };
 
     this.socket.onmessage = (event) => {
-      const data = decode(new Uint8Array(event.data));
+      const compressed = new Uint8Array(event.data);
+      const decompressed = pako.ungzip(compressed);
+      const data = decode(decompressed);
       this.handleMessage(data);
     };
 
