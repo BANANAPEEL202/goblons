@@ -181,10 +181,10 @@ type Bullet struct {
 	Y         float64   `msgpack:"y"`
 	VelX      float64   `msgpack:"velX"`
 	VelY      float64   `msgpack:"velY"`
-	OwnerID   uint32    `msgpack:"ownerId"`
+	OwnerID   uint32    `msgpack:"-"`
 	CreatedAt time.Time `msgpack:"-"` // Not serialized
 	Size      float64   `msgpack:"size"`
-	Damage    int       `msgpack:"damage"`
+	Damage    int       `msgpack:"-"`
 }
 
 // Snapshot represents the current game state sent to clients
@@ -202,7 +202,8 @@ type DeltaSnapshot struct {
 	Players      []PlayerDelta `msgpack:"players,omitempty"`      // Delta player updates
 	ItemsAdded   []GameItem    `msgpack:"itemsAdded,omitempty"`   // Items that were added
 	ItemsRemoved []uint32      `msgpack:"itemsRemoved,omitempty"` // IDs of items that were removed
-	Bullets      []Bullet      `msgpack:"bullets,omitempty"`      // Full bullet list (always sent)
+	BulletsAdded   []Bullet    `msgpack:"bulletsAdded,omitempty"`   // Bullets that were added
+	BulletsRemoved []uint32    `msgpack:"bulletsRemoved,omitempty"` // IDs of bullets that were removed
 	Time         int64         `msgpack:"time"`
 }
 

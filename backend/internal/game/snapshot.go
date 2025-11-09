@@ -41,6 +41,39 @@ func (w *World) calculateItemDeltas(currentItems []GameItem, lastSnapshot Snapsh
 	return itemsAdded, itemsRemoved
 }
 
+// calculateBulletDeltas compares current bullets with client's last snapshot to find added/removed bullets
+func (w *World) calculateBulletDeltas(currentBullets []Bullet, lastSnapshot Snapshot) ([]Bullet, []uint32) {
+	// Create maps for efficient lookup
+	lastBulletMap := make(map[uint32]Bullet)
+	for _, bullet := range lastSnapshot.Bullets {
+		lastBulletMap[bullet.ID] = bullet
+	}
+
+	currentBulletMap := make(map[uint32]Bullet)
+	for _, bullet := range currentBullets {
+		currentBulletMap[bullet.ID] = bullet
+	}
+
+	var bulletsAdded []Bullet
+	var bulletsRemoved []uint32
+
+	// Find added bullets (in current but not in last)
+	for _, bullet := range currentBullets {
+		if _, exists := lastBulletMap[bullet.ID]; !exists {
+			bulletsAdded = append(bulletsAdded, bullet)
+		}
+	}
+
+	// Find removed bullets (in last but not in current)
+	for _, bullet := range lastSnapshot.Bullets {
+		if _, exists := currentBulletMap[bullet.ID]; !exists {
+			bulletsRemoved = append(bulletsRemoved, bullet.ID)
+		}
+	}
+
+	return bulletsAdded, bulletsRemoved
+}
+
 // GetSnapshotStats returns the current snapshot statistics
 func (w *World) GetSnapshotStats() (count int64, totalSize int64) {
 	return atomic.LoadInt64(&w.snapshotCount), atomic.LoadInt64(&w.totalSnapshotSize)
@@ -127,6 +160,7 @@ func (w *World) broadcastSnapshot() {
 				// Calculate delta changes for items based on client's last snapshot
 				c.mu.RLock()
 				itemsAdded, itemsRemoved := w.calculateItemDeltas(clientSnapshot.Items, c.lastSnapshot)
+				bulletsAdded, bulletsRemoved := w.calculateBulletDeltas(clientSnapshot.Bullets, c.lastSnapshot)
 				c.mu.RUnlock()
 
 				// Calculate player deltas based on client's last snapshot
@@ -173,12 +207,13 @@ func (w *World) broadcastSnapshot() {
 
 				// Create delta snapshot
 				deltaSnapshot := DeltaSnapshot{
-					Type:         MsgTypeDeltaSnapshot,
-					Players:      playerDeltas,
-					ItemsAdded:   itemsAdded,
-					ItemsRemoved: itemsRemoved,
-					Bullets:      clientSnapshot.Bullets,
-					Time:         clientSnapshot.Time,
+					Type:           MsgTypeDeltaSnapshot,
+					Players:        playerDeltas,
+					ItemsAdded:     itemsAdded,
+					ItemsRemoved:   itemsRemoved,
+					BulletsAdded:   bulletsAdded,
+					BulletsRemoved: bulletsRemoved,
+					Time:           clientSnapshot.Time,
 				}
 
 				data, err = msgpack.Marshal(deltaSnapshot)

@@ -98,6 +98,7 @@ class GameClient {
     // Client-side prediction
     this.predictedPlayerPos = { x: 0, y: 0 };
     this.lastPredictionUpdate = Date.now();
+    this.lastBulletUpdate = Date.now();
 
     this.controlsLocked = true;
     this.pendingConnectConfig = null;
@@ -475,8 +476,18 @@ class GameClient {
           }
         }
 
-        // Update bullets (always full list)
-        this.gameState.bullets = data.bullets || [];
+        // Update bullets (delta updates)
+        if (data.bulletsAdded) {
+          // Add new bullets
+          for (const bullet of data.bulletsAdded) {
+            this.gameState.bullets.push(bullet);
+          }
+        }
+        if (data.bulletsRemoved) {
+          // Remove bullets by ID
+          const removedIds = new Set(data.bulletsRemoved);
+          this.gameState.bullets = this.gameState.bullets.filter(bullet => !removedIds.has(bullet.id));
+        }
 
         // Apply item deltas
         if (data.itemsAdded) {
@@ -1377,6 +1388,27 @@ class GameClient {
     }
   }
 
+  updateBullets() {
+    const currentTime = Date.now();
+    const deltaTime = Math.min((currentTime - this.lastBulletUpdate) / 1000, 1 / 30); // Cap deltaTime
+    this.lastBulletUpdate = currentTime;
+
+    // Update bullet positions based on velocity (scaled for backend's 30 TPS)
+    for (const bullet of this.gameState.bullets) {
+      if (bullet.velX !== undefined && bullet.velY !== undefined) {
+        // Backend velocities are tuned for 30 TPS, so scale by 30 for per-second movement
+        bullet.x += bullet.velX * 30 * deltaTime;
+        bullet.y += bullet.velY * 30 * deltaTime;
+      }
+    }
+
+    // Remove bullets that are out of bounds (server should also remove them, but this is a safety net)
+    this.gameState.bullets = this.gameState.bullets.filter(bullet => {
+      return bullet.x >= -100 && bullet.x <= WorldWidth + 100 &&
+             bullet.y >= -100 && bullet.y <= WorldHeight + 100;
+    });
+  }
+
   render() {
     // Clear canvas
     this.ctx.fillStyle = '#9bbfeaff';
@@ -1392,6 +1424,7 @@ class GameClient {
 
     this.updateClientPrediction();
     this.updateCamera();
+    this.updateBullets();
 
     // Draw world grid
     this.drawGrid();
