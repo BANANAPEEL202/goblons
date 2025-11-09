@@ -1,11 +1,12 @@
 package game
 
 import (
-	"encoding/json"
 	"log"
 	"math"
 	"sync/atomic"
 	"time"
+
+	"github.com/vmihailenco/msgpack/v5"
 )
 
 // NewWorld creates a new game world
@@ -249,7 +250,7 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 	}
 
 	// Handle thrust (W/S keys) - this affects speed, not direction
-	var thrustForce float32 = 0
+	var thrustForce float64 = 0
 	if input.Up {
 		thrustForce = ShipAcceleration
 	}
@@ -259,15 +260,15 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 
 	// Apply thrust in the direction the ship is facing
 	if thrustForce != 0 {
-		thrustX := float32(math.Cos(float64(player.Angle))) * thrustForce
-		thrustY := float32(math.Sin(float64(player.Angle))) * thrustForce
+		thrustX := float64(math.Cos(float64(player.Angle))) * thrustForce
+		thrustY := float64(math.Sin(float64(player.Angle))) * thrustForce
 		player.VelX += thrustX
 		player.VelY += thrustY
 	}
 
 	// Calculate max speed with move speed upgrade and hull strength reduction
 	maxSpeed := (BaseShipMaxSpeed * player.Modifiers.MoveSpeedMultiplier)
-	speed := min(float32(math.Sqrt(float64(player.VelX*player.VelX+player.VelY*player.VelY))), maxSpeed)
+	speed := min(float64(math.Sqrt(float64(player.VelX*player.VelX+player.VelY*player.VelY))), maxSpeed)
 
 	// Scale turn speed based on current speed and ship length
 	// Example: turn faster at low speed, slower at high speed
@@ -276,7 +277,7 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 
 	// Calculate length factor - longer ships turn slower
 	// Base length for comparison (1 cannon = standard ship)
-	baseShipLength := float32(PlayerSize * 1.2)                   // 1 cannon ship has no length multiplier
+	baseShipLength := float64(PlayerSize * 1.2)                   // 1 cannon ship has no length multiplier
 	lengthFactor := baseShipLength / player.ShipConfig.ShipLength // Longer ships get smaller factor
 
 	// Apply turn speed upgrade
@@ -296,7 +297,7 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 	player.VelY *= ShipDeceleration
 
 	// Limit maximum speed
-	newSpeed := float32(math.Sqrt(float64(player.VelX*player.VelX + player.VelY*player.VelY)))
+	newSpeed := float64(math.Sqrt(float64(player.VelX*player.VelX + player.VelY*player.VelY)))
 	if newSpeed > maxSpeed {
 		speedRatio := maxSpeed / newSpeed
 		player.VelX *= speedRatio
@@ -396,7 +397,7 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 
 	// Handle health regeneration from auto repairs upgrade
 	// Regenerate health based on time elapsed
-	elapsedSeconds := float32(now.Sub(player.LastRegenTime).Seconds())
+	elapsedSeconds := float64(now.Sub(player.LastRegenTime).Seconds())
 	if elapsedSeconds >= 0.2 {
 		healthToRegen := int(elapsedSeconds * player.Modifiers.HealthRegenPerSec)
 		if healthToRegen > 0 && player.Health < player.MaxHealth {
@@ -684,7 +685,7 @@ func (w *World) broadcastSnapshot() {
 
 			if isFirstSnapshot {
 				// First snapshot for this client - send full snapshot
-				data, err = json.Marshal(clientSnapshot)
+				data, err = msgpack.Marshal(clientSnapshot)
 				if err != nil {
 					log.Printf("Error marshaling snapshot for client %d: %v", c.ID, err)
 					return
@@ -747,7 +748,7 @@ func (w *World) broadcastSnapshot() {
 					Time:         clientSnapshot.Time,
 				}
 
-				data, err = json.Marshal(deltaSnapshot)
+				data, err = msgpack.Marshal(deltaSnapshot)
 				if err != nil {
 					log.Printf("Error marshaling delta snapshot for client %d: %v", c.ID, err)
 					return
@@ -779,7 +780,7 @@ func (w *World) sendWelcomeMessage(client *Client) {
 		PlayerId: client.ID,
 	}
 
-	data, err := json.Marshal(welcomeMsg)
+	data, err := msgpack.Marshal(welcomeMsg)
 	if err != nil {
 		log.Printf("Error marshaling welcome message: %v", err)
 		return
@@ -826,8 +827,8 @@ func (w *World) HandleInput(clientID uint32, input InputMsg) {
 
 // keepPlayerInBounds ensures a player stays within the world boundaries
 func (w *World) keepPlayerInBounds(player *Player) {
-	player.X = float32(math.Max(float64(player.ShipConfig.Size/2), math.Min(float64(WorldWidth-player.ShipConfig.Size/2), float64(player.X))))
-	player.Y = float32(math.Max(float64(player.ShipConfig.Size/2), math.Min(float64(WorldHeight-player.ShipConfig.Size/2), float64(player.Y))))
+	player.X = float64(math.Max(float64(player.ShipConfig.Size/2), math.Min(float64(WorldWidth-player.ShipConfig.Size/2), float64(player.X))))
+	player.Y = float64(math.Max(float64(player.ShipConfig.Size/2), math.Min(float64(WorldHeight-player.ShipConfig.Size/2), float64(player.Y))))
 }
 
 // updateBullets handles bullet movement and cleanup (optimized)
@@ -926,7 +927,7 @@ func (w *World) checkPlayerItemCollision(player *Player, item *GameItem) bool {
 	playerBbox := w.mechanics.GetShipBoundingBox(player)
 
 	// Create item bounding box (treat item as a small rectangle)
-	itemHalfSize := float32(ItemPickupSize) / 2
+	itemHalfSize := float64(ItemPickupSize) / 2
 	itemBbox := BoundingBox{
 		MinX: item.X - itemHalfSize,
 		MinY: item.Y - itemHalfSize,
@@ -1077,7 +1078,7 @@ func (w *World) updateModularTurretAiming(player *Player, input *InputMsg) {
 
 // calculateDebugInfo computes debug values for client display
 func (w *World) calculateDebugInfo(player *Player) DebugInfo {
-	baseShipLength := float32(PlayerSize * 1.2)                   // 1 cannon ship has no length multiplier
+	baseShipLength := float64(PlayerSize * 1.2)                   // 1 cannon ship has no length multiplier
 	lengthFactor := baseShipLength / player.ShipConfig.ShipLength // Longer ships get smaller factor
 	debugInfo := DebugInfo{
 		Health:            player.MaxHealth,
@@ -1099,7 +1100,7 @@ func (w *World) calculateDebugInfo(player *Player) DebugInfo {
 	// Calculate DPS for each upgrade type
 	if player.ShipConfig.FrontUpgrade != nil {
 		for _, cannon := range player.ShipConfig.FrontUpgrade.Cannons {
-			damage := float32(cannon.Stats.BulletDamageMod * BulletDamage)
+			damage := float64(cannon.Stats.BulletDamageMod * BulletDamage)
 			reloadRate := cannon.Stats.ReloadTime
 			effectiveDamage := damage * (cannonDamageMod)
 			effectiveReloadRate := reloadRate * (reloadSpeedMod)
@@ -1111,7 +1112,7 @@ func (w *World) calculateDebugInfo(player *Player) DebugInfo {
 
 	if player.ShipConfig.SideUpgrade != nil {
 		for _, cannon := range player.ShipConfig.SideUpgrade.Cannons {
-			damage := float32(cannon.Stats.BulletDamageMod * BulletDamage)
+			damage := float64(cannon.Stats.BulletDamageMod * BulletDamage)
 			reloadRate := cannon.Stats.ReloadTime
 			effectiveDamage := damage * (cannonDamageMod)
 			effectiveReloadRate := reloadRate * (reloadSpeedMod)
@@ -1123,7 +1124,7 @@ func (w *World) calculateDebugInfo(player *Player) DebugInfo {
 
 	if player.ShipConfig.RearUpgrade != nil {
 		for _, cannon := range player.ShipConfig.RearUpgrade.Cannons {
-			damage := float32(cannon.Stats.BulletDamageMod * BulletDamage)
+			damage := float64(cannon.Stats.BulletDamageMod * BulletDamage)
 			reloadRate := cannon.Stats.ReloadTime
 			effectiveDamage := damage * (cannonDamageMod)
 			effectiveReloadRate := reloadRate * (reloadSpeedMod)
@@ -1139,7 +1140,7 @@ func (w *World) calculateDebugInfo(player *Player) DebugInfo {
 			// machine gun dual cannon shares reload
 			turretCannon := turret.Cannons[0]
 
-			damage := float32(turretCannon.Stats.BulletDamageMod * BulletDamage)
+			damage := float64(turretCannon.Stats.BulletDamageMod * BulletDamage)
 			reloadRate := turretCannon.Stats.ReloadTime
 			effectiveDamage := damage * (cannonDamageMod)
 			effectiveReloadRate := reloadRate * (reloadSpeedMod)

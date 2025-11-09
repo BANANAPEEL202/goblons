@@ -1,3 +1,5 @@
+import { decode, encode } from "@msgpack/msgpack";
+
 // Game constants (should match backend)
 const WorldWidth = 5000.0;
 const WorldHeight = 5000.0;
@@ -303,6 +305,7 @@ class GameClient {
 
     try {
       this.socket = new WebSocket(wsUrl);
+      this.socket.binaryType = "arraybuffer";
     } catch (err) {
       console.error('WebSocket creation failed:', err);
       setTimeout(() => this.connect(), 3000);
@@ -339,7 +342,7 @@ class GameClient {
     };
 
     this.socket.onmessage = (event) => {
-      const data = JSON.parse(event.data);
+      const data = decode(new Uint8Array(event.data));
       this.handleMessage(data);
     };
 
@@ -1215,7 +1218,7 @@ class GameClient {
 
     try {
       // Send the current input state
-      this.socket.send(JSON.stringify(this.input));
+      this.socket.send(encode(this.input));
 
       // Clear actions after successful send
       this.input.actions = [];
@@ -1236,7 +1239,7 @@ class GameClient {
     }
 
     console.log('Sending upgrade:', this.input.selectUpgrade, this.input.upgradeChoice);
-    this.socket.send(JSON.stringify(this.input));
+    this.socket.send(encode(this.input));
     this.upgradeUI.upgradeSent = true;
   }
 
@@ -1256,7 +1259,7 @@ class GameClient {
     }
 
     console.log('Toggling autofire');
-    this.socket.send(JSON.stringify(this.input));
+    this.socket.send(encode(this.input));
 
     // Clear the toggle flag after sending
     setTimeout(() => {
@@ -2749,7 +2752,7 @@ class GameClient {
       this.clearActiveInputs();
       // send one last update that all inputs are cleared
       if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-        this.socket.send(JSON.stringify(this.input));
+        this.socket.send(encode(this.input));
       }
     } else {
       this.sendInput();
@@ -2758,7 +2761,7 @@ class GameClient {
 
   sendStartGame() {
     if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-      this.socket.send(JSON.stringify({
+      this.socket.send(encode({
         type: 'startGame',
         startGame: true
       }));
@@ -3058,7 +3061,7 @@ class StartScreen {
 
       // Send profile update to server
       if (this.client.socket && this.client.socket.readyState === WebSocket.OPEN) {
-        this.client.socket.send(JSON.stringify({
+        this.client.socket.send(encode({
           type: 'profile',
           playerName: chosenName,
           playerColor: chosenColor

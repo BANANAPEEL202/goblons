@@ -1,7 +1,7 @@
 package game
 
 import (
-	"encoding/json"
+	"github.com/vmihailenco/msgpack/v5"
 	"log"
 )
 
@@ -33,7 +33,7 @@ func sendAvailableUpgrades(client *Client) {
 		Upgrades: upgrades,
 	}
 
-	data, err := json.Marshal(upgradesMsg)
+	data, err := msgpack.Marshal(upgradesMsg)
 	if err != nil {
 		log.Printf("Error marshaling available upgrades message: %v", err)
 		return
@@ -50,7 +50,7 @@ func sendAvailableUpgrades(client *Client) {
 func sendGameEvent(client *Client, event GameEventMsg) {
 	event.Type = MsgTypeGameEvent
 
-	data, err := json.Marshal(event)
+	data, err := msgpack.Marshal(event)
 	if err != nil {
 		log.Printf("Error marshaling game event message: %v", err)
 		return

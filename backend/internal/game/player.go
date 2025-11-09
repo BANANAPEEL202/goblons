@@ -7,21 +7,21 @@ import (
 )
 
 type Mods struct {
-	SpeedMultiplier        float32
-	HealthRegenPerSec      float32
-	BulletSpeedMultiplier  float32
-	BulletDamageMultiplier float32
-	ReloadSpeedMultiplier  float32
-	MoveSpeedMultiplier    float32
-	TurnSpeedMultiplier    float32
-	BodyDamageBonus        float32
+	SpeedMultiplier        float64
+	HealthRegenPerSec      float64
+	BulletSpeedMultiplier  float64
+	BulletDamageMultiplier float64
+	ReloadSpeedMultiplier  float64
+	MoveSpeedMultiplier    float64
+	TurnSpeedMultiplier    float64
+	BodyDamageBonus        float64
 }
 
 // spawn spawns a player at a random safe location
 func (player *Player) spawn() {
 	// Simple random spawn - could be improved to avoid other players
-	player.X = float32(rand.Intn(int(WorldWidth-100)) + 50)
-	player.Y = float32(rand.Intn(int(WorldHeight-100)) + 50)
+	player.X = float64(rand.Intn(int(WorldWidth-100)) + 50)
+	player.Y = float64(rand.Intn(int(WorldHeight-100)) + 50)
 	player.State = StateAlive
 	player.SpawnTime = time.Now() // Track when player spawned
 }
@@ -106,8 +106,8 @@ func (player *Player) updateShipGeometry() {
 // resetPlayerShipConfig resets a player's ship configuration to default
 func (player *Player) resetPlayerShipConfig() {
 	// Reset ship configuration to basic setup
-	shipLength := float32(PlayerSize) * 1.2
-	shipWidth := float32(PlayerSize) * 0.6
+	shipLength := float64(PlayerSize) * 1.2
+	shipWidth := float64(PlayerSize) * 0.6
 
 	player.ShipConfig = ShipConfiguration{
 
@@ -224,14 +224,14 @@ func (player *Player) BuyUpgrade(upgradeType UpgradeType) bool {
 // stack additively
 func (player *Player) updateModifiers() {
 	sc := &player.ShipConfig
-	moduleSpeedModifier := float32(0)
-	moduleTurnSpeedMultiplier := float32(0)
+	moduleSpeedModifier := float64(0)
+	moduleTurnSpeedMultiplier := float64(0)
 	modules := []*ShipModule{sc.SideUpgrade, sc.TopUpgrade, sc.FrontUpgrade, sc.RearUpgrade}
 
 	for _, module := range modules {
 		if module != nil {
-			moduleSpeedModifier += module.Effect.SpeedMultiplier * float32(module.Count)
-			moduleTurnSpeedMultiplier += module.Effect.TurnRateMultiplier * float32(module.Count)
+			moduleSpeedModifier += module.Effect.SpeedMultiplier * float64(module.Count)
+			moduleTurnSpeedMultiplier += module.Effect.TurnRateMultiplier * float64(module.Count)
 
 		}
 	}
@@ -243,24 +243,24 @@ func (player *Player) updateModifiers() {
 	moveLevel := player.Upgrades[StatUpgradeMoveSpeed].Level
 	ramLevel := player.Upgrades[StatUpgradeBodyDamage].Level
 	// speed multipler is -1% per hull level, +2% per move level
-	player.Modifiers.MoveSpeedMultiplier = 1.0 - float32(hullLevel)*0.01 - float32(ramLevel)*0.01 + float32(moveLevel)*0.02
+	player.Modifiers.MoveSpeedMultiplier = 1.0 - float64(hullLevel)*0.01 - float64(ramLevel)*0.01 + float64(moveLevel)*0.02
 	player.Modifiers.MoveSpeedMultiplier += moduleSpeedModifier
 
 	repairLevel := player.Upgrades[StatUpgradeAutoRepairs].Level
-	player.Modifiers.HealthRegenPerSec = float32(repairLevel) * 0.6
+	player.Modifiers.HealthRegenPerSec = float64(repairLevel) * 0.6
 
 	rangeLevel := player.Upgrades[StatUpgradeCannonRange].Level
-	player.Modifiers.BulletSpeedMultiplier = 1.0 + (float32(rangeLevel) * 0.05)
+	player.Modifiers.BulletSpeedMultiplier = 1.0 + (float64(rangeLevel) * 0.05)
 
 	damageLevel := player.Upgrades[StatUpgradeCannonDamage].Level
-	player.Modifiers.BulletDamageMultiplier = 1.0 + (float32(damageLevel) * 0.08)
+	player.Modifiers.BulletDamageMultiplier = 1.0 + (float64(damageLevel) * 0.08)
 
 	reloadLevel := player.Upgrades[StatUpgradeReloadSpeed].Level
-	player.Modifiers.ReloadSpeedMultiplier = 1.0 - (float32(reloadLevel) * 0.03) // 2% faster per level
+	player.Modifiers.ReloadSpeedMultiplier = 1.0 - (float64(reloadLevel) * 0.03) // 2% faster per level
 
 	turnLevel := player.Upgrades[StatUpgradeTurnSpeed].Level
-	player.Modifiers.TurnSpeedMultiplier = 1 + float32(turnLevel)*0.02 - float32(ramLevel)*0.01
+	player.Modifiers.TurnSpeedMultiplier = 1 + float64(turnLevel)*0.02 - float64(ramLevel)*0.01
 	player.Modifiers.TurnSpeedMultiplier += moduleTurnSpeedMultiplier
 
-	player.Modifiers.BodyDamageBonus = float32(ramLevel) * 0.5
+	player.Modifiers.BodyDamageBonus = float64(ramLevel) * 0.5
 }

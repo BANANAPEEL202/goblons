@@ -1,13 +1,12 @@
 package server
 
 import (
-	"encoding/json"
+	"github.com/vmihailenco/msgpack/v5"
+	"goblons/internal/game"
 	"log"
 	"net/http"
 	"sync/atomic"
 	"time"
-
-	"goblons/internal/game"
 
 	"github.com/gorilla/websocket"
 )
@@ -156,7 +155,7 @@ func (s *Server) handleClientReads(client *game.Client) {
 		atomic.AddInt64(&s.messagesRecv, 1)
 
 		var input game.InputMsg
-		if err := json.Unmarshal(messageBytes, &input); err != nil {
+		if err := msgpack.Unmarshal(messageBytes, &input); err != nil {
 			log.Printf("Error unmarshaling input: %v", err)
 			continue
 		}
@@ -187,7 +186,7 @@ func (s *Server) handleClientWrites(client *game.Client) {
 			atomic.AddInt64(&s.bytesSent, int64(len(message)))
 			atomic.AddInt64(&s.messagesSent, 1)
 
-			if err := client.Conn.WriteMessage(websocket.TextMessage, message); err != nil {
+			if err := client.Conn.WriteMessage(websocket.BinaryMessage, message); err != nil {
 				log.Printf("Write error: %v", err)
 				return
 			}
