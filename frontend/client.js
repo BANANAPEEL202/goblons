@@ -575,6 +575,19 @@ class GameClient {
         this.handleGameEvent(data);
         break;
 
+      case 'resetShipConfig':
+        // Server tells us to reset our ship config
+        if (this.myPlayerId && data.shipConfig) {
+          const myPlayerIndex = this.gameState.players.findIndex(p => p.id === this.myPlayerId);
+          if (myPlayerIndex >= 0) {
+            this.gameState.players[myPlayerIndex].shipConfig = data.shipConfig;
+          }
+          if (this.gameState.myPlayer) {
+            this.gameState.myPlayer.shipConfig = data.shipConfig;
+          }
+        }
+        break;
+
       default:
         console.log('Unknown message type:', data.type);
     }

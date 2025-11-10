@@ -63,6 +63,25 @@ func (client *Client) sendGameEvent(event GameEventMsg) {
 	}
 }
 
+func (client *Client) sendResetShipConfig() {
+	resetMsg := ResetShipConfigMsg{
+		Type:       MsgTypeResetShipConfig,
+		ShipConfig: client.Player.ShipConfig.ToMinimalShipConfig(),
+	}
+
+	data, err := msgpack.Marshal(resetMsg)
+	if err != nil {
+		log.Printf("Error marshaling reset ship config message: %v", err)
+		return
+	}
+
+	select {
+	case client.Send <- data:
+	default:
+		log.Printf("Could not send reset ship config to client %d", client.ID)
+	}
+}
+
 func (client *Client) sendWelcomeMessage() {
 	welcomeMsg := WelcomeMsg{
 		Type:     MsgTypeWelcome,

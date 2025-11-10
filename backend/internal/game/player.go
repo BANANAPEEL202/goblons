@@ -72,6 +72,9 @@ func (player *Player) respawn() {
 
 	player.resetPlayerShipConfig()
 
+	// Send reset ship config message to client
+	player.Client.sendResetShipConfig()
+
 	player.Modifiers = Mods{
 		SpeedMultiplier:        1.0,
 		HealthRegenPerSec:      1.0,

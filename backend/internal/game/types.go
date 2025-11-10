@@ -293,6 +293,12 @@ type GameEventMsg struct {
 	VictimName string `msgpack:"victimName,omitempty"`
 }
 
+// ResetShipConfigMsg represents a message to reset the player's ship configuration
+type ResetShipConfigMsg struct {
+	Type       string         `msgpack:"type"`
+	ShipConfig ShipConfigDelta `msgpack:"shipConfig"`
+}
+
 // Client represents a connected game client
 type Client struct {
 	ID           uint32
