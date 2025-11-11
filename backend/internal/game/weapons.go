@@ -232,7 +232,7 @@ func NewBigCannon() CannonStats {
 	return CannonStats{
 		ReloadTime:      2,
 		BulletSpeedMod:  1,
-		BulletDamageMod: 3,
+		BulletDamageMod: 2.5,
 		BulletCount:     1,
 		SpreadAngle:     0,
 		Range:           0,

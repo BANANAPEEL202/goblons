@@ -11,7 +11,7 @@ const (
 	botCount                     = 5
 	botGuardRadius       float64 = 500.0
 	botAggroRadius       float64 = 1500.0
-	botTargetDistance    float64 = 1000.0
+	botTargetDistance    float64 = 700.0
 	botPreferredDistance float64 = 200.0
 	botDistanceSlack     float64 = 80.0
 	botSideCannonsCount  int     = 2

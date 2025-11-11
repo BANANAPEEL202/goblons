@@ -92,7 +92,7 @@ func (sc *ShipConfiguration) UpdateUpgradePositions() {
 	if topUpgrade != nil && len(topUpgrade.Turrets) > 0 {
 		// Position turrets evenly along the center line of the ship
 		// Use consistent spacing with the dimension calculation
-		turretSpacing := sc.Size * 0.7
+		turretSpacing := sc.ShipLength / float64(len(topUpgrade.Turrets))
 
 		if len(topUpgrade.Turrets) == 1 {
 			// Single turret goes in the center
@@ -175,9 +175,17 @@ func (sc *ShipConfiguration) CalculateShipDimensions() {
 	turretCount := 0
 	if sc.TopUpgrade != nil {
 		turretCount = len(sc.TopUpgrade.Turrets)
+		sc.ShipWidth = baseWidth * sc.TopUpgrade.Effect.ShipWidthMultiplier
 	}
+
 	if turretCount > 0 {
-		turretSpacing := size * 0.7
+		turretSpacing := size * 0.6
+		if sc.TopUpgrade.Name == "Machine Gun Turret" {
+			turretSpacing = size * 1
+		}
+		if sc.TopUpgrade.Name == "Big Turret" {
+			turretSpacing = size * 1.5
+		}
 		turretLength = baseLength + turretSpacing*float64(turretCount-1)
 	}
 

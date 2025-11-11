@@ -170,7 +170,7 @@ func NewBigTurrets(turretCount int) *ShipModule {
 		Effect: ModuleModifier{
 			SpeedMultiplier:     -0.1,
 			TurnRateMultiplier:  -0.1,
-			ShipWidthMultiplier: 1.05,
+			ShipWidthMultiplier: 1.15,
 		},
 	}
 }
@@ -221,7 +221,7 @@ func NewMachineGunTurret(turretCount int) *ShipModule {
 		Effect: ModuleModifier{
 			SpeedMultiplier:     -0.05, // Slightly more penalty due to heavier turrets
 			TurnRateMultiplier:  -0.05,
-			ShipWidthMultiplier: 1.1,
+			ShipWidthMultiplier: 1.05,
 		},
 	}
 }
@@ -284,7 +284,7 @@ func NewSideUpgradeTree() *ShipModule {
 
 	// Root has three paths: upgrade to 2 basic cannons, switch to scatter cannons, or switch to rowing oars
 	root := NewBasicSideCannons(1)
-	root.NextUpgrades = []*ShipModule{basic2, scatter1, rowing1}
+	root.NextUpgrades = []*ShipModule{rowing1, scatter1, basic2}
 
 	return root
 }
