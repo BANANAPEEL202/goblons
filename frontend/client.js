@@ -1426,7 +1426,7 @@ class GameClient {
 
   drawGrid() {
     const gridSize = 50; // Larger grid for better performance
-    this.ctx.strokeStyle = '#808080';
+    this.ctx.strokeStyle = '#c8e8fdff';
     this.ctx.lineWidth = 1;
 
     const startX = Math.floor(this.camera.x / gridSize) * gridSize;
@@ -1455,7 +1455,7 @@ class GameClient {
 
     // Only draw border segments that are visible on screen
     this.ctx.strokeStyle = '#404040';
-    this.ctx.lineWidth = 4;
+    this.ctx.lineWidth = 6;
 
     this.ctx.beginPath();
 

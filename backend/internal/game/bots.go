@@ -9,9 +9,9 @@ import (
 
 const (
 	botCount                     = 5
-	botGuardRadius       float64 = 100.0
-	botAggroRadius       float64 = 1000.0
-	botTargetDistance    float64 = 500.0
+	botGuardRadius       float64 = 500.0
+	botAggroRadius       float64 = 1500.0
+	botTargetDistance    float64 = 1000.0
 	botPreferredDistance float64 = 200.0
 	botDistanceSlack     float64 = 80.0
 	botSideCannonsCount  int     = 2
@@ -53,9 +53,9 @@ func (w *World) spawnInitialBots() {
 		player.IsBot = true
 		player.Name = fmt.Sprintf("Guardian %d", i+1)
 		player.Color = botColors[i%len(botColors)]
-		player.Score = 500
-		player.Coins = 500
-		player.Experience = 500
+		player.Score = 1000
+		player.Coins = 1000
+		player.Experience = 1000
 		player.Level = 25
 		player.AvailableUpgrades = 0
 
