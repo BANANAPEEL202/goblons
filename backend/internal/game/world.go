@@ -931,5 +931,7 @@ func (w *World) calculateDebugInfo(player *Player) DebugInfo {
 		}
 	}
 
+	debugInfo.TotalDPS = debugInfo.FrontDPS + debugInfo.SideDPS + debugInfo.RearDPS + debugInfo.TopDPS
+
 	return debugInfo
 }
