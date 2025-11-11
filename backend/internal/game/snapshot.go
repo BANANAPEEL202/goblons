@@ -302,7 +302,6 @@ func calculateTurretDeltas(newTurrets []*Turret) []TurretDelta {
 			Position:        turret.Position,
 			Angle:           turret.Angle,
 			Type:            string(turret.Type),
-			RecoilTime:      turret.RecoilTime,
 			NextCannonIndex: turret.NextCannonIndex,
 			Cannons:         calculateCannonDeltas(nil, cannonPtrs),
 		}
@@ -328,7 +327,7 @@ func calculateCannonDeltas(oldCannons, newCannons []*Cannon) []CannonDelta {
 	for i := range newCannons {
 		oldCannon := oldCannons[i]
 		newCannon := newCannons[i]
-		if oldCannon.Position != newCannon.Position || oldCannon.Type != newCannon.Type || !oldCannon.RecoilTime.Equal(newCannon.RecoilTime) {
+		if oldCannon.Position != newCannon.Position || oldCannon.Type != newCannon.Type || !newCannon.RecoilTime.IsZero() {
 			delta := CannonDelta{
 				Position:   newCannon.Position,
 				Type:       string(newCannon.Type),

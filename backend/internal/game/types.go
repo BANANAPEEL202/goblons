@@ -198,13 +198,13 @@ type Snapshot struct {
 
 // DeltaSnapshot represents only the changes in game state since last snapshot
 type DeltaSnapshot struct {
-	Type         string        `msgpack:"type"`
-	Players      []PlayerDelta `msgpack:"players,omitempty"`      // Delta player updates
-	ItemsAdded   []GameItem    `msgpack:"itemsAdded,omitempty"`   // Items that were added
-	ItemsRemoved []uint32      `msgpack:"itemsRemoved,omitempty"` // IDs of items that were removed
-	BulletsAdded   []Bullet    `msgpack:"bulletsAdded,omitempty"`   // Bullets that were added
-	BulletsRemoved []uint32    `msgpack:"bulletsRemoved,omitempty"` // IDs of bullets that were removed
-	Time         int64         `msgpack:"time"`
+	Type           string        `msgpack:"type"`
+	Players        []PlayerDelta `msgpack:"players,omitempty"`        // Delta player updates
+	ItemsAdded     []GameItem    `msgpack:"itemsAdded,omitempty"`     // Items that were added
+	ItemsRemoved   []uint32      `msgpack:"itemsRemoved,omitempty"`   // IDs of items that were removed
+	BulletsAdded   []Bullet      `msgpack:"bulletsAdded,omitempty"`   // Bullets that were added
+	BulletsRemoved []uint32      `msgpack:"bulletsRemoved,omitempty"` // IDs of bullets that were removed
+	Time           int64         `msgpack:"time"`
 }
 
 // PlayerDelta represents only the changed fields of a player since last snapshot
@@ -257,12 +257,11 @@ type CannonDelta struct {
 
 // TurretDelta contains only the fields needed by the frontend for rendering
 type TurretDelta struct {
-	Position        Position      `msgpack:"position,omitempty"`        // Relative position for drawing
-	Angle           float64       `msgpack:"angle,omitempty"`           // Current aiming angle
-	Type            string        `msgpack:"type,omitempty"`            // Turret type for rendering style
-	RecoilTime      time.Time     `msgpack:"recoilTime,omitempty"`      // For recoil animation
-	NextCannonIndex int           `msgpack:"nextCannonIndex,omitempty"` // For alternating recoil
-	Cannons         []CannonDelta `msgpack:"cannons,omitempty"`         // Turret cannons (minimal data)
+	Position        Position      `msgpack:"position,omitempty"` // Relative position for drawing
+	Angle           float64       `msgpack:"angle,omitempty"`    // Current aiming angle
+	Type            string        `msgpack:"type,omitempty"`     // Turret type for rendering style
+	NextCannonIndex int           `msgpack:"nextCannonIndex"`    // For alternating recoil, cannot omit empty since 0 is valid
+	Cannons         []CannonDelta `msgpack:"cannons,omitempty"`  // Turret cannons (minimal data)
 }
 
 // WelcomeMsg represents a welcome message sent to a new client
@@ -295,7 +294,7 @@ type GameEventMsg struct {
 
 // ResetShipConfigMsg represents a message to reset the player's ship configuration
 type ResetShipConfigMsg struct {
-	Type       string         `msgpack:"type"`
+	Type       string          `msgpack:"type"`
 	ShipConfig ShipConfigDelta `msgpack:"shipConfig"`
 }
 

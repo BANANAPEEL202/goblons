@@ -38,6 +38,7 @@ func (player *Player) respawn() {
 	// Save half of previous XP and coins
 	respawnXP := player.Experience / 2
 	respawnCoins := player.Coins / 2
+	respawnScore := player.Score / 2
 
 	// Save player identity
 	playerID := player.ID
@@ -49,7 +50,7 @@ func (player *Player) respawn() {
 	player.Coins = respawnCoins
 	player.Level = 1
 	player.AvailableUpgrades = 0
-	player.Score = 0
+	player.Score = respawnScore
 	player.Health = 100
 	player.MaxHealth = 100
 	player.State = StateAlive

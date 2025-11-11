@@ -1570,7 +1570,6 @@ class GameClient {
         // Backend provides relative positions, draw cannon centered on that position
         let centerX = cannon.position.x;
         let centerY = cannon.position.y;
-
         // Calculate recoil animation offset
         if (cannon.recoilTime) {
           const timeSinceFire = Date.now() - new Date(cannon.recoilTime).getTime();
@@ -1810,8 +1809,10 @@ class GameClient {
 
         // Calculate recoil offset for turret barrels
         let recoilOffset = 0;
-        if (turret.recoilTime) {
-          const timeSinceFire = Date.now() - new Date(turret.recoilTime).getTime();
+        const recoilTimes = turret.cannons?.map(c => c.recoilTime ? new Date(c.recoilTime).getTime() : 0) || [0];
+        const latestRecoilTime = Math.max(...recoilTimes);
+        if (latestRecoilTime > 0) {
+          const timeSinceFire = Date.now() - latestRecoilTime;
           const recoilDuration = 200; // 200ms recoil animation
 
           if (timeSinceFire < recoilDuration) {

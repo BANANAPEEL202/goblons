@@ -116,7 +116,6 @@ type Turret struct {
 	LastFireTime    time.Time  `msgpack:"-"`         // Not serialized
 	Type            WeaponType `msgpack:"type"`
 	NextCannonIndex int        `msgpack:"nextCannonIndex"` // For alternating fire
-	RecoilTime      time.Time  `msgpack:"recoilTime"`      // When the turret last fired (for recoil animation)
 }
 
 // UpdateAiming updates the turret's angle to aim at target position
@@ -151,7 +150,6 @@ func (t *Turret) Fire(world *World, player *Player, now time.Time) []*Bullet {
 			// Move to next cannon for alternating fire
 			t.NextCannonIndex = (t.NextCannonIndex + 1) % len(t.Cannons)
 			t.LastFireTime = now
-			t.RecoilTime = now
 		}
 	} else {
 		// Regular turret: fire all cannons simultaneously
@@ -163,7 +161,6 @@ func (t *Turret) Fire(world *World, player *Player, now time.Time) []*Bullet {
 
 		if len(allBullets) > 0 {
 			t.LastFireTime = now
-			t.RecoilTime = now
 		}
 	}
 

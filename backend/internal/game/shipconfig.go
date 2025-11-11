@@ -239,7 +239,6 @@ func (sc *ShipConfiguration) ToMinimalShipConfig() ShipConfigDelta {
 				Position:        turret.Position,
 				Angle:           turret.Angle,
 				Type:            string(turret.Type),
-				RecoilTime:      turret.RecoilTime,
 				NextCannonIndex: turret.NextCannonIndex,
 				Cannons:         make([]CannonDelta, len(turret.Cannons)),
 			}
