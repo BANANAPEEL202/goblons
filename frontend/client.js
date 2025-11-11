@@ -344,8 +344,16 @@ class GameClient {
     };
 
     this.socket.onmessage = (event) => {
-      const compressed = new Uint8Array(event.data);
-      const decompressed = pako.ungzip(compressed);
+      const arrayBuffer = event.data;
+      const uint8Array = new Uint8Array(arrayBuffer);
+      let decompressed;
+      if (uint8Array[0] === 1) {
+        // Compressed with gzip
+        decompressed = pako.ungzip(uint8Array.slice(1));
+      } else {
+        // Uncompressed
+        decompressed = uint8Array.slice(1);
+      }
       const data = decode(decompressed);
       this.handleMessage(data);
     };

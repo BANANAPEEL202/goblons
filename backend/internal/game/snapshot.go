@@ -213,7 +213,6 @@ func (w *World) broadcastSnapshot() {
 					ItemsRemoved:   itemsRemoved,
 					BulletsAdded:   bulletsAdded,
 					BulletsRemoved: bulletsRemoved,
-					Time:           clientSnapshot.Time,
 				}
 
 				data, err = msgpack.Marshal(deltaSnapshot)

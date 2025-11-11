@@ -209,8 +209,11 @@ func (s *Server) handleClientWrites(client *game.Client) {
 	}
 }
 
-// compressMessage compresses a byte slice using gzip
+// compressMessage compresses a byte slice using gzip if large enough
 func compressMessage(data []byte) ([]byte, error) {
+	if len(data) < 512 { // Don't compress small messages
+		return append([]byte{0x00}, data...), nil
+	}
 	var buf bytes.Buffer
 	gz := gzip.NewWriter(&buf)
 	if _, err := gz.Write(data); err != nil {
@@ -219,5 +222,5 @@ func compressMessage(data []byte) ([]byte, error) {
 	if err := gz.Close(); err != nil {
 		return nil, err
 	}
-	return buf.Bytes(), nil
+	return append([]byte{0x01}, buf.Bytes()...), nil
 }

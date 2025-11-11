@@ -204,7 +204,6 @@ type DeltaSnapshot struct {
 	ItemsRemoved   []uint32      `msgpack:"itemsRemoved,omitempty"`   // IDs of items that were removed
 	BulletsAdded   []Bullet      `msgpack:"bulletsAdded,omitempty"`   // Bullets that were added
 	BulletsRemoved []uint32      `msgpack:"bulletsRemoved,omitempty"` // IDs of bullets that were removed
-	Time           int64         `msgpack:"time"`
 }
 
 // PlayerDelta represents only the changed fields of a player since last snapshot
