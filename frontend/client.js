@@ -1865,7 +1865,7 @@ class GameClient {
 
     // Draw player name with upgrade level prefix above the ship
     const displayName = (player.name && player.name.trim()) ? player.name.trim() : `Player ${player.id}`;
-    const labelY = screenY - (shaftWidth / 2) - 20;
+    const labelY = screenY - (shaftWidth / 2) - 30;
 
     this.ctx.save();
     this.ctx.lineWidth = 3;
