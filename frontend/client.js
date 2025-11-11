@@ -204,16 +204,6 @@ class GameClient {
       const screenX = e.clientX - rect.left;
       const screenY = e.clientY - rect.top;
 
-      // Check death screen respawn button first
-      if (this.deathScreen.visible && this.deathScreen.respawnButtonBounds) {
-        const bounds = this.deathScreen.respawnButtonBounds;
-        if (screenX >= bounds.x && screenX <= bounds.x + bounds.width &&
-          screenY >= bounds.y && screenY <= bounds.y + bounds.height) {
-          this.handleRespawn();
-          return;
-        }
-      }
-
       if (this.controlsLocked) {
         console.log('Controls are locked; ignoring click.');
         return;
@@ -245,6 +235,14 @@ class GameClient {
         this.toggleFullscreen();
       }
     });
+
+    // Respawn button
+    const respawnButton = document.getElementById('respawnButton');
+    if (respawnButton) {
+      respawnButton.addEventListener('click', () => {
+        this.handleRespawn();
+      });
+    }
   }
 
   toggleFullscreen() {
@@ -639,12 +637,41 @@ class GameClient {
     this.deathScreen.score = player.scoreAtDeath || player.score;
     this.deathScreen.survivalTime = player.survivalTime || 0;
     this.deathScreen.killerName = player.killedByName || 'Unknown';
+
+    // Update HTML elements
+    const deathScore = document.getElementById('deathScore');
+    const deathTime = document.getElementById('deathTime');
+    const deathKiller = document.getElementById('deathKiller');
+    const deathScreen = document.getElementById('deathScreen');
+
+    if (deathScore) deathScore.textContent = this.deathScreen.score;
+
+    const minutes = Math.floor(this.deathScreen.survivalTime / 60);
+    const seconds = Math.floor(this.deathScreen.survivalTime % 60);
+    const timeString = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    if (deathTime) deathTime.textContent = timeString;
+
+    if (deathKiller) {
+      deathKiller.textContent = this.deathScreen.killerName && this.deathScreen.killerName !== '' ?
+        this.deathScreen.killerName : 'Environment';
+    }
+
+    if (deathScreen) {
+      deathScreen.classList.add('visible');
+    }
+
     console.log('Death screen shown:', this.deathScreen);
   }
 
   handleRespawn() {
     console.log('Respawn requested');
     this.deathScreen.visible = false;
+
+    // Hide HTML death screen
+    const deathScreen = document.getElementById('deathScreen');
+    if (deathScreen) {
+      deathScreen.classList.remove('visible');
+    }
 
     // Send respawn request to server
     this.input.requestRespawn = true;
@@ -657,88 +684,7 @@ class GameClient {
   }
 
   drawDeathScreen() {
-    if (!this.deathScreen.visible) return;
-
-    const ctx = this.ctx;
-    const centerX = this.screenWidth / 2;
-    const centerY = this.screenHeight / 2;
-
-    // Semi-transparent overlay
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-    ctx.fillRect(0, 0, this.screenWidth, this.screenHeight);
-
-    // Death screen panel
-    const panelWidth = 500;
-    const panelHeight = 400;
-    const panelX = centerX - panelWidth / 2;
-    const panelY = centerY - panelHeight / 2;
-
-    // Panel background
-    ctx.fillStyle = 'rgba(20, 20, 30, 0.7)';
-    this.drawRoundedRect(panelX, panelY, panelWidth, panelHeight, 15);
-    ctx.fill();
-
-    // Panel border
-    ctx.strokeStyle = '#ff4444';
-    ctx.lineWidth = 3;
-    this.drawRoundedRect(panelX, panelY, panelWidth, panelHeight, 15);
-    ctx.stroke();
-
-    // Title
-    ctx.font = 'bold 48px Arial';
-    ctx.fillStyle = '#ff4444';
-    ctx.textAlign = 'center';
-    ctx.fillText('YOU DIED', centerX, panelY + 80);
-
-    // Stats
-    ctx.font = 'bold 24px Arial';
-    ctx.fillStyle = '#ffffff';
-
-    const statsY = panelY + 150;
-    const lineHeight = 45;
-
-    ctx.fillText(`Score: ${this.deathScreen.score}`, centerX, statsY);
-
-    const minutes = Math.floor(this.deathScreen.survivalTime / 60);
-    const seconds = Math.floor(this.deathScreen.survivalTime % 60);
-    const timeString = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-    ctx.fillText(`Survived: ${timeString}`, centerX, statsY + lineHeight);
-
-    if (this.deathScreen.killerName && this.deathScreen.killerName !== '') {
-      ctx.fillText(`Killed by: ${this.deathScreen.killerName}`, centerX, statsY + lineHeight * 2);
-    } else {
-      ctx.fillText('Killed by: Environment', centerX, statsY + lineHeight * 2);
-    }
-
-    // Respawn button
-    const buttonWidth = 200;
-    const buttonHeight = 50;
-    const buttonX = centerX - buttonWidth / 2;
-    const buttonY = panelY + panelHeight - 90;
-
-    // Store button bounds for click detection
-    this.deathScreen.respawnButtonBounds = {
-      x: buttonX,
-      y: buttonY,
-      width: buttonWidth,
-      height: buttonHeight
-    };
-
-    // Button background
-    ctx.fillStyle = '#4CAF50';
-    this.drawRoundedRect(buttonX, buttonY, buttonWidth, buttonHeight, 8);
-    ctx.fill();
-
-    // Button border
-    ctx.strokeStyle = '#45a049';
-    ctx.lineWidth = 2;
-    this.drawRoundedRect(buttonX, buttonY, buttonWidth, buttonHeight, 8);
-    ctx.stroke();
-
-    // Button text
-    ctx.font = 'bold 20px Arial';
-    ctx.fillStyle = '#ffffff';
-    ctx.fillText('RESPAWN', centerX, buttonY + 32);
+    // Death screen is now handled by HTML overlay
   }
 
   drawDebugStatus() {
@@ -2407,7 +2353,7 @@ class GameClient {
 
       // Instructions
       this.ctx.fillStyle = '#FFFFFF';
-      this.ctx.font = '14px Arial';
+      this.ctx.font = 'bold 14px Arial';
       this.ctx.textAlign = 'left';
       this.ctx.fillText('Press 1-8 to upgrade.', panelX, yOffset + 25);
     } else {

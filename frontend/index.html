@@ -285,6 +285,126 @@
         font-size: 12px;
       }
     }
+
+    #deathScreen {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(6px);
+      z-index: 2100;
+      transition: opacity 200ms ease, visibility 200ms ease;
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    #deathScreen.visible {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+    }
+
+    .death-card {
+      width: min(380px, 85vw);
+      padding: 28px 36px;
+      border-radius: 24px;
+      background: rgba(29, 29, 29, 0.7);
+      text-align: center;
+      border: 1px solid rgba(96, 139, 193, 0.4);
+    }
+
+    .death-title {
+      font-size: 48px;
+      font-weight: bold;
+      color: #ffffff;
+      margin: 0 0 30px 0;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .death-stats {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      margin-bottom: 30px;
+    }
+
+    .stat-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+    }
+
+    .stat-label {
+      font-size: 16px;
+      font-weight: 600;
+      color: rgba(203, 220, 235, 0.8);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .stat-value {
+      font-size: 18px;
+      font-weight: bold;
+      color: #ffffff;
+    }
+
+    .death-actions {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .respawn-button {
+      padding: 16px 32px;
+      border: 2px solid rgba(96, 139, 193, 0.5);
+      border-radius: 8px;
+      background: rgba(29, 29, 29, 0.9);
+      color: #ffffff;
+      font-size: 16px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+      cursor: pointer;
+      transition: transform 160ms ease, box-shadow 160ms ease, background-color 160ms ease, border-color 160ms ease;
+    }
+
+    .respawn-button:hover {
+      transform: translateY(-1px);
+      background: rgba(45, 45, 45, 0.9);
+      border-color: rgba(96, 139, 193, 0.8);
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+    }
+
+    .respawn-button:active {
+      transform: translateY(0);
+    }
+
+    @media (max-width: 850px) {
+      .death-card {
+        width: min(340px, 90vw);
+        padding: 26px 24px;
+      }
+
+      .death-title {
+        font-size: 36px;
+      }
+
+      .stat-item {
+        padding: 10px 14px;
+      }
+
+      .stat-label {
+        font-size: 14px;
+      }
+
+      .stat-value {
+        font-size: 16px;
+      }
+    }
   </style>
 </head>
 
@@ -316,6 +436,28 @@
           </div>
         </form>
         <p class="start-help">WASD to steer • Mouse to aim</p>
+      </div>
+    </div>
+    <div id="deathScreen">
+      <div class="death-card">
+        <h1 class="death-title">YOU DIED</h1>
+        <div class="death-stats">
+          <div class="stat-item">
+            <span class="stat-label">Score:</span>
+            <span class="stat-value" id="deathScore">0</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Survived:</span>
+            <span class="stat-value" id="deathTime">0:00</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Killed by:</span>
+            <span class="stat-value" id="deathKiller">Unknown</span>
+          </div>
+        </div>
+        <div class="death-actions">
+          <button id="respawnButton" class="respawn-button">RESPAWN</button>
+        </div>
       </div>
     </div>
   </div>

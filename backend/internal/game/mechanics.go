@@ -243,8 +243,8 @@ func (gm *GameMechanics) SpawnFoodItems() {
 	}{
 		{ItemTypeGrayCircle, 10, 10, 30},   // Most common
 		{ItemTypeYellowCircle, 10, 10, 20}, // Common
-		{ItemTypeOrangeCircle, 30, 30, 20}, // Uncommon
-		{ItemTypeBlueDiamond, 50, 50, 10},  // Rare
+		{ItemTypeOrangeCircle, 20, 20, 20}, // Uncommon
+		{ItemTypeBlueDiamond, 30, 30, 10},  // Rare
 	}
 
 	// Calculate total weight
