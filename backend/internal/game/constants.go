@@ -74,5 +74,5 @@ const (
 )
 
 const (
-	DEV = false
+	DEV = true
 )

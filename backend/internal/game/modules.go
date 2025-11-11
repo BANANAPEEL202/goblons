@@ -243,6 +243,7 @@ func NewTopUpgradeTree() *ShipModule {
 	machineGunTurret2 := NewMachineGunTurret(2)
 
 	bigTurret1 := NewBigTurrets(1)
+	bigTurret2 := NewBigTurrets(2)
 
 	// Link the upgrade paths
 	// From root, you can choose basic turret or machine gun turret
@@ -251,6 +252,8 @@ func NewTopUpgradeTree() *ShipModule {
 	// Basic turret path
 	turret1.NextUpgrades = []*ShipModule{bigTurret1, turret2}
 	turret2.NextUpgrades = []*ShipModule{turret3}
+
+	bigTurret1.NextUpgrades = []*ShipModule{bigTurret2}
 
 	// machine gun path
 	machineGunTurret1.NextUpgrades = []*ShipModule{machineGunTurret2}

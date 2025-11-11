@@ -194,7 +194,7 @@ func NewScatterCannon() CannonStats {
 
 func NewTurretCannon() CannonStats {
 	return CannonStats{
-		ReloadTime:      1.5,
+		ReloadTime:      1.2,
 		BulletSpeedMod:  1.0,
 		BulletDamageMod: 1.0,
 		BulletCount:     1,
@@ -232,7 +232,7 @@ func NewBigCannon() CannonStats {
 	return CannonStats{
 		ReloadTime:      2,
 		BulletSpeedMod:  1,
-		BulletDamageMod: 5,
+		BulletDamageMod: 3,
 		BulletCount:     1,
 		SpreadAngle:     0,
 		Range:           0,
