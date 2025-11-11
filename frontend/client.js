@@ -1432,7 +1432,7 @@ class GameClient {
 
   render() {
     // Clear canvas
-    this.ctx.fillStyle = '#9bbfeaff';
+    this.ctx.fillStyle = '#95c1f7ff';
     this.ctx.fillRect(0, 0, this.screenWidth, this.screenHeight);
 
     if (!this.isConnected) {
@@ -2407,9 +2407,9 @@ class GameClient {
 
       // Instructions
       this.ctx.fillStyle = '#FFFFFF';
-      this.ctx.font = '11px Arial';
+      this.ctx.font = '14px Arial';
       this.ctx.textAlign = 'left';
-      this.ctx.fillText('Press 1-8 to upgrade stats', panelX, yOffset + 20);
+      this.ctx.fillText('Press 1-8 to upgrade.', panelX, yOffset + 25);
     } else {
       this.ctx.fillStyle = '#B0B0B0';
       this.ctx.font = '12px Arial';
@@ -2446,9 +2446,9 @@ class GameClient {
 
     // Title
     this.ctx.fillStyle = '#FFFFFF';
-    this.ctx.font = 'bold 16px Arial';
+    this.ctx.font = 'bold 20px Arial';
     this.ctx.textAlign = 'left';
-    this.ctx.fillText('Leaderboard', x + 10, y + 20);
+    this.ctx.fillText('Leaderboard', x + 10, y + 25);
 
     // Players
     this.ctx.font = '14px Arial';
@@ -2502,11 +2502,6 @@ class GameClient {
     // Background
     this.ctx.fillStyle = 'rgba(64, 64, 64, 0.8)';
     this.ctx.fillRect(minimapX, minimapY, minimapSize, minimapSize);
-
-    // Border
-    this.ctx.strokeStyle = '#FFFFFF';
-    this.ctx.lineWidth = 2;
-    this.ctx.strokeRect(minimapX, minimapY, minimapSize, minimapSize);
 
     // Scale factors
     const scaleX = minimapSize / WorldWidth;
@@ -2590,7 +2585,7 @@ class GameClient {
     if (player.availableUpgrades > 0) {
       this.ctx.fillStyle = '#FFFFFF';
       this.ctx.font = 'bold 18px Arial';
-      this.ctx.fillText(`${player.availableUpgrades} Modules${player.availableUpgrades > 1 ? 's' : ''} Available!`, this.screenWidth / 2, barY - 20);
+      this.ctx.fillText(`${player.availableUpgrades} Modules${player.availableUpgrades > 1 ? 's' : ''} Available!`, this.screenWidth / 2, barY - 15);
     }
   }
 
@@ -3024,9 +3019,8 @@ class StartScreen {
     this.form = document.getElementById('startForm');
     this.nameInput = document.getElementById('playerName');
     this.colorInput = document.getElementById('playerColor');
-    this.colorPreview = document.getElementById('colorPreviewValue');
+    this.colorDisplay = document.getElementById('colorDisplay');
     this.swatchContainer = document.getElementById('presetColors');
-    this.randomButton = document.getElementById('randomizeName');
     this.playButton = this.form ? this.form.querySelector('.play-button') : null;
     this.activeSwatch = null;
     this.hasLaunched = false;
@@ -3087,17 +3081,6 @@ class StartScreen {
         this.applyName(this.nameInput.value);
       });
     }
-
-    if (this.randomButton) {
-      this.randomButton.addEventListener('click', () => {
-        const randomName = generateRandomName();
-        this.applyName(randomName);
-        if (this.nameInput) {
-          this.nameInput.focus();
-          this.nameInput.select();
-        }
-      });
-    }
   }
 
   applyName(value) {
@@ -3113,8 +3096,8 @@ class StartScreen {
     if (this.colorInput) {
       this.colorInput.value = sanitized;
     }
-    if (this.colorPreview) {
-      this.colorPreview.textContent = sanitized;
+    if (this.colorDisplay) {
+      this.colorDisplay.style.backgroundColor = sanitized;
     }
     if (this.swatchContainer) {
       this.swatchContainer.querySelectorAll('.color-swatch').forEach((button) => {

@@ -88,12 +88,10 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      backdrop-filter: blur(8px);
+      backdrop-filter: blur(6px);
       z-index: 2000;
       transition: opacity 200ms ease, visibility 200ms ease;
-    }
-
-    #startScreen.hidden {
+    }    #startScreen.hidden {
       opacity: 0;
       visibility: hidden;
       pointer-events: none;
@@ -103,7 +101,7 @@
       width: min(460px, 92vw);
       padding: 28px 36px;
       border-radius: 24px;
-      background: rgba(203, 220, 235, 0.98);
+      background: rgba(29, 29, 29, 0.7);
       text-align: center;
       border: 1px solid rgba(96, 139, 193, 0.35);
     }
@@ -117,15 +115,6 @@
       max-height: 320px;
     }
 
-    .tagline {
-      margin-top: 6px;
-      margin-bottom: 30px;
-      font-size: 16px;
-      color: #133E87;
-      letter-spacing: 0.04em;
-      font-weight: 600;
-    }
-
     #startForm {
       display: flex;
       flex-direction: column;
@@ -133,11 +122,9 @@
     }
 
     .input-label {
-      align-self: flex-start;
-      margin-bottom: 8px;
       font-size: 12px;
       letter-spacing: 0.18em;
-      color: rgba(19, 62, 135, 0.65);
+      color: rgba(203, 220, 235, 0.8);
       text-transform: uppercase;
     }
 
@@ -145,21 +132,28 @@
       width: 100%;
       padding: 14px 16px;
       border-radius: 12px;
-      border: 1px solid rgba(96, 139, 193, 0.35);
-      background: rgba(203, 220, 235, 0.75);
-      color: #133E87;
+      border: 1px solid rgba(96, 139, 193, 0.4);
+      background: rgba(29, 29, 29, 0.8);
+      color: #ffffff;
       font-size: 16px;
       outline: none;
       transition: border-color 150ms ease, box-shadow 150ms ease;
+      text-align: center;
     }
 
     #playerName:focus {
-      border-color: rgba(19, 62, 135, 0.65);
-      box-shadow: 0 0 0 2px rgba(19, 62, 135, 0.2);
+      border-color: rgba(96, 139, 193, 0.8);
+      box-shadow: 0 0 0 2px rgba(96, 139, 193, 0.3);
+    }
+
+    .name-input-row {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
     }
 
     .color-picker-row {
-      text-align: left;
       display: flex;
       flex-direction: column;
       gap: 12px;
@@ -167,33 +161,47 @@
 
     .color-picker-header {
       display: flex;
-      justify-content: space-between;
+      flex-direction: column;
       align-items: center;
-    }
-
-    .color-value {
-      font-size: 12px;
-      letter-spacing: 0.12em;
-      color: rgba(19, 62, 135, 0.75);
-      text-transform: uppercase;
+      gap: 4px;
     }
 
     .color-controls {
       display: flex;
-      gap: 12px;
+      justify-content: center;
       align-items: center;
       flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .custom-color-picker {
+      position: relative;
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      border: 2px solid rgba(96, 139, 193, 0.5);
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.35);
+      cursor: pointer;
+      transition: transform 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
+    }
+
+    .custom-color-picker:hover {
+      transform: translateY(-2px);
+      border-color: rgba(96, 139, 193, 0.8);
+      box-shadow: 0 14px 32px rgba(19, 62, 135, 0.22);
     }
 
     #playerColor {
-      width: 64px;
-      height: 48px;
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
+      cursor: pointer;
       border: none;
-      border-radius: 12px;
       padding: 0;
       background: none;
-      cursor: pointer;
-      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.35);
     }
 
     .color-swatches {
@@ -206,7 +214,7 @@
       width: 36px;
       height: 36px;
       border-radius: 50%;
-      border: 2px solid rgba(96, 139, 193, 0.4);
+      border: 2px solid rgba(96, 139, 193, 0.5);
       background: var(--swatch-color);
       cursor: pointer;
       transition: transform 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
@@ -216,68 +224,49 @@
     .color-swatch:hover,
     .color-swatch.active {
       transform: translateY(-2px);
-      border-color: rgba(19, 62, 135, 0.75);
+      border-color: rgba(96, 139, 193, 0.8);
       box-shadow: 0 14px 32px rgba(19, 62, 135, 0.22);
     }
 
     .start-actions {
       display: flex;
-      gap: 12px;
-      flex-wrap: wrap;
       justify-content: center;
       align-items: center;
     }
 
     .play-button {
-      flex: 1 1 180px;
-      padding: 16px 20px;
-      border: none;
-      border-radius: 12px;
-      background: #133E87;
-      color: #F3F3E0;
-      font-size: 18px;
+      padding: 16px 32px;
+      border: 2px solid rgba(96, 139, 193, 0.5);
+      border-radius: 8px;
+      background: rgba(29, 29, 29, 0.9);
+      color: #ffffff;
+      font-size: 16px;
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.16em;
       cursor: pointer;
-      transition: transform 160ms ease, box-shadow 160ms ease;
+      transition: transform 160ms ease, box-shadow 160ms ease, background-color 160ms ease, border-color 160ms ease;
     }
 
     .play-button:hover {
       transform: translateY(-1px);
-      box-shadow: 0 24px 40px rgba(19, 62, 135, 0.45);
+      background: rgba(45, 45, 45, 0.9);
+      border-color: rgba(96, 139, 193, 0.8);
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
     }
 
     .play-button:disabled {
       opacity: 0.65;
       cursor: wait;
       transform: none;
-      box-shadow: 0 16px 32px rgba(19, 62, 135, 0.25);
-    }
-
-    .randomize-button {
-      padding: 12px 16px;
-      border-radius: 10px;
-      border: 1px solid rgba(96, 139, 193, 0.45);
-      background: rgba(203, 220, 235, 0.45);
-      color: #133E87;
-      font-size: 14px;
-      letter-spacing: 0.08em;
-      cursor: pointer;
-      transition: background 150ms ease, color 150ms ease, transform 150ms ease;
-    }
-
-    .randomize-button:hover {
-      background: rgba(96, 139, 193, 0.45);
-      color: #F3F3E0;
-      transform: translateY(-1px);
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
     }
 
     .start-help {
       margin-top: 26px;
       font-size: 13px;
       letter-spacing: 0.08em;
-      color: rgba(19, 62, 135, 0.65);
+      color: rgba(203, 220, 235, 0.7);
       text-transform: uppercase;
     }
 
@@ -290,10 +279,6 @@
       .launch-logo {
         width: 100%;
         max-width: 380px;
-      }
-
-      .tagline {
-        font-size: 14px;
       }
 
       .start-help {
@@ -309,29 +294,28 @@
     <div id="startScreen">
       <div class="start-card">
         <img src="/goblons_launch.png" class="launch-logo" alt="Goblons Launch Logo">
-        <p class="tagline">Chart a course, rally your fleet, and seize the sector.</p>
         <form id="startForm" autocomplete="off">
-          <div>
+          <div class="name-input-row">
             <label class="input-label" for="playerName">Name</label>
-            <input type="text" id="playerName" maxlength="16" placeholder="Captain Nova" autocomplete="off" required
+            <input type="text" id="playerName" maxlength="16" placeholder="Player Name" autocomplete="off" required
               autofocus />
           </div>
           <div class="color-picker-row">
             <div class="color-picker-header">
               <label class="input-label" for="playerColor">Hull Color</label>
-              <span class="color-value" id="colorPreviewValue">#608BC1</span>
             </div>
             <div class="color-controls">
-              <input type="color" id="playerColor" value="#608BC1" aria-label="Choose hull color" />
+              <div class="custom-color-picker" id="colorDisplay">
+                <input type="color" id="playerColor" value="#608BC1" aria-label="Choose hull color" />
+              </div>
               <div class="color-swatches" id="presetColors"></div>
             </div>
           </div>
           <div class="start-actions">
             <button type="submit" class="play-button">Set Sail</button>
-            <button type="button" class="randomize-button" id="randomizeName">Random Name</button>
           </div>
         </form>
-        <p class="start-help">WASD to steer • Mouse to aim • F11 for fullscreen</p>
+        <p class="start-help">WASD to steer • Mouse to aim</p>
       </div>
     </div>
   </div>
