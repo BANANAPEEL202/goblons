@@ -228,6 +228,9 @@ type PlayerDelta struct {
 	Upgrades          *map[UpgradeType]Upgrade `msgpack:"statUpgrades,omitempty"`      // Changes with stat upgrades
 	AutofireEnabled   *bool                    `msgpack:"autofireEnabled,omitempty"`   // Changes rarely
 	DebugInfo         *DebugInfo               `msgpack:"debugInfo,omitempty"`         // Changes frequently for display
+	ScoreAtDeath      *int                     `msgpack:"scoreAtDeath,omitempty"`      // Score captured on death
+	SurvivalTime      *float64                 `msgpack:"survivalTime,omitempty"`      // Lifetime duration
+	KilledByName      *string                  `msgpack:"killedByName,omitempty"`      // Killer name tracking
 }
 
 // ShipConfigDelta contains only the fields needed by the frontend for rendering

@@ -170,7 +170,10 @@ func hasPlayerChanges(delta PlayerDelta) bool {
 		delta.Coins != nil ||
 		delta.Upgrades != nil ||
 		delta.AutofireEnabled != nil ||
-		delta.DebugInfo != nil
+		delta.DebugInfo != nil ||
+		delta.ScoreAtDeath != nil ||
+		delta.SurvivalTime != nil ||
+		delta.KilledByName != nil
 }
 
 // BuyUpgrade attempts to upgrade a specific stat for a player

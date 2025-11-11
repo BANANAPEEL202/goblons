@@ -200,6 +200,9 @@ func (w *World) broadcastSnapshot() {
 							Upgrades:          &currentPlayer.Upgrades,
 							AutofireEnabled:   &currentPlayer.AutofireEnabled,
 							DebugInfo:         &currentPlayer.DebugInfo,
+							ScoreAtDeath:      &currentPlayer.ScoreAtDeath,
+							SurvivalTime:      &currentPlayer.SurvivalTime,
+							KilledByName:      &currentPlayer.KilledByName,
 						}
 						playerDeltas = append(playerDeltas, delta)
 					}
@@ -404,6 +407,19 @@ func calculatePlayerDeltas(oldPlayer, newPlayer *Player) PlayerDelta {
 	// Compare upgrades (changes with stat upgrades)
 	if !upgradesEqual(oldPlayer.Upgrades, newPlayer.Upgrades) {
 		delta.Upgrades = &newPlayer.Upgrades
+	}
+
+	// Compare death-related fields
+	if oldPlayer.ScoreAtDeath != newPlayer.ScoreAtDeath {
+		delta.ScoreAtDeath = &newPlayer.ScoreAtDeath
+	}
+
+	if oldPlayer.SurvivalTime != newPlayer.SurvivalTime {
+		delta.SurvivalTime = &newPlayer.SurvivalTime
+	}
+
+	if oldPlayer.KilledByName != newPlayer.KilledByName {
+		delta.KilledByName = &newPlayer.KilledByName
 	}
 
 	delta.ShipConfig = calculateShipConfigDeltas(&oldPlayer.ShipConfig, &newPlayer.ShipConfig)

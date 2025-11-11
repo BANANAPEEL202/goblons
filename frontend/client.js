@@ -2855,6 +2855,9 @@ class GameClient {
     if (deltaPlayer.statUpgrades !== undefined) merged.statUpgrades = deltaPlayer.statUpgrades;
     if (deltaPlayer.autofireEnabled !== undefined) merged.autofireEnabled = deltaPlayer.autofireEnabled;
     if (deltaPlayer.debugInfo !== undefined) merged.debugInfo = deltaPlayer.debugInfo;
+    if (deltaPlayer.scoreAtDeath !== undefined) merged.scoreAtDeath = deltaPlayer.scoreAtDeath;
+    if (deltaPlayer.survivalTime !== undefined) merged.survivalTime = deltaPlayer.survivalTime;
+    if (deltaPlayer.killedByName !== undefined) merged.killedByName = deltaPlayer.killedByName;
 
     return merged;
   }
@@ -2922,7 +2925,10 @@ class GameClient {
       coins: deltaPlayer.coins || 0,
       statUpgrades: deltaPlayer.statUpgrades || {},
       autofireEnabled: deltaPlayer.autofireEnabled || false,
-      debugInfo: deltaPlayer.debugInfo || {}
+      debugInfo: deltaPlayer.debugInfo || {},
+      scoreAtDeath: deltaPlayer.scoreAtDeath || 0,
+      survivalTime: deltaPlayer.survivalTime || 0,
+      killedByName: deltaPlayer.killedByName || ''
     };
   }
 }
