@@ -2421,6 +2421,7 @@ class GameClient {
   drawLeaderboard() {
     const sortedPlayers = [...this.gameState.players]
       .filter(player => !player.isBot) // Exclude bots from leaderboard
+      .filter(player => (player.state === undefined || player.state === 0)) // Exclude dead players (state 1 = dead)
       .sort((a, b) => {
         const scoreDiff = (b.score || 0) - (a.score || 0);
         if (scoreDiff !== 0) return scoreDiff;
@@ -2428,13 +2429,13 @@ class GameClient {
         const nameA = (a.name || `Player ${a.id}`).toLowerCase();
         const nameB = (b.name || `Player ${b.id}`).toLowerCase();
         return nameA.localeCompare(nameB);
-      })
-      .slice(0, 5); // Top 5 players
+  })
+  .slice(0, 10); // Top 10 players
 
     if (sortedPlayers.length === 0) return;
 
     const leaderboardWidth = 180;
-    const leaderboardHeight = 30 + sortedPlayers.length * 25;
+  const leaderboardHeight = 30 + sortedPlayers.length * 25;
     const x = this.screenWidth - leaderboardWidth - 10;
     const y = 10;
 
