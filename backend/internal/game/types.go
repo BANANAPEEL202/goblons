@@ -111,7 +111,7 @@ type Player struct {
 	IsBot       bool      `msgpack:"isBot"`
 	Health      int       `msgpack:"health"`
 	MaxHealth   int       `msgpack:"maxHealth"`
-	RespawnTime time.Time `msgpack:"-"` // When the player can respawn
+	RespawnTime time.Time `msgpack:"-"` // When the player can respawn (used only for bots)
 
 	Client *Client `msgpack:"-"` // Back-reference to owning client (not serialized)
 	// Leveling system
@@ -119,11 +119,7 @@ type Player struct {
 	Experience        int `msgpack:"experience"`        // Current experience points
 	AvailableUpgrades int `msgpack:"availableUpgrades"` // Number of pending upgrade points
 	// Category-specific reload times
-	LastSideUpgradeShot  time.Time         `msgpack:"-"`          // When side upgrades last fired
-	LastTopUpgradeShot   time.Time         `msgpack:"-"`          // When top upgrades last fired
-	LastFrontUpgradeShot time.Time         `msgpack:"-"`          // When front upgrades last fired
-	LastRearUpgradeShot  time.Time         `msgpack:"-"`          // When rear upgrades last fired
-	ShipConfig           ShipConfiguration `msgpack:"shipConfig"` // New modular upgrade system
+	ShipConfig ShipConfiguration `msgpack:"shipConfig"` // New modular upgrade system
 
 	// Stat upgrades
 	Coins     int                     `msgpack:"coins"`        // Currency for stat upgrades
@@ -326,9 +322,8 @@ type World struct {
 	bulletID          uint32
 	running           bool
 	tickCounter       uint32 // For performance optimizations
-	botsSpawned       bool
-	snapshotCount     int64 // Total snapshots sent
-	totalSnapshotSize int64 // Total size of all snapshots
+	snapshotCount     int64  // Total snapshots sent
+	totalSnapshotSize int64  // Total size of all snapshots
 }
 
 // NewClient creates a new client

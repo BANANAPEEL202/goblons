@@ -39,10 +39,6 @@ func (w *World) spawnInitialBots() {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	if w.botsSpawned {
-		return
-	}
-
 	now := time.Now()
 
 	for i := 0; i < botCount; i++ {
@@ -93,8 +89,6 @@ func (w *World) spawnInitialBots() {
 		w.players[id] = player
 		w.bots[id] = bot
 	}
-
-	w.botsSpawned = true
 }
 
 func (w *World) applyBotLoadout(player *Player) {

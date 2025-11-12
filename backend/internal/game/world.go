@@ -327,7 +327,7 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 		}
 	}
 
-	// Handle upgrade selection (only one upgrade per level with cooldown protection)
+	// Handle module selection (only one module per level with cooldown protection)
 	if input.SelectUpgrade != "" && input.UpgradeChoice != "" && player.AvailableUpgrades > 0 {
 		// Get client for cooldown check
 		if client, exists := w.GetClient(player.ID); exists {

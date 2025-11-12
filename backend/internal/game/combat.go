@@ -83,7 +83,8 @@ func (gm *GameMechanics) handlePlayerDeath(victim *Player, killer *Player, cause
 
 func (gm *GameMechanics) calculateKillOutcome(victim *Player) (xpReward int, coinReward int) {
 	xpReward = max(victim.Experience/2, 100)
-	coinReward = max(victim.Coins/2, 200)
+	// use score to not penalize players for killing players who have spent everything
+	coinReward = max(victim.Score/2, 200)
 	if coinReward > 2000 {
 		coinReward = 2000
 	}
