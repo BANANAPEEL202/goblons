@@ -308,7 +308,7 @@ func NewRowingUpgrade(oarCount int) *ShipModule {
 		Count:   oarCount,
 		Cannons: oars,
 		Effect: ModuleModifier{
-			SpeedMultiplier:     0.05,
+			SpeedMultiplier:     0.07,
 			TurnRateMultiplier:  -0.1,
 			ShipWidthMultiplier: 1.0, // No effect on width
 		},
