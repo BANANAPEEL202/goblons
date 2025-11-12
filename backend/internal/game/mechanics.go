@@ -239,10 +239,3 @@ func (gm *GameMechanics) SpawnFoodItems() {
 		gm.world.items[item.ID] = item
 	}
 }
-
-// ApplyItemEffect applies the effect of a collected item to a player
-func (gm *GameMechanics) ApplyItemEffect(player *Player, item *GameItem) {
-	player.Score += item.XP
-	player.Coins += item.Coins
-	player.AddExperience(item.XP)
-}

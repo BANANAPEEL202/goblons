@@ -435,8 +435,9 @@ func (w *World) collectItem(playerID, itemID uint32) {
 		return
 	}
 
-	// Use the mechanics system to apply item effects
-	w.mechanics.ApplyItemEffect(player, item)
+	player.Score += item.XP
+	player.Coins += item.Coins
+	player.AddExperience(item.XP)
 
 	delete(w.items, itemID)
 }
@@ -517,8 +518,8 @@ func (w *World) HandleInput(clientID uint32, input InputMsg) {
 
 // keepPlayerInBounds ensures a player stays within the world boundaries
 func (w *World) keepPlayerInBounds(player *Player) {
-	player.X = float64(math.Max(float64(player.ShipConfig.Size/2), math.Min(float64(WorldWidth-player.ShipConfig.Size/2), float64(player.X))))
-	player.Y = float64(math.Max(float64(player.ShipConfig.Size/2), math.Min(float64(WorldHeight-player.ShipConfig.Size/2), float64(player.Y))))
+	player.X = float64(math.Max(0, math.Min(WorldWidth, player.X)))
+	player.Y = float64(math.Max(0, math.Min(WorldHeight, player.Y)))
 }
 
 // updateBullets handles bullet movement and cleanup (optimized)
