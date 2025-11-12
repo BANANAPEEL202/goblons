@@ -95,7 +95,7 @@ func (w *World) applyBotLoadout(player *Player) {
 	baseLength := float64(PlayerSize*1.2) * 0.5
 	baseWidth := float64(PlayerSize * 0.8)
 
-	InitializeStatUpgrades(player)
+	player.InitializeStatUpgrades()
 	ForceStatUpgrades(player, map[UpgradeType]int{
 		StatUpgradeCannonDamage: botCannonDamageLevel,
 		StatUpgradeCannonRange:  botCannonRangeLevel,

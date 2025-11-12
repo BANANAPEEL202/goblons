@@ -389,7 +389,7 @@ func NewPlayer(id uint32) *Player {
 	}
 
 	// Initialize stat upgrades
-	InitializeStatUpgrades(player)
+	player.InitializeStatUpgrades()
 
 	return player
 }
@@ -514,48 +514,4 @@ func (p *Player) GetExperienceProgressToNextLevel() float64 {
 		return 1
 	}
 	return progress
-}
-
-// AddExperience adds experience and handles level ups
-func (p *Player) AddExperience(exp int) {
-	p.Experience += exp
-
-	// Check for level up
-	if p.Experience >= p.GetExperienceRequiredForNextLevel() {
-		p.Level++
-		p.AvailableUpgrades++
-	}
-}
-
-// DebugLevelUp increases the player's level (for testing)
-func (p *Player) DebugLevelUp() {
-	p.Level++
-	p.Experience = p.GetExperienceForCurrentLevel()
-	p.AvailableUpgrades++
-}
-
-// InitializeStatUpgrades initializes the stat upgrade system for a player
-func InitializeStatUpgrades(player *Player) {
-	player.Upgrades = make(map[UpgradeType]Upgrade)
-
-	upgradeTypes := []UpgradeType{
-		StatUpgradeHullStrength,
-		StatUpgradeAutoRepairs,
-		StatUpgradeCannonRange,
-		StatUpgradeCannonDamage,
-		StatUpgradeReloadSpeed,
-		StatUpgradeMoveSpeed,
-		StatUpgradeTurnSpeed,
-		StatUpgradeBodyDamage,
-	}
-
-	for _, upgradeType := range upgradeTypes {
-		player.Upgrades[upgradeType] = Upgrade{
-			Type:        upgradeType,
-			Level:       0,
-			MaxLevel:    15,
-			BaseCost:    10,
-			CurrentCost: 10,
-		}
-	}
 }

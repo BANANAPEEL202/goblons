@@ -40,21 +40,19 @@ func NewBasicSideCannons(cannonCount int) *ShipModule {
 	// Create cannons for both sides (cannonCount per side)
 	cannons := make([]*Cannon, cannonCount*2)
 
-	// Left side cannons - angle will be calculated dynamically based on ship orientation
+	// Left side cannons
 	for i := 0; i < cannonCount; i++ {
 		cannons[i] = &Cannon{
 			ID:    uint32(i + 1),
-			Angle: 0, // Relative angle - actual angle calculated during firing
 			Stats: NewBasicCannon(),
 			Type:  WeaponTypeCannon,
 		}
 	}
 
-	// Right side cannons - angle will be calculated dynamically based on ship orientation
+	// Right side cannons
 	for i := 0; i < cannonCount; i++ {
 		cannons[cannonCount+i] = &Cannon{
 			ID:    uint32(cannonCount + i + 1),
-			Angle: 0, // Relative angle - actual angle calculated during firing
 			Stats: NewBasicCannon(),
 			Type:  WeaponTypeCannon,
 		}
@@ -82,7 +80,6 @@ func NewScatterSideCannons(cannonCount int) *ShipModule {
 	for i := 0; i < cannonCount; i++ {
 		cannons[i] = &Cannon{
 			ID:    uint32(i + 1),
-			Angle: 0, // Relative angle - actual angle calculated during firing
 			Stats: NewScatterCannon(),
 			Type:  WeaponTypeScatter,
 		}
@@ -92,7 +89,6 @@ func NewScatterSideCannons(cannonCount int) *ShipModule {
 	for i := 0; i < cannonCount; i++ {
 		cannons[cannonCount+i] = &Cannon{
 			ID:    uint32(cannonCount + i + 1),
-			Angle: 0, // Relative angle - actual angle calculated during firing
 			Stats: NewScatterCannon(),
 			Type:  WeaponTypeScatter,
 		}
@@ -118,13 +114,11 @@ func NewBasicTurrets(turretCount int) *ShipModule {
 	for i := 0; i < turretCount; i++ {
 		turretCannon := Cannon{
 			ID:    uint32(i),
-			Angle: 0, // Will be controlled by turret aiming
 			Stats: NewTurretCannon(),
 			Type:  WeaponTypeCannon,
 		}
 		turret := &Turret{
 			ID:      uint32(i + 1),
-			Angle:   0, // Will be controlled by turret aiming
 			Cannons: []Cannon{turretCannon},
 			Type:    WeaponTypeTurret,
 		}
@@ -150,13 +144,11 @@ func NewBigTurrets(turretCount int) *ShipModule {
 	for i := 0; i < turretCount; i++ {
 		turretCannon := Cannon{
 			ID:    uint32(i),
-			Angle: 0, // Will be controlled by turret aiming
 			Stats: NewBigCannon(),
 			Type:  WeaponTypeCannon,
 		}
 		turret := &Turret{
 			ID:      uint32(i + 1),
-			Angle:   0, // Will be controlled by turret aiming
 			Cannons: []Cannon{turretCannon},
 			Type:    WeaponTypeBigTurret,
 		}
@@ -183,7 +175,6 @@ func NewMachineGunTurret(turretCount int) *ShipModule {
 		// Create two cannons for each machine gu  turret, positioned side by side
 		leftCannon := Cannon{
 			ID:    uint32(i*2 + 1),
-			Angle: 0, // Will be controlled by turret aiming
 			Stats: NewMachineGunCannon(),
 			Type:  WeaponTypeCannon,
 			Position: Position{
@@ -194,7 +185,6 @@ func NewMachineGunTurret(turretCount int) *ShipModule {
 
 		rightCannon := Cannon{
 			ID:    uint32(i*2 + 2),
-			Angle: 0, // Will be controlled by turret aiming
 			Stats: NewMachineGunCannon(),
 			Type:  WeaponTypeCannon,
 			Position: Position{
@@ -205,7 +195,6 @@ func NewMachineGunTurret(turretCount int) *ShipModule {
 
 		turret := &Turret{
 			ID:              uint32(i + 1),
-			Angle:           0, // Will be controlled by turret aiming
 			Cannons:         []Cannon{leftCannon, rightCannon},
 			Type:            WeaponTypeMachineGunTurret,
 			NextCannonIndex: 0, // Start with the first cannon
@@ -299,7 +288,6 @@ func NewRowingUpgrade(oarCount int) *ShipModule {
 	for i := 0; i < oarCount; i++ {
 		oars[i] = &Cannon{
 			ID:    uint32(i + 1),
-			Angle: 0, // Relative angle - actual angle calculated during rowing
 			Stats: NewRowingOar(),
 			Type:  WeaponTypeRow,
 		}
@@ -309,7 +297,6 @@ func NewRowingUpgrade(oarCount int) *ShipModule {
 	for i := 0; i < oarCount; i++ {
 		oars[oarCount+i] = &Cannon{
 			ID:    uint32(oarCount + i + 1),
-			Angle: 0, // Relative angle - actual angle calculated during rowing
 			Stats: NewRowingOar(),
 			Type:  WeaponTypeRow,
 		}
@@ -357,14 +344,12 @@ func NewRamUpgrade() *ShipModule {
 func NewChaseCannonUpgrade() *ShipModule {
 	cannon1 := &Cannon{
 		ID:    1,
-		Angle: 0, // Forward facing
 		Stats: NewChaseCannon(),
 		Type:  WeaponTypeCannon,
 	}
 
 	cannon2 := &Cannon{
 		ID:    2,
-		Angle: 0, // Forward facing
 		Stats: NewChaseCannon(),
 		Type:  WeaponTypeCannon,
 	}

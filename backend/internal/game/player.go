@@ -88,7 +88,7 @@ func (player *Player) respawn() {
 	}
 
 	// Reset stat upgrades
-	InitializeStatUpgrades(player)
+	player.InitializeStatUpgrades()
 
 	player.spawn()
 
@@ -126,6 +126,24 @@ func (player *Player) resetPlayerShipConfig() {
 
 	// Recalculate ship dimensions and positions
 	player.updateShipGeometry()
+}
+
+// AddExperience adds experience and handles level ups
+func (p *Player) AddExperience(exp int) {
+	p.Experience += exp
+
+	// Check for level up
+	if p.Experience >= p.GetExperienceRequiredForNextLevel() {
+		p.Level++
+		p.AvailableUpgrades++
+	}
+}
+
+// DebugLevelUp increases the player's level (for testing)
+func (p *Player) DebugLevelUp() {
+	p.Level++
+	p.Experience = p.GetExperienceForCurrentLevel()
+	p.AvailableUpgrades++
 }
 
 // GetShipBoundingBox calculates the axis-aligned bounding box for a rotated ship
@@ -219,10 +237,36 @@ func hasPlayerChanges(delta PlayerDelta) bool {
 		delta.KilledByName != nil
 }
 
+// InitializeStatUpgrades initializes the stat upgrade system for a player
+func (player *Player) InitializeStatUpgrades() {
+	player.Upgrades = make(map[UpgradeType]Upgrade)
+
+	upgradeTypes := []UpgradeType{
+		StatUpgradeHullStrength,
+		StatUpgradeAutoRepairs,
+		StatUpgradeCannonRange,
+		StatUpgradeCannonDamage,
+		StatUpgradeReloadSpeed,
+		StatUpgradeMoveSpeed,
+		StatUpgradeTurnSpeed,
+		StatUpgradeBodyDamage,
+	}
+
+	for _, upgradeType := range upgradeTypes {
+		player.Upgrades[upgradeType] = Upgrade{
+			Type:        upgradeType,
+			Level:       0,
+			MaxLevel:    15,
+			BaseCost:    10,
+			CurrentCost: 10,
+		}
+	}
+}
+
 // BuyUpgrade attempts to upgrade a specific stat for a player
 func (player *Player) BuyUpgrade(upgradeType UpgradeType) bool {
 	if player.Upgrades == nil {
-		InitializeStatUpgrades(player)
+		player.InitializeStatUpgrades()
 	}
 
 	upgrade, exists := player.Upgrades[upgradeType]

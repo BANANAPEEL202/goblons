@@ -111,9 +111,8 @@ type Turret struct {
 	ID              uint32     `msgpack:"id"`
 	Angle           float64    `msgpack:"angle"` // Current aiming angle in world space
 	Cannons         []Cannon   `msgpack:"cannons"`
-	Position        Position   `msgpack:"position"`  // Relative position from ship center
-	TurnSpeed       float64    `msgpack:"turnSpeed"` // How fast turret can rotate (rad/s)
-	LastFireTime    time.Time  `msgpack:"-"`         // Not serialized
+	Position        Position   `msgpack:"position"` // Relative position from ship center
+	LastFireTime    time.Time  `msgpack:"-"`        // Not serialized
 	Type            WeaponType `msgpack:"type"`
 	NextCannonIndex int        `msgpack:"nextCannonIndex"` // For alternating fire
 }
