@@ -2,8 +2,8 @@ package game
 
 // Game world constants
 const (
-	WorldWidth         = 2000.0
-	WorldHeight        = 2000.0
+	WorldWidth         = 5000.0
+	WorldHeight        = 5000.0
 	TickRate           = 30 // Server updates per second (reduced for performance)
 	PlayerSize         = 50.0
 	MaxPlayers         = 32
@@ -65,5 +65,5 @@ const (
 )
 
 const (
-	DEV = true
+	DEV = false
 )

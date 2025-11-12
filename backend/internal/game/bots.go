@@ -49,9 +49,9 @@ func (w *World) spawnInitialBots() {
 		player.IsBot = true
 		player.Name = fmt.Sprintf("Guardian %d", i+1)
 		player.Color = botColors[i%len(botColors)]
-		player.Score = 1000
-		player.Coins = 1000
-		player.Experience = 1000
+		player.Score = 2000
+		player.Coins = 2000
+		player.Experience = 2000
 		player.Level = 25
 		player.AvailableUpgrades = 0
 
