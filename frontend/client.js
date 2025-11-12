@@ -2128,7 +2128,7 @@ class GameClient {
 
     // Draw bullet as a bright orange/yellow circle
     this.ctx.beginPath();
-    this.ctx.arc(0, 0, bullet.size, 0, Math.PI * 2);
+    this.ctx.arc(0, 0, bullet.radius, 0, Math.PI * 2);
     this.ctx.fillStyle = '#484848ff'; // Gold color for bullets
     this.ctx.fill();
 

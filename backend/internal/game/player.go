@@ -2,6 +2,7 @@ package game
 
 import (
 	"log"
+	"math"
 	"math/rand"
 	"time"
 )
@@ -54,7 +55,6 @@ func (player *Player) respawn() {
 	player.Health = 100
 	player.MaxHealth = 100
 	player.State = StateAlive
-	player.LastRegenTime = now
 	player.LastCollisionDamage = now
 
 	// Restore identity
@@ -126,6 +126,49 @@ func (player *Player) resetPlayerShipConfig() {
 
 	// Recalculate ship dimensions and positions
 	player.updateShipGeometry()
+}
+
+// GetShipBoundingBox calculates the axis-aligned bounding box for a rotated ship
+func (player *Player) GetShipBoundingBox() BoundingBox {
+	// Calculate the four corners of the rotated ship rectangle
+	halfLength := player.ShipConfig.ShipLength / 2
+	halfWidth := player.ShipConfig.ShipWidth / 2
+
+	cos := float64(math.Cos(float64(player.Angle)))
+	sin := float64(math.Sin(float64(player.Angle)))
+
+	// Local corners (relative to ship center)
+	corners := []struct{ x, y float64 }{
+		{-halfLength, -halfWidth}, // Back-left
+		{halfLength, -halfWidth},  // Front-left
+		{halfLength, halfWidth},   // Front-right
+		{-halfLength, halfWidth},  // Back-right
+	}
+
+	// Transform corners to world coordinates and find bounding box
+	minX, minY := float64(math.Inf(1)), float64(math.Inf(1))
+	maxX, maxY := float64(math.Inf(-1)), float64(math.Inf(-1))
+
+	for _, corner := range corners {
+		// Rotate corner and translate to world position
+		worldX := player.X + (corner.x*cos - corner.y*sin)
+		worldY := player.Y + (corner.x*sin + corner.y*cos)
+
+		if worldX < minX {
+			minX = worldX
+		}
+		if worldX > maxX {
+			maxX = worldX
+		}
+		if worldY < minY {
+			minY = worldY
+		}
+		if worldY > maxY {
+			maxY = worldY
+		}
+	}
+
+	return BoundingBox{MinX: minX, MinY: minY, MaxX: maxX, MaxY: maxY}
 }
 
 // copyPlayer creates a deep copy of a Player including maps

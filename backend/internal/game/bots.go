@@ -69,7 +69,6 @@ func (w *World) spawnInitialBots() {
 		player.Y = spawnPos.Y
 		player.Angle = 0
 		player.AutofireEnabled = true
-		player.LastRegenTime = now
 		player.LastCollisionDamage = now
 
 		w.applyBotLoadout(player)
@@ -150,6 +149,8 @@ func (w *World) updateBots() {
 	for _, bot := range w.bots {
 		w.updateBot(bot, now)
 	}
+
+	w.handleBotRespawns()
 }
 
 func (w *World) updateBot(bot *Bot, now time.Time) {
@@ -310,7 +311,6 @@ func (w *World) respawnBot(bot *Bot, now time.Time) {
 	player.Angle = 0
 	player.AutofireEnabled = true
 	player.RespawnTime = time.Time{}
-	player.LastRegenTime = now
 	player.LastCollisionDamage = now
 
 	// Update guard center to new spawn location

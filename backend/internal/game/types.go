@@ -130,7 +130,6 @@ type Player struct {
 	Upgrades  map[UpgradeType]Upgrade `msgpack:"statUpgrades"` // Applied stat upgrades
 	Modifiers Mods                    `msgpack:"-"`            // Calculated stat modifiers (not serialized)
 
-	LastRegenTime       time.Time `msgpack:"-"` // Last health regeneration time
 	LastCollisionDamage time.Time `msgpack:"-"` // Last collision damage time
 	// Autofire toggle state
 	AutofireEnabled bool `msgpack:"autofireEnabled"` // Whether autofire is currently enabled
@@ -183,7 +182,7 @@ type Bullet struct {
 	VelY      float64   `msgpack:"velY"`
 	OwnerID   uint32    `msgpack:"-"`
 	CreatedAt time.Time `msgpack:"-"` // Not serialized
-	Size      float64   `msgpack:"size"`
+	Radius    float64   `msgpack:"radius"`
 	Damage    int       `msgpack:"-"`
 }
 
@@ -389,7 +388,6 @@ func NewPlayer(id uint32) *Player {
 		ShipConfig:          shipConfig,
 		Coins:               0, // Starting coins
 		Upgrades:            make(map[UpgradeType]Upgrade),
-		LastRegenTime:       time.Now(),                 // Initialize health regen timer
 		LastProcessedAction: 0,                          // No actions processed yet
 		ActionCooldowns:     make(map[string]time.Time), // Initialize cooldown map
 		LastCollisionDamage: time.Now(),                 // Initialize collision damage timer

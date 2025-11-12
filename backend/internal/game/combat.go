@@ -37,7 +37,6 @@ func (gm *GameMechanics) ApplyDamage(target *Player, damage int, attacker *Playe
 func (gm *GameMechanics) handlePlayerDeath(victim *Player, killer *Player, cause KillCause, now time.Time) {
 	victim.Health = 0
 	victim.State = StateDead
-	victim.RespawnTime = now.Add(time.Duration(RespawnDelay) * time.Second)
 
 	// Track death information
 	victim.DeathTime = now

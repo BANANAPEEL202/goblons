@@ -45,11 +45,10 @@ func (w *World) Start() {
 
 	log.Println("Game world started")
 	for w.running {
-		select {
-		case <-ticker.C:
-			w.update()
-		}
+		<-ticker.C
+		w.update()
 	}
+
 }
 
 // Stop stops the game world
@@ -130,9 +129,6 @@ func (w *World) update() {
 	// Update bot-controlled ships using AI inputs
 	w.updateBots()
 
-	// Handle respawning
-	w.handleRespawns()
-
 	// Update bullets
 	w.updateBullets()
 
@@ -146,11 +142,6 @@ func (w *World) update() {
 	w.tickCounter++
 	if w.tickCounter%1 == 0 {
 		w.broadcastSnapshot()
-	}
-
-	// Periodic cleanup every 10 seconds (300 ticks at 30 TPS)
-	if w.tickCounter%300 == 0 {
-		w.performCleanup()
 	}
 }
 
@@ -248,25 +239,12 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 		return
 	}
 
-	// Handle thrust (W/S keys) - this affects speed, not direction
-	var thrustForce float64 = 0
-	if input.Up {
-		thrustForce = ShipAcceleration
-	}
-	if input.Down {
-		thrustForce = -ShipAcceleration * 0.5 // Reverse is weaker
-	}
-
-	// Apply thrust in the direction the ship is facing
-	if thrustForce != 0 {
-		thrustX := float64(math.Cos(float64(player.Angle))) * thrustForce
-		thrustY := float64(math.Sin(float64(player.Angle))) * thrustForce
-		player.VelX += thrustX
-		player.VelY += thrustY
-	}
-
 	// Calculate max speed with move speed upgrade and hull strength reduction
 	maxSpeed := (BaseShipMaxSpeed * player.Modifiers.MoveSpeedMultiplier)
+	if input.Up {
+		player.VelX = float64(math.Cos(float64(player.Angle))) * maxSpeed
+		player.VelY = float64(math.Sin(float64(player.Angle))) * maxSpeed
+	}
 	speed := min(float64(math.Sqrt(float64(player.VelX*player.VelX+player.VelY*player.VelY))), maxSpeed)
 
 	// Scale turn speed based on current speed and ship length
@@ -397,84 +375,17 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 
 	// Handle health regeneration from auto repairs upgrade
 	// Regenerate health based on time elapsed
-	elapsedSeconds := float64(now.Sub(player.LastRegenTime).Seconds())
-	if elapsedSeconds >= 0.2 {
-		healthToRegen := int(elapsedSeconds * player.Modifiers.HealthRegenPerSec)
-		if healthToRegen > 0 && player.Health < player.MaxHealth {
-			player.Health += healthToRegen
-			if player.Health > player.MaxHealth {
-				player.Health = player.MaxHealth
-			}
-			player.LastRegenTime = now
+	elapsedSeconds := float64(1 / TickRate)
+	healthToRegen := int(elapsedSeconds * player.Modifiers.HealthRegenPerSec)
+	if healthToRegen > 0 && player.Health < player.MaxHealth {
+		player.Health += healthToRegen
+		if player.Health > player.MaxHealth {
+			player.Health = player.MaxHealth
 		}
-
 	}
 
 	// Keep player within world boundaries
 	w.keepPlayerInBounds(player)
-}
-
-// performCleanup removes old entities and prevents memory leaks
-func (w *World) performCleanup() {
-	now := time.Now()
-
-	// Clean up old bullets (in case some weren't removed properly)
-	oldBullets := 0
-	for id, bullet := range w.bullets {
-		if now.Sub(bullet.CreatedAt).Seconds() > BulletLifetime+5 { // 5 second grace period
-			delete(w.bullets, id)
-			oldBullets++
-		}
-	}
-
-	// Limit total bullets to prevent memory issues
-	if len(w.bullets) > 1000 {
-		// Remove oldest bullets
-		type bulletAge struct {
-			id  uint32
-			age time.Duration
-		}
-		bulletAges := make([]bulletAge, 0, len(w.bullets))
-		for id, bullet := range w.bullets {
-			bulletAges = append(bulletAges, bulletAge{id, now.Sub(bullet.CreatedAt)})
-		}
-
-		// Sort by age (oldest first)
-		for i := 0; i < len(bulletAges)-1; i++ {
-			for j := i + 1; j < len(bulletAges); j++ {
-				if bulletAges[i].age < bulletAges[j].age {
-					bulletAges[i], bulletAges[j] = bulletAges[j], bulletAges[i]
-				}
-			}
-		}
-
-		// Remove oldest bullets to get under limit
-		toRemove := len(w.bullets) - 800 // Keep 800, remove excess
-		for i := 0; i < toRemove && i < len(bulletAges); i++ {
-			delete(w.bullets, bulletAges[i].id)
-		}
-		log.Printf("Cleaned up %d excess bullets", toRemove)
-	}
-
-	// Limit total items to prevent server overload
-	if len(w.items) > 500 {
-		// Remove oldest items
-		itemsToRemove := len(w.items) - 400 // Keep 400, remove excess
-		count := 0
-		for id := range w.items {
-			if count >= itemsToRemove {
-				break
-			}
-			delete(w.items, id)
-			count++
-		}
-		log.Printf("Cleaned up %d excess items", itemsToRemove)
-	}
-
-	if oldBullets > 0 {
-		log.Printf("Cleanup: removed %d old bullets, %d total bullets, %d total items",
-			oldBullets, len(w.bullets), len(w.items))
-	}
 }
 
 // checkCollisions handles player-item collisions (optimized)
@@ -530,22 +441,20 @@ func (w *World) collectItem(playerID, itemID uint32) {
 	delete(w.items, itemID)
 }
 
-// handleRespawns checks for dead players that need to respawn
-func (w *World) handleRespawns() {
+// handleBotRespawns checks for dead players that need to respawn
+func (w *World) handleBotRespawns() {
 	now := time.Now()
 	for _, player := range w.players {
-		if player.State == StateDead && now.After(player.RespawnTime) {
-			if player.IsBot {
+		if player.IsBot {
+			if player.State == StateDead && now.After(player.RespawnTime) {
 				if bot, exists := w.bots[player.ID]; exists {
 					w.respawnBot(bot, now)
 				}
 				continue
 			}
-
-			// For human players, don't auto-respawn - wait for their respawn request
-			// The respawn is handled in processInput when RequestRespawn is true
 		}
 	}
+
 }
 
 // spawnItems continuously spawns items in the world (with limits)
@@ -632,14 +541,12 @@ func (w *World) updateBullets() {
 		bullet.X += bullet.VelX
 		bullet.Y += bullet.VelY
 
-		// Remove bullets that are out of bounds
+		// skip out of bounds bullets
 		if bullet.X < -100 || bullet.X > WorldWidth+100 || bullet.Y < -100 || bullet.Y > WorldHeight+100 {
-			bulletsToDelete = append(bulletsToDelete, id)
 			continue
 		}
 
 		// Check collision with players (only if bullet is in world bounds)
-		bulletHit := false
 		var attacker *Player
 		if shooter, exists := w.players[bullet.OwnerID]; exists {
 			attacker = shooter
@@ -660,20 +567,16 @@ func (w *World) updateBullets() {
 				// Apply damage through mechanics system (handles death + rewards)
 				damage := bullet.Damage * int(attacker.Modifiers.BulletDamageMultiplier)
 				if damage == 0 {
-					damage = BulletDamage // Fallback to default for legacy bullets
+					damage = BulletDamage
+					log.Printf("Bullet damage calculated as 0 for player %d, defaulting to %d", attacker.ID, BulletDamage)
 				}
 				w.mechanics.ApplyDamage(player, damage, attacker, KillCauseBullet, now)
 
 				// Mark bullet for deletion
 				bulletsToDelete = append(bulletsToDelete, id)
-				bulletHit = true
 
 				break // Bullet hit something, stop checking other players
 			}
-		}
-
-		if bulletHit {
-			break // Move to next bullet
 		}
 	}
 
@@ -685,27 +588,27 @@ func (w *World) updateBullets() {
 
 // checkBulletPlayerCollision checks if a bullet collides with a player using rectangular bounding boxes
 func (w *World) checkBulletPlayerCollision(bullet *Bullet, player *Player) bool {
-	// Get player's bounding box using the mechanics instance
-	playerBbox := w.mechanics.GetShipBoundingBox(player)
+	playerBbox := player.GetShipBoundingBox()
 
-	// Create bullet bounding box (treat bullet as a small rectangle)
-	bulletHalfSize := bullet.Size / 2
-	bulletBbox := BoundingBox{
-		MinX: bullet.X - bulletHalfSize,
-		MinY: bullet.Y - bulletHalfSize,
-		MaxX: bullet.X + bulletHalfSize,
-		MaxY: bullet.Y + bulletHalfSize,
-	}
+	// Bullet treated as a circle
+	cx, cy := bullet.X, bullet.Y
 
-	// Check if bounding boxes overlap
-	return bulletBbox.MinX < playerBbox.MaxX && bulletBbox.MaxX > playerBbox.MinX &&
-		bulletBbox.MinY < playerBbox.MaxY && bulletBbox.MaxY > playerBbox.MinY
+	// Find the closest point on the rectangle to the bullet center
+	closestX := math.Max(playerBbox.MinX, math.Min(cx, playerBbox.MaxX))
+	closestY := math.Max(playerBbox.MinY, math.Min(cy, playerBbox.MaxY))
+
+	// Compute distance from bullet center to that closest point
+	dx := cx - closestX
+	dy := cy - closestY
+	distSq := dx*dx + dy*dy
+
+	return distSq <= bullet.Radius*bullet.Radius
 }
 
 // checkPlayerItemCollision checks if a player collides with an item using rectangular bounding boxes
 func (w *World) checkPlayerItemCollision(player *Player, item *GameItem) bool {
 	// Get player's bounding box using the mechanics instance
-	playerBbox := w.mechanics.GetShipBoundingBox(player)
+	playerBbox := player.GetShipBoundingBox()
 
 	// Create item bounding box (treat item as a small rectangle)
 	itemHalfSize := float64(ItemPickupSize) / 2

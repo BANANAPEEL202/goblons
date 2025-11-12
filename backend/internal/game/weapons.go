@@ -93,7 +93,7 @@ func (c *Cannon) ForceFire(world *World, player *Player, targetAngle float64, no
 			VelY:      bulletVelY,
 			OwnerID:   player.ID,
 			CreatedAt: now,
-			Size:      bulletSize,
+			Radius:    bulletSize,
 			Damage:    int(finalDamage),
 		}
 
