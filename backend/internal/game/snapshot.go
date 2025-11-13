@@ -138,6 +138,12 @@ func (w *World) broadcastSnapshot() {
 	// Send to all clients concurrently (non-blocking)
 	for _, client := range w.clients {
 		go func(c *Client) {
+			defer func() {
+				if r := recover(); r != nil {
+					// Client disconnected, channel closed - ignore
+				}
+			}()
+
 			var data []byte
 			var err error
 
