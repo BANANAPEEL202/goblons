@@ -9,11 +9,11 @@ import (
 
 const (
 	botCount                     = 5
-	botGuardRadius       float32 = 100.0
-	botAggroRadius       float32 = 1000.0
-	botTargetDistance    float32 = 500.0
-	botPreferredDistance float32 = 200.0
-	botDistanceSlack     float32 = 80.0
+	botGuardRadius       float64 = 500.0
+	botAggroRadius       float64 = 1500.0
+	botTargetDistance    float64 = 700.0
+	botPreferredDistance float64 = 200.0
+	botDistanceSlack     float64 = 80.0
 	botSideCannonsCount  int     = 2
 	botTopTurretCount    int     = 1
 	botDecisionInterval          = 250 * time.Millisecond
@@ -27,10 +27,10 @@ const (
 )
 
 const (
-	botAreaMinX float32 = 0
-	botAreaMaxX float32 = WorldWidth
-	botAreaMinY float32 = 0
-	botAreaMaxY float32 = WorldHeight
+	botAreaMinX float64 = 0
+	botAreaMaxX float64 = WorldWidth
+	botAreaMinY float64 = 0
+	botAreaMaxY float64 = WorldHeight
 )
 
 var botColors = []string{"#5B73FF", "#FF6F61", "#48C9B0"}
@@ -38,10 +38,6 @@ var botColors = []string{"#5B73FF", "#FF6F61", "#48C9B0"}
 func (w *World) spawnInitialBots() {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-
-	if w.botsSpawned {
-		return
-	}
 
 	now := time.Now()
 
@@ -53,23 +49,22 @@ func (w *World) spawnInitialBots() {
 		player.IsBot = true
 		player.Name = fmt.Sprintf("Guardian %d", i+1)
 		player.Color = botColors[i%len(botColors)]
-		player.Score = 500
-		player.Coins = 500
-		player.Experience = 500
+		player.Score = 2000
+		player.Coins = 2000
+		player.Experience = 2000
 		player.Level = 25
 		player.AvailableUpgrades = 0
 
 		// Random spawn position with some padding from edges
 		spawnPos := Position{
-			X: float32(rand.Intn(int(WorldWidth-200)) + 100),
-			Y: float32(rand.Intn(int(WorldHeight-200)) + 100),
+			X: float64(rand.Intn(int(WorldWidth-200)) + 100),
+			Y: float64(rand.Intn(int(WorldHeight-200)) + 100),
 		}
 
 		player.X = spawnPos.X
 		player.Y = spawnPos.Y
 		player.Angle = 0
 		player.AutofireEnabled = true
-		player.LastRegenTime = now
 		player.LastCollisionDamage = now
 
 		w.applyBotLoadout(player)
@@ -94,15 +89,13 @@ func (w *World) spawnInitialBots() {
 		w.players[id] = player
 		w.bots[id] = bot
 	}
-
-	w.botsSpawned = true
 }
 
 func (w *World) applyBotLoadout(player *Player) {
-	baseLength := float32(PlayerSize*1.2) * 0.5
-	baseWidth := float32(PlayerSize * 0.8)
+	baseLength := float64(PlayerSize*1.2) * 0.5
+	baseWidth := float64(PlayerSize * 0.8)
 
-	InitializeStatUpgrades(player)
+	player.InitializeStatUpgrades()
 	ForceStatUpgrades(player, map[UpgradeType]int{
 		StatUpgradeCannonDamage: botCannonDamageLevel,
 		StatUpgradeCannonRange:  botCannonRangeLevel,
@@ -150,6 +143,8 @@ func (w *World) updateBots() {
 	for _, bot := range w.bots {
 		w.updateBot(bot, now)
 	}
+
+	w.handleBotRespawns()
 }
 
 func (w *World) updateBot(bot *Bot, now time.Time) {
@@ -183,7 +178,7 @@ func (w *World) updateBot(bot *Bot, now time.Time) {
 		bot.NextDecision = now.Add(botDecisionInterval)
 	}
 
-	var desiredAngle float32
+	var desiredAngle float64
 	hasDesiredAngle := false
 	target := w.players[bot.TargetPlayerID]
 	if bot.TargetPlayerID != 0 && target != nil {
@@ -191,15 +186,15 @@ func (w *World) updateBot(bot *Bot, now time.Time) {
 		bot.Input.Mouse.X = target.X
 		bot.Input.Mouse.Y = target.Y
 
-		angleToTarget := float32(math.Atan2(float64(target.Y-player.Y), float64(target.X-player.X)))
-		distance := float32(math.Hypot(float64(target.X-player.X), float64(target.Y-player.Y)))
+		angleToTarget := float64(math.Atan2(float64(target.Y-player.Y), float64(target.X-player.X)))
+		distance := float64(math.Hypot(float64(target.X-player.X), float64(target.Y-player.Y)))
 
 		if distance > bot.PreferredDistance+botDistanceSlack {
 			desiredAngle = angleToTarget
 		} else if distance < bot.PreferredDistance-botDistanceSlack {
-			desiredAngle = angleToTarget + float32(bot.OrbitDirection)*float32(math.Pi*0.75)
+			desiredAngle = angleToTarget + float64(bot.OrbitDirection)*float64(math.Pi*0.75)
 		} else {
-			desiredAngle = angleToTarget + float32(bot.OrbitDirection)*float32(math.Pi/2)
+			desiredAngle = angleToTarget + float64(bot.OrbitDirection)*float64(math.Pi/2)
 		}
 		hasDesiredAngle = true
 
@@ -210,8 +205,8 @@ func (w *World) updateBot(bot *Bot, now time.Time) {
 	} else {
 		dx := bot.GuardCenter.X - player.X
 		dy := bot.GuardCenter.Y - player.Y
-		distance := float32(math.Hypot(float64(dx), float64(dy)))
-		angleToCenter := float32(math.Atan2(float64(dy), float64(dx)))
+		distance := float64(math.Hypot(float64(dx), float64(dy)))
+		angleToCenter := float64(math.Atan2(float64(dy), float64(dx)))
 
 		bot.Input.Mouse.X = bot.GuardCenter.X
 		bot.Input.Mouse.Y = bot.GuardCenter.Y
@@ -219,9 +214,9 @@ func (w *World) updateBot(bot *Bot, now time.Time) {
 		if distance > bot.GuardRadius*0.5 {
 			desiredAngle = angleToCenter
 		} else if distance > bot.GuardRadius*0.25 {
-			desiredAngle = angleToCenter + float32(bot.OrbitDirection)*float32(math.Pi/3)
+			desiredAngle = angleToCenter + float64(bot.OrbitDirection)*float64(math.Pi/3)
 		} else {
-			desiredAngle = angleToCenter + float32(bot.OrbitDirection)*float32(math.Pi/2)
+			desiredAngle = angleToCenter + float64(bot.OrbitDirection)*float64(math.Pi/2)
 		}
 		hasDesiredAngle = true
 	}
@@ -238,11 +233,11 @@ func (w *World) updateBot(bot *Bot, now time.Time) {
 		angleDiff = 0
 	}
 
-	turnResponseRange := float32(math.Pi / 2)
+	turnResponseRange := float64(math.Pi / 2)
 	if turnResponseRange <= 0 {
 		turnResponseRange = 1
 	}
-	desiredTurn := clampFloat32(angleDiff/turnResponseRange, -1, 1)
+	desiredTurn := clampfloat64(angleDiff/turnResponseRange, -1, 1)
 	const steeringSmoothing = 0.18
 	bot.TurnIntent += (desiredTurn - bot.TurnIntent) * steeringSmoothing
 
@@ -258,7 +253,7 @@ func (w *World) updateBot(bot *Bot, now time.Time) {
 
 func (w *World) findBotTarget(bot *Bot) uint32 {
 	var bestID uint32
-	bestDistance := float32(math.MaxFloat32)
+	bestDistance := float64(math.MaxFloat64)
 
 	for id, candidate := range w.players {
 		if candidate == nil || candidate.IsBot || candidate.State != StateAlive {
@@ -268,7 +263,7 @@ func (w *World) findBotTarget(bot *Bot) uint32 {
 			continue
 		}
 
-		distance := float32(math.Hypot(float64(candidate.X-bot.Player.X), float64(candidate.Y-bot.Player.Y)))
+		distance := float64(math.Hypot(float64(candidate.X-bot.Player.X), float64(candidate.Y-bot.Player.Y)))
 		if distance < bestDistance && distance <= bot.TargetDistance {
 			bestDistance = distance
 			bestID = id
@@ -278,14 +273,14 @@ func (w *World) findBotTarget(bot *Bot) uint32 {
 	return bestID
 }
 
-func (bot *Bot) inAllowedZone(x, y float32) bool {
+func (bot *Bot) inAllowedZone(x, y float64) bool {
 	if x < botAreaMinX || x > botAreaMaxX || y < botAreaMinY || y > botAreaMaxY {
 		return false
 	}
 
 	dx := x - bot.GuardCenter.X
 	dy := y - bot.GuardCenter.Y
-	return float32(math.Hypot(float64(dx), float64(dy))) <= bot.AggroRadius
+	return float64(math.Hypot(float64(dx), float64(dy))) <= bot.AggroRadius
 }
 
 func (w *World) respawnBot(bot *Bot, now time.Time) {
@@ -298,8 +293,8 @@ func (w *World) respawnBot(bot *Bot, now time.Time) {
 
 	// Random respawn position with some padding from edges
 	spawnPos := Position{
-		X: float32(rand.Intn(int(WorldWidth-200)) + 100),
-		Y: float32(rand.Intn(int(WorldHeight-200)) + 100),
+		X: float64(rand.Intn(int(WorldWidth-200)) + 100),
+		Y: float64(rand.Intn(int(WorldHeight-200)) + 100),
 	}
 
 	player.State = StateAlive
@@ -310,7 +305,6 @@ func (w *World) respawnBot(bot *Bot, now time.Time) {
 	player.Angle = 0
 	player.AutofireEnabled = true
 	player.RespawnTime = time.Time{}
-	player.LastRegenTime = now
 	player.LastCollisionDamage = now
 
 	// Update guard center to new spawn location
@@ -319,17 +313,17 @@ func (w *World) respawnBot(bot *Bot, now time.Time) {
 	bot.NextDecision = now.Add(botDecisionInterval)
 }
 
-func normalizeAngle(angle float32) float32 {
-	for angle > float32(math.Pi) {
-		angle -= float32(2 * math.Pi)
+func normalizeAngle(angle float64) float64 {
+	for angle > float64(math.Pi) {
+		angle -= float64(2 * math.Pi)
 	}
-	for angle < -float32(math.Pi) {
-		angle += float32(2 * math.Pi)
+	for angle < -float64(math.Pi) {
+		angle += float64(2 * math.Pi)
 	}
 	return angle
 }
 
-func clampFloat32(value, min, max float32) float32 {
+func clampfloat64(value, min, max float64) float64 {
 	if value < min {
 		return min
 	}

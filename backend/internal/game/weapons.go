@@ -21,46 +21,46 @@ const (
 
 // CannonStats holds the properties of a cannon
 type CannonStats struct {
-	ReloadTime      float32 // Seconds between shots
-	BulletSpeedMod  float32 // Multiplier for bullet speed (1.0 = normal)
-	BulletDamageMod float32 // Multiplier for bullet damage (1.0 = normal)
+	ReloadTime      float64 // Seconds between shots
+	BulletSpeedMod  float64 // Multiplier for bullet speed (1.0 = normal)
+	BulletDamageMod float64 // Multiplier for bullet damage (1.0 = normal)
 	BulletCount     int     // Number of bullets fired per shot (for scatter cannons)
-	SpreadAngle     float32 // Spread angle for multiple bullets (radians)
-	Range           float32 // Maximum effective range (0 = unlimited)
-	Size            float32 // Visual size of the cannon
+	SpreadAngle     float64 // Spread angle for multiple bullets (radians)
+	Range           float64 // Maximum effective range (0 = unlimited)
+	Size            float64 // Visual size of the cannon
 }
 
 // Cannon represents a basic weapon that fires bullets
 type Cannon struct {
-	ID           uint32      `json:"id"`
-	Position     Position    `json:"position"` // Relative position from ship center
-	Angle        float32     `json:"angle"`    // Fixed firing angle relative to ship
-	Stats        CannonStats `json:"stats"`
-	LastFireTime time.Time   `json:"-"`
-	Type         WeaponType  `json:"type"`
-	RecoilTime   time.Time   `json:"recoilTime"` // When the cannon last fired (for recoil animation)
+	ID           uint32      `msgpack:"id"`
+	Position     Position    `msgpack:"position"` // Relative position from ship center
+	Angle        float64     `msgpack:"angle"`    // Fixed firing angle relative to ship
+	Stats        CannonStats `msgpack:"stats"`
+	LastFireTime time.Time   `msgpack:"-"` // Not serialized
+	Type         WeaponType  `msgpack:"type"`
+	RecoilTime   time.Time   `msgpack:"recoilTime"` // When the cannon last fired (for recoil animation)
 }
 
 // CanFire checks if the cannon is ready to fire based on reload time
 func (c *Cannon) CanFire(player *Player, now time.Time) bool {
 	reloadTime := c.Stats.ReloadTime * player.Modifiers.ReloadSpeedMultiplier
-	return float32(now.Sub(c.LastFireTime).Seconds()) >= reloadTime
+	return float64(now.Sub(c.LastFireTime).Seconds()) >= reloadTime
 }
 
 // Fire creates bullets from this cannon
-func (c *Cannon) Fire(world *World, player *Player, targetAngle float32, now time.Time) []*Bullet {
+func (c *Cannon) Fire(world *World, player *Player, targetAngle float64, now time.Time) []*Bullet {
 	if !c.CanFire(player, now) {
 		return nil
 	}
 	return c.ForceFire(world, player, targetAngle, now)
 }
 
-func (c *Cannon) ForceFire(world *World, player *Player, targetAngle float32, now time.Time) []*Bullet {
+func (c *Cannon) ForceFire(world *World, player *Player, targetAngle float64, now time.Time) []*Bullet {
 	bullets := make([]*Bullet, 0, c.Stats.BulletCount)
 
 	// Calculate world position of cannon
-	cos := float32(math.Cos(float64(player.Angle)))
-	sin := float32(math.Sin(float64(player.Angle)))
+	cos := float64(math.Cos(float64(player.Angle)))
+	sin := float64(math.Sin(float64(player.Angle)))
 	worldX := player.X + (c.Position.X*cos - c.Position.Y*sin)
 	worldY := player.Y + (c.Position.X*sin + c.Position.Y*cos)
 
@@ -70,18 +70,18 @@ func (c *Cannon) ForceFire(world *World, player *Player, targetAngle float32, no
 		bulletAngle := targetAngle
 		if c.Stats.BulletCount > 1 {
 			// Distribute bullets evenly across spread angle
-			spreadOffset := c.Stats.SpreadAngle * (float32(i)/float32(c.Stats.BulletCount-1) - 0.5)
+			spreadOffset := c.Stats.SpreadAngle * (float64(i)/float64(c.Stats.BulletCount-1) - 0.5)
 			bulletAngle += spreadOffset
 		}
 
 		// Base bullet velocity with cannon range upgrade
 		bulletSpeed := BulletSpeed * c.Stats.BulletSpeedMod
 		bulletSpeed *= player.Modifiers.BulletSpeedMultiplier
-		bulletVelX := float32(math.Cos(float64(bulletAngle))) * bulletSpeed
-		bulletVelY := float32(math.Sin(float64(bulletAngle))) * bulletSpeed
+		bulletVelX := float64(math.Cos(float64(bulletAngle))) * bulletSpeed
+		bulletVelY := float64(math.Sin(float64(bulletAngle))) * bulletSpeed
 
 		// Calculate bullet damage and size with upgrades
-		baseDamage := float32(BulletDamage) * c.Stats.BulletDamageMod
+		baseDamage := float64(BulletDamage) * c.Stats.BulletDamageMod
 		finalDamage := baseDamage * player.Modifiers.BulletDamageMultiplier // Add cannon damage bonus
 		bulletSize := BulletSize * c.Stats.Size
 
@@ -93,7 +93,7 @@ func (c *Cannon) ForceFire(world *World, player *Player, targetAngle float32, no
 			VelY:      bulletVelY,
 			OwnerID:   player.ID,
 			CreatedAt: now,
-			Size:      bulletSize,
+			Radius:    bulletSize,
 			Damage:    int(finalDamage),
 		}
 
@@ -108,23 +108,21 @@ func (c *Cannon) ForceFire(world *World, player *Player, targetAngle float32, no
 
 // Turret represents a rotatable weapon system with one or more cannons
 type Turret struct {
-	ID              uint32     `json:"id"`
-	Angle           float32    `json:"angle"` // Current aiming angle in world space
-	Cannons         []Cannon   `json:"cannons"`
-	Position        Position   `json:"position"`  // Relative position from ship center
-	TurnSpeed       float32    `json:"turnSpeed"` // How fast turret can rotate (rad/s)
-	LastFireTime    time.Time  `json:"-"`
-	Type            WeaponType `json:"type"`
-	NextCannonIndex int        `json:"nextCannonIndex"` // For alternating fire
-	RecoilTime      time.Time  `json:"recoilTime"`      // When the turret last fired (for recoil animation)
+	ID              uint32     `msgpack:"id"`
+	Angle           float64    `msgpack:"angle"` // Current aiming angle in world space
+	Cannons         []Cannon   `msgpack:"cannons"`
+	Position        Position   `msgpack:"position"` // Relative position from ship center
+	LastFireTime    time.Time  `msgpack:"-"`        // Not serialized
+	Type            WeaponType `msgpack:"type"`
+	NextCannonIndex int        `msgpack:"nextCannonIndex"` // For alternating fire
 }
 
 // UpdateAiming updates the turret's angle to aim at target position
-func (t *Turret) UpdateAiming(player *Player, targetX, targetY float32) {
+func (t *Turret) UpdateAiming(player *Player, targetX, targetY float64) {
 	// Calculate desired angle to target
 	dx := targetX - player.X
 	dy := targetY - player.Y
-	targetAngle := float32(math.Atan2(float64(dy), float64(dx)))
+	targetAngle := float64(math.Atan2(float64(dy), float64(dx)))
 
 	// For now, instantly snap to target (can add smooth rotation later)
 	t.Angle = targetAngle
@@ -151,7 +149,6 @@ func (t *Turret) Fire(world *World, player *Player, now time.Time) []*Bullet {
 			// Move to next cannon for alternating fire
 			t.NextCannonIndex = (t.NextCannonIndex + 1) % len(t.Cannons)
 			t.LastFireTime = now
-			t.RecoilTime = now
 		}
 	} else {
 		// Regular turret: fire all cannons simultaneously
@@ -163,7 +160,6 @@ func (t *Turret) Fire(world *World, player *Player, now time.Time) []*Bullet {
 
 		if len(allBullets) > 0 {
 			t.LastFireTime = now
-			t.RecoilTime = now
 		}
 	}
 
@@ -197,7 +193,7 @@ func NewScatterCannon() CannonStats {
 
 func NewTurretCannon() CannonStats {
 	return CannonStats{
-		ReloadTime:      1.5,
+		ReloadTime:      1.2,
 		BulletSpeedMod:  1.0,
 		BulletDamageMod: 1.0,
 		BulletCount:     1,
@@ -211,7 +207,7 @@ func NewMachineGunCannon() CannonStats {
 	return CannonStats{
 		ReloadTime:      0.3,
 		BulletSpeedMod:  0.7,
-		BulletDamageMod: 0.3,
+		BulletDamageMod: 0.4,
 		BulletCount:     1,
 		SpreadAngle:     0,
 		Range:           0,
@@ -235,7 +231,7 @@ func NewBigCannon() CannonStats {
 	return CannonStats{
 		ReloadTime:      2,
 		BulletSpeedMod:  1,
-		BulletDamageMod: 5,
+		BulletDamageMod: 2.5,
 		BulletCount:     1,
 		SpreadAngle:     0,
 		Range:           0,

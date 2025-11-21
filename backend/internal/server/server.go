@@ -1,13 +1,15 @@
 package server
 
 import (
-	"encoding/json"
+	"bytes"
+	"compress/gzip"
+	"goblons/internal/game"
 	"log"
 	"net/http"
 	"sync/atomic"
 	"time"
 
-	"goblons/internal/game"
+	"github.com/vmihailenco/msgpack/v5"
 
 	"github.com/gorilla/websocket"
 )
@@ -34,10 +36,10 @@ func NewServer() *Server {
 	server := &Server{
 		world: game.NewWorld(),
 	}
-	
+
 	// Start network monitoring
 	go server.monitorNetworkUsage()
-	
+
 	return server
 }
 
@@ -58,28 +60,40 @@ func (s *Server) Start(addr string) error {
 func (s *Server) monitorNetworkUsage() {
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
-	
+
 	var lastSent, lastRecv int64
 	var lastMsgSent, lastMsgRecv int64
-	
+	var lastSnapshotCount int64
+	var lastTotalSnapshotSize int64
+
 	for range ticker.C {
 		currentSent := atomic.LoadInt64(&s.bytesSent)
 		currentRecv := atomic.LoadInt64(&s.bytesReceived)
 		currentMsgSent := atomic.LoadInt64(&s.messagesSent)
 		currentMsgRecv := atomic.LoadInt64(&s.messagesRecv)
-		
-		sentRate := float64(currentSent-lastSent) / 10.0
-		recvRate := float64(currentRecv-lastRecv) / 10.0
+		currentSnapshotCount, currentTotalSnapshotSize := s.world.GetSnapshotStats()
+
+		sentRate := float64(currentSent-lastSent) / 10.0 / 1000000.0
+		recvRate := float64(currentRecv-lastRecv) / 10.0 / 1000000.0
 		msgSentRate := float64(currentMsgSent-lastMsgSent) / 10.0
 		msgRecvRate := float64(currentMsgRecv-lastMsgRecv) / 10.0
-		
-		log.Printf("Network Stats - Sent: %.1f B/s (%d total), Recv: %.1f B/s (%d total), Msg Sent: %.1f/s (%d total), Msg Recv: %.1f/s (%d total)",
-			sentRate, currentSent, recvRate, currentRecv, msgSentRate, currentMsgSent, msgRecvRate, currentMsgRecv)
-		
+
+		var avgSnapshotSize float64
+		snapshotsInPeriod := currentSnapshotCount - lastSnapshotCount
+		if snapshotsInPeriod > 0 {
+			sizeInPeriod := currentTotalSnapshotSize - lastTotalSnapshotSize
+			avgSnapshotSize = float64(sizeInPeriod) / float64(snapshotsInPeriod)
+		}
+
+		log.Printf("Network Stats - Sent: %.3f MB/s, Recv: %.3f MB/s, Msg Sent: %.1f/s, Msg Recv: %.1f/s, Avg Snapshot: %.1f KB (%d total)",
+			sentRate, recvRate, msgSentRate, msgRecvRate, avgSnapshotSize/1024.0, currentSnapshotCount)
+
 		lastSent = currentSent
 		lastRecv = currentRecv
 		lastMsgSent = currentMsgSent
 		lastMsgRecv = currentMsgRecv
+		lastSnapshotCount = currentSnapshotCount
+		lastTotalSnapshotSize = currentTotalSnapshotSize
 	}
 }
 
@@ -144,7 +158,7 @@ func (s *Server) handleClientReads(client *game.Client) {
 		atomic.AddInt64(&s.messagesRecv, 1)
 
 		var input game.InputMsg
-		if err := json.Unmarshal(messageBytes, &input); err != nil {
+		if err := msgpack.Unmarshal(messageBytes, &input); err != nil {
 			log.Printf("Error unmarshaling input: %v", err)
 			continue
 		}
@@ -175,7 +189,13 @@ func (s *Server) handleClientWrites(client *game.Client) {
 			atomic.AddInt64(&s.bytesSent, int64(len(message)))
 			atomic.AddInt64(&s.messagesSent, 1)
 
-			if err := client.Conn.WriteMessage(websocket.TextMessage, message); err != nil {
+			compressedMsg, err := compressMessage(message)
+			if err != nil {
+				log.Printf("Compression error: %v", err)
+				compressedMsg = message // fallback to uncompressed
+			}
+
+			if err := client.Conn.WriteMessage(websocket.BinaryMessage, compressedMsg); err != nil {
 				log.Printf("Write error: %v", err)
 				return
 			}
@@ -187,4 +207,20 @@ func (s *Server) handleClientWrites(client *game.Client) {
 			}
 		}
 	}
+}
+
+// compressMessage compresses a byte slice using gzip if large enough
+func compressMessage(data []byte) ([]byte, error) {
+	if len(data) < 512 { // Don't compress small messages
+		return append([]byte{0x00}, data...), nil
+	}
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	if _, err := gz.Write(data); err != nil {
+		return nil, err
+	}
+	if err := gz.Close(); err != nil {
+		return nil, err
+	}
+	return append([]byte{0x01}, buf.Bytes()...), nil
 }

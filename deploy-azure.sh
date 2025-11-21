@@ -123,7 +123,7 @@ ssh -o StrictHostKeyChecking=no "$ADMIN_USER@$VM_IP" << EOF
     sudo docker rm -f "$IMAGE_NAME" 2>/dev/null || true
 
     echo "🚀 Starting game container..."
-    sudo docker run -d -p 8080:8080 --name "$IMAGE_NAME" "$REGISTRY_NAME.azurecr.io/$IMAGE_NAME:latest"
+    sudo docker run -d -p 8080:8080 --restart unless-stopped --name "$IMAGE_NAME" "$REGISTRY_NAME.azurecr.io/$IMAGE_NAME:latest"
 EOF
 
 # =========================

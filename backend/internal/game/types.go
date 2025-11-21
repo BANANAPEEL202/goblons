@@ -30,123 +30,116 @@ var colorHexPattern = regexp.MustCompile(`^#?([0-9a-fA-F]{6})$`)
 
 // Upgrade represents a single stat upgrade level
 type Upgrade struct {
-	Type        UpgradeType `json:"type"`
-	Level       int         `json:"level"`       // Current level (0-75)
-	MaxLevel    int         `json:"maxLevel"`    // Maximum level (75)
-	BaseCost    int         `json:"baseCost"`    // Base cost (10)
-	CurrentCost int         `json:"currentCost"` // Current upgrade cost
+	Type        UpgradeType `msgpack:"type"`
+	Level       int         `msgpack:"level"`       // Current level (0-75)
+	MaxLevel    int         `msgpack:"maxLevel"`    // Maximum level (75)
+	BaseCost    int         `msgpack:"baseCost"`    // Base cost (10)
+	CurrentCost int         `msgpack:"currentCost"` // Current upgrade cost
 }
 
 // InputMsg represents player input from client
 type InputMsg struct {
-	Type string `json:"type"`
+	Type string `msgpack:"type"`
 	// Movement inputs (continuous state)
-	Up    bool `json:"up"`
-	Down  bool `json:"down"`
-	Left  bool `json:"left"`
-	Right bool `json:"right"`
+	Up    bool `msgpack:"up"`
+	Down  bool `msgpack:"down"`
+	Left  bool `msgpack:"left"`
+	Right bool `msgpack:"right"`
 	// Action inputs (single-fire events with sequence numbers)
-	Actions []InputAction `json:"actions,omitempty"`
+	Actions []InputAction `msgpack:"actions,omitempty"`
 	// Mouse position
 	Mouse struct {
-		X float32 `json:"x"`
-		Y float32 `json:"y"`
-	} `json:"mouse"`
+		X float64 `msgpack:"x"`
+		Y float64 `msgpack:"y"`
+	} `msgpack:"mouse"`
 	// Legacy inputs (deprecated but kept for compatibility)
-	UpgradeCannons   bool   `json:"upgradeCannons,omitempty"`
-	DowngradeCannons bool   `json:"downgradeCannons,omitempty"`
-	UpgradeScatter   bool   `json:"upgradeScatter,omitempty"`
-	DowngradeScatter bool   `json:"downgradeScatter,omitempty"`
-	UpgradeTurrets   bool   `json:"upgradeTurrets,omitempty"`
-	DowngradeTurrets bool   `json:"downgradeTurrets,omitempty"`
-	DebugLevelUp     bool   `json:"debugLevelUp,omitempty"`
-	SelectUpgrade    string `json:"selectUpgrade,omitempty"`
-	UpgradeChoice    string `json:"upgradeChoice,omitempty"`
-	StatUpgradeType  string `json:"statUpgradeType,omitempty"`
-	ToggleAutofire   bool   `json:"toggleAutofire,omitempty"`
-	ManualFire       bool   `json:"manualFire,omitempty"`
-	RequestRespawn   bool   `json:"requestRespawn,omitempty"`
-	StartGame        bool   `json:"startGame,omitempty"`
-	PlayerName       string `json:"playerName,omitempty"`
-	PlayerColor      string `json:"playerColor,omitempty"`
+	UpgradeCannons   bool   `msgpack:"upgradeCannons,omitempty"`
+	DowngradeCannons bool   `msgpack:"downgradeCannons,omitempty"`
+	UpgradeTurrets   bool   `msgpack:"upgradeTurrets,omitempty"`
+	DowngradeTurrets bool   `msgpack:"downgradeTurrets,omitempty"`
+	DebugLevelUp     bool   `msgpack:"debugLevelUp,omitempty"`
+	SelectUpgrade    string `msgpack:"selectUpgrade,omitempty"`
+	UpgradeChoice    string `msgpack:"upgradeChoice,omitempty"`
+	StatUpgradeType  string `msgpack:"statUpgradeType,omitempty"`
+	ToggleAutofire   bool   `msgpack:"toggleAutofire,omitempty"`
+	ManualFire       bool   `msgpack:"manualFire,omitempty"`
+	RequestRespawn   bool   `msgpack:"requestRespawn,omitempty"`
+	StartGame        bool   `msgpack:"startGame,omitempty"`
+	PlayerName       string `msgpack:"playerName,omitempty"`
+	PlayerColor      string `msgpack:"playerColor,omitempty"`
 }
 
 // InputAction represents a single-fire action with deduplication
 type InputAction struct {
-	Type     string `json:"type"`     // "statUpgrade", "toggleAutofire", etc.
-	Sequence uint32 `json:"sequence"` // Client-side sequence number for deduplication
-	Data     string `json:"data"`     // Action-specific data (e.g., stat type for upgrades)
+	Type     string `msgpack:"type"`     // "statUpgrade", "toggleAutofire", etc.
+	Sequence uint32 `msgpack:"sequence"` // Client-side sequence number for deduplication
+	Data     string `msgpack:"data"`     // Action-specific data (e.g., stat type for upgrades)
 }
 
 // Position represents the relative position of a single cannon from ship center
 type Position struct {
-	X float32 `json:"x"` // Relative X position from ship center
-	Y float32 `json:"y"` // Relative Y position from ship center
+	X float64 `msgpack:"x"` // Relative X position from ship center
+	Y float64 `msgpack:"y"` // Relative Y position from ship center
 }
 
 // DebugInfo contains calculated debug values for client display
 type DebugInfo struct {
-	Health            int     `json:"health"`
-	MoveSpeedModifier float32 `json:"moveSpeedModifier"`
-	TurnSpeedModifier float32 `json:"turnSpeedModifier"`
-	RegenRate         float32 `json:"regenRate"`
-	BodyDamage        float32 `json:"bodyDamage"`
-	FrontDPS          float32 `json:"frontDps"`
-	SideDPS           float32 `json:"sideDps"`
-	RearDPS           float32 `json:"rearDps"`
-	TopDPS            float32 `json:"topDps"`
-	TotalDPS          float32 `json:"totalDps"`
+	Health            int     `msgpack:"health"`
+	MoveSpeedModifier float64 `msgpack:"moveSpeedModifier"`
+	TurnSpeedModifier float64 `msgpack:"turnSpeedModifier"`
+	RegenRate         float64 `msgpack:"regenRate"`
+	BodyDamage        float64 `msgpack:"bodyDamage"`
+	FrontDPS          float64 `msgpack:"frontDps"`
+	SideDPS           float64 `msgpack:"sideDps"`
+	RearDPS           float64 `msgpack:"rearDps"`
+	TopDPS            float64 `msgpack:"topDps"`
+	TotalDPS          float64 `msgpack:"totalDps"`
 }
 
 // Player represents a game player
 type Player struct {
-	ID          uint32    `json:"id"`
-	X           float32   `json:"x"`
-	Y           float32   `json:"y"`
-	VelX        float32   `json:"velX"`
-	VelY        float32   `json:"velY"`
-	Angle       float32   `json:"angle"` // Ship facing direction in radians
-	Score       int       `json:"score"`
-	State       int       `json:"state"`
-	Name        string    `json:"name"`
-	Color       string    `json:"color"`
-	IsBot       bool      `json:"isBot"`
-	Health      int       `json:"health"`
-	MaxHealth   int       `json:"maxHealth"`
-	RespawnTime time.Time `json:"-"` // When the player can respawn
+	ID          uint32    `msgpack:"id"`
+	X           float64   `msgpack:"x"`
+	Y           float64   `msgpack:"y"`
+	VelX        float64   `msgpack:"velX"`
+	VelY        float64   `msgpack:"velY"`
+	Angle       float64   `msgpack:"angle"` // Ship facing direction in radians
+	Score       int       `msgpack:"score"`
+	State       int       `msgpack:"state"`
+	Name        string    `msgpack:"name"`
+	Color       string    `msgpack:"color"`
+	IsBot       bool      `msgpack:"isBot"`
+	Health      int       `msgpack:"health"`
+	MaxHealth   int       `msgpack:"maxHealth"`
+	RespawnTime time.Time `msgpack:"-"` // When the player can respawn (used only for bots)
 
-	Client *Client `json:"-"` // Back-reference to owning client (not serialized)
+	Client *Client `msgpack:"-"` // Back-reference to owning client (not serialized)
 	// Leveling system
-	Level             int `json:"level"`             // Current player level
-	Experience        int `json:"experience"`        // Current experience points
-	AvailableUpgrades int `json:"availableUpgrades"` // Number of pending upgrade points
+	Level             int `msgpack:"level"`             // Current player level
+	Experience        int `msgpack:"experience"`        // Current experience points
+	AvailableUpgrades int `msgpack:"availableUpgrades"` // Number of pending upgrade points
 	// Category-specific reload times
-	LastSideUpgradeShot  time.Time         `json:"-"`          // When side upgrades last fired
-	LastTopUpgradeShot   time.Time         `json:"-"`          // When top upgrades last fired
-	LastFrontUpgradeShot time.Time         `json:"-"`          // When front upgrades last fired
-	LastRearUpgradeShot  time.Time         `json:"-"`          // When rear upgrades last fired
-	ShipConfig           ShipConfiguration `json:"shipConfig"` // New modular upgrade system
+	ShipConfig ShipConfiguration `msgpack:"shipConfig"` // New modular upgrade system
 
 	// Stat upgrades
-	Coins     int                     `json:"coins"`        // Currency for stat upgrades
-	Upgrades  map[UpgradeType]Upgrade `json:"statUpgrades"` // Applied stat upgrades
-	Modifiers Mods                    `json:"-"`            // Calculated stat modifiers (not serialized)
+	Coins     int                     `msgpack:"coins"`        // Currency for stat upgrades
+	Upgrades  map[UpgradeType]Upgrade `msgpack:"statUpgrades"` // Applied stat upgrades
+	Modifiers Mods                    `msgpack:"-"`            // Calculated stat modifiers (not serialized)
 
-	LastRegenTime       time.Time `json:"-"` // Last health regeneration time
-	LastCollisionDamage time.Time `json:"-"` // Last collision damage time
+	LastCollisionDamage time.Time `msgpack:"-"` // Last collision damage time
 	// Autofire toggle state
-	AutofireEnabled bool `json:"autofireEnabled"` // Whether autofire is currently enabled
+	AutofireEnabled bool `msgpack:"autofireEnabled"` // Whether autofire is currently enabled
 	// Action processing state (for deduplication)
-	LastProcessedAction uint32               `json:"-"` // Last processed action sequence number
-	ActionCooldowns     map[string]time.Time `json:"-"` // Cooldowns per action type
+	LastProcessedAction uint32               `msgpack:"-"` // Last processed action sequence number
+	ActionCooldowns     map[string]time.Time `msgpack:"-"` // Cooldowns per action type
 	// Death tracking
-	KilledBy     uint32    `json:"killedBy"`     // ID of player who killed this player (0 if none)
-	KilledByName string    `json:"killedByName"` // Name of player who killed this player
-	DeathTime    time.Time `json:"-"`            // When the player died
-	ScoreAtDeath int       `json:"scoreAtDeath"` // Score when player died
-	SurvivalTime float64   `json:"survivalTime"` // How long the player was alive (in seconds)
-	SpawnTime    time.Time `json:"-"`            // When the player spawned
-	DebugInfo    DebugInfo `json:"debugInfo"`    // Calculated debug values for client
+	KilledBy     uint32    `msgpack:"killedBy"`     // ID of player who killed this player (0 if none)
+	KilledByName string    `msgpack:"killedByName"` // Name of player who killed this player
+	DeathTime    time.Time `msgpack:"-"`            // When the player died
+	ScoreAtDeath int       `msgpack:"scoreAtDeath"` // Score when player died
+	SurvivalTime float64   `msgpack:"survivalTime"` // How long the player was alive (in seconds)
+	SpawnTime    time.Time `msgpack:"-"`            // When the player spawned
+	DebugInfo    DebugInfo `msgpack:"debugInfo"`    // Calculated debug values for client
 }
 
 // Bot wraps an AI-controlled player with simple state required for decision making.
@@ -155,104 +148,182 @@ type Bot struct {
 	Player            *Player
 	Input             InputMsg
 	GuardCenter       Position
-	GuardRadius       float32
-	AggroRadius       float32
-	TargetDistance    float32
-	PreferredDistance float32
+	GuardRadius       float64
+	AggroRadius       float64
+	TargetDistance    float64
+	PreferredDistance float64
 	NextDecision      time.Time
 	TargetPlayerID    uint32
 	OrbitDirection    int
-	TurnIntent        float32
-	DesiredAngle      float32
+	TurnIntent        float64
+	DesiredAngle      float64
 }
 
 // GameItem represents collectible items in the game
 type GameItem struct {
-	ID    uint32  `json:"id"`
-	X     float32 `json:"x"`
-	Y     float32 `json:"y"`
-	Type  string  `json:"type"`
-	Coins int     `json:"coins"`
-	XP    int     `json:"xp"`
+	ID    uint32  `msgpack:"id"`
+	X     float64 `msgpack:"x"`
+	Y     float64 `msgpack:"y"`
+	Type  string  `msgpack:"type"`
+	Coins int     `msgpack:"coins"`
+	XP    int     `msgpack:"xp"`
 }
 
 // Bullet represents a projectile fired from ship cannons
 type Bullet struct {
-	ID        uint32    `json:"id"`
-	X         float32   `json:"x"`
-	Y         float32   `json:"y"`
-	VelX      float32   `json:"velX"`
-	VelY      float32   `json:"velY"`
-	OwnerID   uint32    `json:"ownerId"`
-	CreatedAt time.Time `json:"-"`
-	Size      float32   `json:"size"`
-	Damage    int       `json:"damage"`
+	ID        uint32    `msgpack:"id"`
+	X         float64   `msgpack:"x"`
+	Y         float64   `msgpack:"y"`
+	VelX      float64   `msgpack:"velX"`
+	VelY      float64   `msgpack:"velY"`
+	OwnerID   uint32    `msgpack:"-"`
+	CreatedAt time.Time `msgpack:"-"` // Not serialized
+	Radius    float64   `msgpack:"radius"`
+	Damage    int       `msgpack:"-"`
 }
 
 // Snapshot represents the current game state sent to clients
 type Snapshot struct {
-	Type    string     `json:"type"`
-	Players []Player   `json:"players"`
-	Items   []GameItem `json:"items"`
-	Bullets []Bullet   `json:"bullets"`
-	Time    int64      `json:"time"`
+	Type    string     `msgpack:"type"`
+	Players []Player   `msgpack:"players"`
+	Items   []GameItem `msgpack:"items"`
+	Bullets []Bullet   `msgpack:"bullets"`
+	Time    int64      `msgpack:"time"`
+}
+
+// DeltaSnapshot represents only the changes in game state since last snapshot
+type DeltaSnapshot struct {
+	Type           string        `msgpack:"type"`
+	Players        []PlayerDelta `msgpack:"players,omitempty"`        // Delta player updates
+	ItemsAdded     []GameItem    `msgpack:"itemsAdded,omitempty"`     // Items that were added
+	ItemsRemoved   []uint32      `msgpack:"itemsRemoved,omitempty"`   // IDs of items that were removed
+	BulletsAdded   []Bullet      `msgpack:"bulletsAdded,omitempty"`   // Bullets that were added
+	BulletsRemoved []uint32      `msgpack:"bulletsRemoved,omitempty"` // IDs of bullets that were removed
+}
+
+// PlayerDelta represents only the changed fields of a player since last snapshot
+type PlayerDelta struct {
+	ID                uint32                   `msgpack:"id"`          // Always sent
+	X                 *float64                 `msgpack:"x,omitempty"` // Position changes frequently
+	Y                 *float64                 `msgpack:"y,omitempty"`
+	VelX              *float64                 `msgpack:"velX,omitempty"`
+	VelY              *float64                 `msgpack:"velY,omitempty"`
+	Angle             *float64                 `msgpack:"angle,omitempty"`
+	Score             *int                     `msgpack:"score,omitempty"`             // Changes occasionally
+	State             *int                     `msgpack:"state,omitempty"`             // Alive/dead state
+	Name              *string                  `msgpack:"name,omitempty"`              // Changes rarely
+	Color             *string                  `msgpack:"color,omitempty"`             // Changes rarely
+	Health            *int                     `msgpack:"health,omitempty"`            // Changes frequently
+	MaxHealth         *int                     `msgpack:"maxHealth,omitempty"`         // Changes with upgrades
+	Level             *int                     `msgpack:"level,omitempty"`             // Changes occasionally
+	Experience        *int                     `msgpack:"experience,omitempty"`        // Changes frequently
+	AvailableUpgrades *int                     `msgpack:"availableUpgrades,omitempty"` // Changes occasionally
+	ShipConfig        ShipConfigDelta          `msgpack:"shipConfig"`                  // Always sent (minimal data for rendering)
+	Coins             *int                     `msgpack:"coins,omitempty"`             // Changes with items/spending
+	Upgrades          *map[UpgradeType]Upgrade `msgpack:"statUpgrades,omitempty"`      // Changes with stat upgrades
+	AutofireEnabled   *bool                    `msgpack:"autofireEnabled,omitempty"`   // Changes rarely
+	DebugInfo         *DebugInfo               `msgpack:"debugInfo,omitempty"`         // Changes frequently for display
+	ScoreAtDeath      *int                     `msgpack:"scoreAtDeath,omitempty"`      // Score captured on death
+	SurvivalTime      *float64                 `msgpack:"survivalTime,omitempty"`      // Lifetime duration
+	KilledByName      *string                  `msgpack:"killedByName,omitempty"`      // Killer name tracking
+}
+
+// ShipConfigDelta contains only the fields needed by the frontend for rendering
+type ShipConfigDelta struct {
+	ShipLength   float64          `msgpack:"shipLength,omitempty"`   // For hull dimensions
+	ShipWidth    float64          `msgpack:"shipWidth,omitempty"`    // For hull dimensions
+	SideUpgrade  *ShipModuleDelta `msgpack:"sideUpgrade,omitempty"`  // Side cannons
+	FrontUpgrade *ShipModuleDelta `msgpack:"frontUpgrade,omitempty"` // Front upgrades (ram/cannons)
+	RearUpgrade  *ShipModuleDelta `msgpack:"rearUpgrade,omitempty"`  // Rear upgrades (rudder)
+	TopUpgrade   *ShipModuleDelta `msgpack:"topUpgrade,omitempty"`   // Top turrets
+}
+
+// ShipModuleDelta contains only the fields needed by the frontend
+type ShipModuleDelta struct {
+	Name    string        `msgpack:"name"`              // Upgrade name (for ram/rudder)
+	Cannons []CannonDelta `msgpack:"cannons,omitempty"` // Cannons with minimal data
+	Turrets []TurretDelta `msgpack:"turrets,omitempty"` // Turrets with minimal data
+}
+
+// CannonDelta contains only the fields needed by the frontend for rendering
+type CannonDelta struct {
+	Position   Position  `msgpack:"position,omitempty"`   // Relative position for drawing
+	Type       string    `msgpack:"type,omitempty"`       // Cannon type for rendering style
+	RecoilTime time.Time `msgpack:"recoilTime,omitempty"` // For recoil animation
+}
+
+// TurretDelta contains only the fields needed by the frontend for rendering
+type TurretDelta struct {
+	Position        Position      `msgpack:"position,omitempty"` // Relative position for drawing
+	Angle           float64       `msgpack:"angle,omitempty"`    // Current aiming angle
+	Type            string        `msgpack:"type,omitempty"`     // Turret type for rendering style
+	NextCannonIndex int           `msgpack:"nextCannonIndex"`    // For alternating recoil, cannot omit empty since 0 is valid
+	Cannons         []CannonDelta `msgpack:"cannons,omitempty"`  // Turret cannons (minimal data)
 }
 
 // WelcomeMsg represents a welcome message sent to a new client
 type WelcomeMsg struct {
-	Type     string `json:"type"`
-	PlayerId uint32 `json:"playerId"`
+	Type     string `msgpack:"type"`
+	PlayerId uint32 `msgpack:"playerId"`
 }
 
 // UpgradeInfo represents simplified upgrade information for client
 type UpgradeInfo struct {
-	Name string `json:"name"`
-	Type string `json:"type"`
+	Name string `msgpack:"name"`
+	Type string `msgpack:"type"`
 }
 
 // AvailableUpgradesMsg represents available upgrades for a player
 type AvailableUpgradesMsg struct {
-	Type     string                   `json:"type"`
-	Upgrades map[string][]UpgradeInfo `json:"upgrades"`
+	Type     string                   `msgpack:"type"`
+	Upgrades map[string][]UpgradeInfo `msgpack:"upgrades"`
 }
 
 // GameEventMsg represents a one-off gameplay notification
 type GameEventMsg struct {
-	Type       string `json:"type"`
-	EventType  string `json:"eventType"`
-	KillerID   uint32 `json:"killerId,omitempty"`
-	KillerName string `json:"killerName,omitempty"`
-	VictimID   uint32 `json:"victimId,omitempty"`
-	VictimName string `json:"victimName,omitempty"`
+	Type       string `msgpack:"type"`
+	EventType  string `msgpack:"eventType"`
+	KillerID   uint32 `msgpack:"killerId,omitempty"`
+	KillerName string `msgpack:"killerName,omitempty"`
+	VictimID   uint32 `msgpack:"victimId,omitempty"`
+	VictimName string `msgpack:"victimName,omitempty"`
+}
+
+// ResetShipConfigMsg represents a message to reset the player's ship configuration
+type ResetShipConfigMsg struct {
+	Type       string          `msgpack:"type"`
+	ShipConfig ShipConfigDelta `msgpack:"shipConfig"`
 }
 
 // Client represents a connected game client
 type Client struct {
-	ID          uint32
-	Conn        *websocket.Conn
-	Player      *Player
-	Input       InputMsg
-	Send        chan []byte
-	LastSeen    time.Time
-	LastUpgrade time.Time // Prevents rapid upgrade applications
-	mu          sync.RWMutex
+	ID           uint32
+	Conn         *websocket.Conn
+	Player       *Player
+	Input        InputMsg
+	Send         chan []byte
+	LastSeen     time.Time
+	LastUpgrade  time.Time // Prevents rapid upgrade applications
+	lastSnapshot Snapshot  // Store the last sent snapshot for delta calculations
+	mu           sync.RWMutex
 }
 
 // World represents the game world and all its entities
 type World struct {
-	mu           sync.RWMutex
-	clients      map[uint32]*Client
-	players      map[uint32]*Player
-	bots         map[uint32]*Bot
-	items        map[uint32]*GameItem
-	bullets      map[uint32]*Bullet
-	mechanics    *GameMechanics
-	nextPlayerID uint32
-	itemID       uint32
-	bulletID     uint32
-	running      bool
-	tickCounter  uint32 // For performance optimizations
-	botsSpawned  bool
+	mu                sync.RWMutex
+	clients           map[uint32]*Client
+	players           map[uint32]*Player
+	bots              map[uint32]*Bot
+	items             map[uint32]*GameItem
+	bullets           map[uint32]*Bullet
+	mechanics         *GameMechanics
+	nextPlayerID      uint32
+	itemID            uint32
+	bulletID          uint32
+	running           bool
+	tickCounter       uint32 // For performance optimizations
+	snapshotCount     int64  // Total snapshots sent
+	totalSnapshotSize int64  // Total size of all snapshots
 }
 
 // NewClient creates a new client
@@ -272,8 +343,8 @@ func NewClient(id uint32, conn *websocket.Conn) *Client {
 // NewPlayer creates a new player with default values
 func NewPlayer(id uint32) *Player {
 	// Calculate initial shaft length (same logic as updateShipDimensions)
-	shipLength := float32(PlayerSize*1.2) * 0.5 // Base shaft length for 1 cannon
-	shipWidth := float32(PlayerSize * 0.8)
+	shipLength := float64(PlayerSize*1.2) * 0.5 // Base shaft length for 1 cannon
+	shipWidth := float64(PlayerSize * 0.8)
 
 	shipConfig := ShipConfiguration{
 		SideUpgrade:  NewSideUpgradeTree(),
@@ -312,14 +383,13 @@ func NewPlayer(id uint32) *Player {
 		ShipConfig:          shipConfig,
 		Coins:               0, // Starting coins
 		Upgrades:            make(map[UpgradeType]Upgrade),
-		LastRegenTime:       time.Now(),                 // Initialize health regen timer
 		LastProcessedAction: 0,                          // No actions processed yet
 		ActionCooldowns:     make(map[string]time.Time), // Initialize cooldown map
 		LastCollisionDamage: time.Now(),                 // Initialize collision damage timer
 	}
 
 	// Initialize stat upgrades
-	InitializeStatUpgrades(player)
+	player.InitializeStatUpgrades()
 
 	return player
 }
@@ -427,7 +497,7 @@ func (p *Player) GetExperienceForCurrentLevel() int {
 }
 
 // GetExperienceProgressToNextLevel returns progress (0.0 to 1.0) to next level
-func (p *Player) GetExperienceProgressToNextLevel() float32 {
+func (p *Player) GetExperienceProgressToNextLevel() float64 {
 	currentLevelExp := p.GetExperienceForCurrentLevel()
 	nextLevelExp := p.GetExperienceRequiredForNextLevel()
 	levelExpNeeded := nextLevelExp - currentLevelExp
@@ -436,7 +506,7 @@ func (p *Player) GetExperienceProgressToNextLevel() float32 {
 		return 1.0
 	}
 
-	progress := float32(p.Experience-currentLevelExp) / float32(levelExpNeeded)
+	progress := float64(p.Experience-currentLevelExp) / float64(levelExpNeeded)
 	if progress < 0 {
 		return 0
 	}
@@ -444,48 +514,4 @@ func (p *Player) GetExperienceProgressToNextLevel() float32 {
 		return 1
 	}
 	return progress
-}
-
-// AddExperience adds experience and handles level ups
-func (p *Player) AddExperience(exp int) {
-	p.Experience += exp
-
-	// Check for level up
-	if p.Experience >= p.GetExperienceRequiredForNextLevel() {
-		p.Level++
-		p.AvailableUpgrades++
-	}
-}
-
-// DebugLevelUp increases the player's level (for testing)
-func (p *Player) DebugLevelUp() {
-	p.Level++
-	p.Experience = p.GetExperienceForCurrentLevel()
-	p.AvailableUpgrades++
-}
-
-// InitializeStatUpgrades initializes the stat upgrade system for a player
-func InitializeStatUpgrades(player *Player) {
-	player.Upgrades = make(map[UpgradeType]Upgrade)
-
-	upgradeTypes := []UpgradeType{
-		StatUpgradeHullStrength,
-		StatUpgradeAutoRepairs,
-		StatUpgradeCannonRange,
-		StatUpgradeCannonDamage,
-		StatUpgradeReloadSpeed,
-		StatUpgradeMoveSpeed,
-		StatUpgradeTurnSpeed,
-		StatUpgradeBodyDamage,
-	}
-
-	for _, upgradeType := range upgradeTypes {
-		player.Upgrades[upgradeType] = Upgrade{
-			Type:        upgradeType,
-			Level:       0,
-			MaxLevel:    15,
-			BaseCost:    10,
-			CurrentCost: 10,
-		}
-	}
 }

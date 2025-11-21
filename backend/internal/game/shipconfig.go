@@ -6,13 +6,13 @@ import (
 
 // ShipConfiguration holds all upgrades for a ship
 type ShipConfiguration struct {
-	SideUpgrade  *ShipModule `json:"sideUpgrade"`  // Side cannons upgrade (single)
-	TopUpgrade   *ShipModule `json:"topUpgrade"`   // Top turrets upgrade (single)
-	FrontUpgrade *ShipModule `json:"frontUpgrade"` // Front weapons upgrade (single)
-	RearUpgrade  *ShipModule `json:"rearUpgrade"`  // Rear weapons upgrade (single)
-	ShipLength   float32     `json:"shipLength"`   // Calculated ship length based on upgrades
-	ShipWidth    float32     `json:"shipWidth"`    // Calculated ship width based on upgrades
-	Size         float32     `json:"size"`         // Base size of the ship
+	SideUpgrade  *ShipModule `msgpack:"sideUpgrade"`  // Side cannons upgrade (single)
+	TopUpgrade   *ShipModule `msgpack:"topUpgrade"`   // Top turrets upgrade (single)
+	FrontUpgrade *ShipModule `msgpack:"frontUpgrade"` // Front weapons upgrade (single)
+	RearUpgrade  *ShipModule `msgpack:"rearUpgrade"`  // Rear weapons upgrade (single)
+	ShipLength   float64     `msgpack:"shipLength"`   // Calculated ship length based on upgrades
+	ShipWidth    float64     `msgpack:"shipWidth"`    // Calculated ship width based on upgrades
+	Size         float64     `msgpack:"size"`         // Base size of the ship
 }
 
 // GetTotalEffect calculates the combined effect of all upgrades
@@ -65,11 +65,11 @@ func (sc *ShipConfiguration) UpdateUpgradePositions() {
 		cannonCount := sideUpgrade.Count // Number of cannons per side
 		gunLength := sc.ShipLength * 0.35
 		gunWidth := sc.Size * 0.2
-		gunSpacing := sc.ShipLength / float32(cannonCount+1)
+		gunSpacing := sc.ShipLength / float64(cannonCount+1)
 
 		for i := 0; i < cannonCount; i++ {
 			// Calculate horizontal position along ship length
-			cannonLeftEdge := -sc.ShipLength/2 + float32(i+1)*gunSpacing - gunLength/2
+			cannonLeftEdge := -sc.ShipLength/2 + float64(i+1)*gunSpacing - gunLength/2
 			relativeX := cannonLeftEdge + gunLength/2
 
 			// Left side cannon (positive Y in ship coordinates)
@@ -77,14 +77,14 @@ func (sc *ShipConfiguration) UpdateUpgradePositions() {
 				X: relativeX,
 				Y: sc.ShipWidth/2 + gunWidth/2,
 			}
-			sideUpgrade.Cannons[i].Angle = float32(math.Pi / 2)
+			sideUpgrade.Cannons[i].Angle = float64(math.Pi / 2)
 
 			// Right side cannon (negative Y in ship coordinates)w
 			sideUpgrade.Cannons[cannonCount+i].Position = Position{
 				X: relativeX,
 				Y: -sc.ShipWidth/2 - gunWidth/2,
 			}
-			sideUpgrade.Cannons[cannonCount+i].Angle = -float32(math.Pi / 2)
+			sideUpgrade.Cannons[cannonCount+i].Angle = -float64(math.Pi / 2)
 		}
 	}
 
@@ -92,7 +92,7 @@ func (sc *ShipConfiguration) UpdateUpgradePositions() {
 	if topUpgrade != nil && len(topUpgrade.Turrets) > 0 {
 		// Position turrets evenly along the center line of the ship
 		// Use consistent spacing with the dimension calculation
-		turretSpacing := sc.Size * 0.7
+		turretSpacing := sc.ShipLength / float64(len(topUpgrade.Turrets))
 
 		if len(topUpgrade.Turrets) == 1 {
 			// Single turret goes in the center
@@ -109,11 +109,11 @@ func (sc *ShipConfiguration) UpdateUpgradePositions() {
 
 		} else {
 			// Multiple turrets: space them evenly
-			totalTurretLength := turretSpacing * float32(len(topUpgrade.Turrets)-1)
+			totalTurretLength := turretSpacing * float64(len(topUpgrade.Turrets)-1)
 			startOffset := -totalTurretLength / 2
 
 			for i := 0; i < len(topUpgrade.Turrets); i++ {
-				offset := startOffset + turretSpacing*float32(i)
+				offset := startOffset + turretSpacing*float64(i)
 				topUpgrade.Turrets[i].Position = Position{
 					X: offset,
 					Y: 0,
@@ -153,8 +153,8 @@ func (sc *ShipConfiguration) UpdateUpgradePositions() {
 func (sc *ShipConfiguration) CalculateShipDimensions() {
 	// Start with base dimensions
 	size := sc.Size
-	baseLength := float32(size*1.2) * 0.5 // Base shaft length for 1 cannon
-	baseWidth := float32(size * 0.8)
+	baseLength := float64(size*1.2) * 0.5 // Base shaft length for 1 cannon
+	baseWidth := float64(size * 0.8)
 
 	sideLength := baseLength
 	turretLength := baseLength
@@ -168,19 +168,98 @@ func (sc *ShipConfiguration) CalculateShipDimensions() {
 	if maxSideCannonCount > 1 {
 		gunLength := size * 0.35
 		spacing := gunLength * 0.75
-		sideLength += spacing * float32(maxSideCannonCount-1)
+		sideLength += spacing * float64(maxSideCannonCount-1)
 	}
 
 	// Add length for turrets
 	turretCount := 0
 	if sc.TopUpgrade != nil {
 		turretCount = len(sc.TopUpgrade.Turrets)
+		sc.ShipWidth = baseWidth * sc.TopUpgrade.Effect.ShipWidthMultiplier
 	}
+
 	if turretCount > 0 {
-		turretSpacing := size * 0.7
-		turretLength = baseLength + turretSpacing*float32(turretCount-1)
+		turretSpacing := size * 0.6
+		if sc.TopUpgrade.Name == "Machine Gun Turret" {
+			turretSpacing = size * 1
+		}
+		if sc.TopUpgrade.Name == "Big Turret" {
+			turretSpacing = size * 1.5
+		}
+		turretLength = baseLength + turretSpacing*float64(turretCount-1)
 	}
 
 	sc.ShipLength = max(sideLength, turretLength)
 	sc.ShipWidth = max(baseWidth, sc.ShipWidth)
+}
+
+// ToMinimalShipConfig converts a ShipConfiguration to MinimalShipConfig for delta snapshots
+func (sc *ShipConfiguration) ToMinimalShipConfig() ShipConfigDelta {
+	minimal := ShipConfigDelta{
+		ShipLength: sc.ShipLength,
+		ShipWidth:  sc.ShipWidth,
+	}
+
+	// Convert side upgrade
+	if sc.SideUpgrade != nil {
+		minimal.SideUpgrade = &ShipModuleDelta{
+			Name:    sc.SideUpgrade.Name,
+			Cannons: make([]CannonDelta, len(sc.SideUpgrade.Cannons)),
+		}
+		for i, cannon := range sc.SideUpgrade.Cannons {
+			minimal.SideUpgrade.Cannons[i] = CannonDelta{
+				Position:   cannon.Position,
+				Type:       string(cannon.Type),
+				RecoilTime: cannon.RecoilTime,
+			}
+		}
+	}
+
+	// Convert front upgrade
+	if sc.FrontUpgrade != nil {
+		minimal.FrontUpgrade = &ShipModuleDelta{
+			Name:    sc.FrontUpgrade.Name,
+			Cannons: make([]CannonDelta, len(sc.FrontUpgrade.Cannons)),
+		}
+		for i, cannon := range sc.FrontUpgrade.Cannons {
+			minimal.FrontUpgrade.Cannons[i] = CannonDelta{
+				Position:   cannon.Position,
+				Type:       string(cannon.Type),
+				RecoilTime: cannon.RecoilTime,
+			}
+		}
+	}
+
+	// Convert rear upgrade
+	if sc.RearUpgrade != nil {
+		minimal.RearUpgrade = &ShipModuleDelta{
+			Name: sc.RearUpgrade.Name,
+		}
+	}
+
+	// Convert top upgrade (turrets)
+	if sc.TopUpgrade != nil {
+		minimal.TopUpgrade = &ShipModuleDelta{
+			Turrets: make([]TurretDelta, len(sc.TopUpgrade.Turrets)),
+		}
+		for i, turret := range sc.TopUpgrade.Turrets {
+			minimalTurret := TurretDelta{
+				Position:        turret.Position,
+				Angle:           turret.Angle,
+				Type:            string(turret.Type),
+				NextCannonIndex: turret.NextCannonIndex,
+				Cannons:         make([]CannonDelta, len(turret.Cannons)),
+			}
+			for j, cannon := range turret.Cannons {
+				minimalTurret.Cannons[j] = CannonDelta{
+					Position:   cannon.Position,
+					Type:       string(cannon.Type),
+					RecoilTime: cannon.RecoilTime,
+				}
+			}
+			minimal.TopUpgrade.Turrets[i] = minimalTurret
+		}
+	}
+
+	return minimal
 }

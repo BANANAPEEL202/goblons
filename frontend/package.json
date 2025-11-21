@@ -12,5 +12,8 @@
   "devDependencies": {
     "vite": "^5.0.0"
   },
-  "dependencies": {}
+  "dependencies": {
+    "@msgpack/msgpack": "^3.1.2",
+    "pako": "^2.1.0"
+  }
 }

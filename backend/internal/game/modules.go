@@ -16,22 +16,22 @@ const (
 
 // ModuleModifier represents the effects an upgrade has on ship stats
 type ModuleModifier struct {
-	SpeedMultiplier     float32 `json:"speedMultiplier"`     // Speed modification (1.0 = no change)
-	TurnRateMultiplier  float32 `json:"turnRateMultiplier"`  // Turn rate modification (1.0 = no change)
-	ShipWidthMultiplier float32 `json:"shipWidthMultiplier"` // Width modification (1.0 = no change)
+	SpeedMultiplier     float64 `msgpack:"speedMultiplier"`     // Speed modification (1.0 = no change)
+	TurnRateMultiplier  float64 `msgpack:"turnRateMultiplier"`  // Turn rate modification (1.0 = no change)
+	ShipWidthMultiplier float64 `msgpack:"shipWidthMultiplier"` // Width modification (1.0 = no change)
 }
 
 // ShipModule represents a single upgrade installed on a ship
 type ShipModule struct {
-	ID      uint32         `json:"id"`
-	Type    moduleType     `json:"type"`
-	Name    string         `json:"name"`
-	Count   int            `json:"level"`   // Upgrade level (1, 2, 3, etc.)
-	Effect  ModuleModifier `json:"effect"`  // Stat modifications
-	Cannons []*Cannon      `json:"cannons"` // Weapons (if applicable)
-	Turrets []*Turret      `json:"turrets"` // Turret weapons (if applicable)
+	ID      uint32         `msgpack:"id"`
+	Type    moduleType     `msgpack:"type"`
+	Name    string         `msgpack:"name"`
+	Count   int            `msgpack:"level"`   // Upgrade level (1, 2, 3, etc.)
+	Effect  ModuleModifier `msgpack:"effect"`  // Stat modifications
+	Cannons []*Cannon      `msgpack:"cannons"` // Weapons (if applicable)
+	Turrets []*Turret      `msgpack:"turrets"` // Turret weapons (if applicable)
 
-	NextUpgrades []*ShipModule `json:"nextUpgrades,omitempty"` // Possible next upgrades
+	NextUpgrades []*ShipModule `msgpack:"nextUpgrades,omitempty"` // Possible next upgrades
 }
 
 // Predefined upgrade templates
@@ -40,21 +40,19 @@ func NewBasicSideCannons(cannonCount int) *ShipModule {
 	// Create cannons for both sides (cannonCount per side)
 	cannons := make([]*Cannon, cannonCount*2)
 
-	// Left side cannons - angle will be calculated dynamically based on ship orientation
+	// Left side cannons
 	for i := 0; i < cannonCount; i++ {
 		cannons[i] = &Cannon{
 			ID:    uint32(i + 1),
-			Angle: 0, // Relative angle - actual angle calculated during firing
 			Stats: NewBasicCannon(),
 			Type:  WeaponTypeCannon,
 		}
 	}
 
-	// Right side cannons - angle will be calculated dynamically based on ship orientation
+	// Right side cannons
 	for i := 0; i < cannonCount; i++ {
 		cannons[cannonCount+i] = &Cannon{
 			ID:    uint32(cannonCount + i + 1),
-			Angle: 0, // Relative angle - actual angle calculated during firing
 			Stats: NewBasicCannon(),
 			Type:  WeaponTypeCannon,
 		}
@@ -82,7 +80,6 @@ func NewScatterSideCannons(cannonCount int) *ShipModule {
 	for i := 0; i < cannonCount; i++ {
 		cannons[i] = &Cannon{
 			ID:    uint32(i + 1),
-			Angle: 0, // Relative angle - actual angle calculated during firing
 			Stats: NewScatterCannon(),
 			Type:  WeaponTypeScatter,
 		}
@@ -92,7 +89,6 @@ func NewScatterSideCannons(cannonCount int) *ShipModule {
 	for i := 0; i < cannonCount; i++ {
 		cannons[cannonCount+i] = &Cannon{
 			ID:    uint32(cannonCount + i + 1),
-			Angle: 0, // Relative angle - actual angle calculated during firing
 			Stats: NewScatterCannon(),
 			Type:  WeaponTypeScatter,
 		}
@@ -118,13 +114,11 @@ func NewBasicTurrets(turretCount int) *ShipModule {
 	for i := 0; i < turretCount; i++ {
 		turretCannon := Cannon{
 			ID:    uint32(i),
-			Angle: 0, // Will be controlled by turret aiming
 			Stats: NewTurretCannon(),
 			Type:  WeaponTypeCannon,
 		}
 		turret := &Turret{
 			ID:      uint32(i + 1),
-			Angle:   0, // Will be controlled by turret aiming
 			Cannons: []Cannon{turretCannon},
 			Type:    WeaponTypeTurret,
 		}
@@ -150,13 +144,11 @@ func NewBigTurrets(turretCount int) *ShipModule {
 	for i := 0; i < turretCount; i++ {
 		turretCannon := Cannon{
 			ID:    uint32(i),
-			Angle: 0, // Will be controlled by turret aiming
 			Stats: NewBigCannon(),
 			Type:  WeaponTypeCannon,
 		}
 		turret := &Turret{
 			ID:      uint32(i + 1),
-			Angle:   0, // Will be controlled by turret aiming
 			Cannons: []Cannon{turretCannon},
 			Type:    WeaponTypeBigTurret,
 		}
@@ -170,7 +162,7 @@ func NewBigTurrets(turretCount int) *ShipModule {
 		Effect: ModuleModifier{
 			SpeedMultiplier:     -0.1,
 			TurnRateMultiplier:  -0.1,
-			ShipWidthMultiplier: 1.05,
+			ShipWidthMultiplier: 1.15,
 		},
 	}
 }
@@ -183,7 +175,6 @@ func NewMachineGunTurret(turretCount int) *ShipModule {
 		// Create two cannons for each machine gu  turret, positioned side by side
 		leftCannon := Cannon{
 			ID:    uint32(i*2 + 1),
-			Angle: 0, // Will be controlled by turret aiming
 			Stats: NewMachineGunCannon(),
 			Type:  WeaponTypeCannon,
 			Position: Position{
@@ -194,7 +185,6 @@ func NewMachineGunTurret(turretCount int) *ShipModule {
 
 		rightCannon := Cannon{
 			ID:    uint32(i*2 + 2),
-			Angle: 0, // Will be controlled by turret aiming
 			Stats: NewMachineGunCannon(),
 			Type:  WeaponTypeCannon,
 			Position: Position{
@@ -205,7 +195,6 @@ func NewMachineGunTurret(turretCount int) *ShipModule {
 
 		turret := &Turret{
 			ID:              uint32(i + 1),
-			Angle:           0, // Will be controlled by turret aiming
 			Cannons:         []Cannon{leftCannon, rightCannon},
 			Type:            WeaponTypeMachineGunTurret,
 			NextCannonIndex: 0, // Start with the first cannon
@@ -221,7 +210,7 @@ func NewMachineGunTurret(turretCount int) *ShipModule {
 		Effect: ModuleModifier{
 			SpeedMultiplier:     -0.05, // Slightly more penalty due to heavier turrets
 			TurnRateMultiplier:  -0.05,
-			ShipWidthMultiplier: 1.1,
+			ShipWidthMultiplier: 1.05,
 		},
 	}
 }
@@ -284,7 +273,7 @@ func NewSideUpgradeTree() *ShipModule {
 
 	// Root has three paths: upgrade to 2 basic cannons, switch to scatter cannons, or switch to rowing oars
 	root := NewBasicSideCannons(1)
-	root.NextUpgrades = []*ShipModule{basic2, scatter1, rowing1}
+	root.NextUpgrades = []*ShipModule{rowing1, scatter1, basic2}
 
 	return root
 }
@@ -299,7 +288,6 @@ func NewRowingUpgrade(oarCount int) *ShipModule {
 	for i := 0; i < oarCount; i++ {
 		oars[i] = &Cannon{
 			ID:    uint32(i + 1),
-			Angle: 0, // Relative angle - actual angle calculated during rowing
 			Stats: NewRowingOar(),
 			Type:  WeaponTypeRow,
 		}
@@ -309,7 +297,6 @@ func NewRowingUpgrade(oarCount int) *ShipModule {
 	for i := 0; i < oarCount; i++ {
 		oars[oarCount+i] = &Cannon{
 			ID:    uint32(oarCount + i + 1),
-			Angle: 0, // Relative angle - actual angle calculated during rowing
 			Stats: NewRowingOar(),
 			Type:  WeaponTypeRow,
 		}
@@ -321,7 +308,7 @@ func NewRowingUpgrade(oarCount int) *ShipModule {
 		Count:   oarCount,
 		Cannons: oars,
 		Effect: ModuleModifier{
-			SpeedMultiplier:     0.05,
+			SpeedMultiplier:     0.07,
 			TurnRateMultiplier:  -0.1,
 			ShipWidthMultiplier: 1.0, // No effect on width
 		},
@@ -357,14 +344,12 @@ func NewRamUpgrade() *ShipModule {
 func NewChaseCannonUpgrade() *ShipModule {
 	cannon1 := &Cannon{
 		ID:    1,
-		Angle: 0, // Forward facing
 		Stats: NewChaseCannon(),
 		Type:  WeaponTypeCannon,
 	}
 
 	cannon2 := &Cannon{
 		ID:    2,
-		Angle: 0, // Forward facing
 		Stats: NewChaseCannon(),
 		Type:  WeaponTypeCannon,
 	}

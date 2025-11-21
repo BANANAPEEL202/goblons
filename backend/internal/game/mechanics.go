@@ -58,8 +58,8 @@ func (gm *GameMechanics) HandlePlayerCollisions() {
 
 // checkRectangularCollision checks if two ships' rectangular bounding boxes collide
 func (gm *GameMechanics) checkRectangularCollision(player1, player2 *Player) bool {
-	bbox1 := gm.GetShipBoundingBox(player1)
-	bbox2 := gm.GetShipBoundingBox(player2)
+	bbox1 := player1.GetShipBoundingBox()
+	bbox2 := player2.GetShipBoundingBox()
 
 	// Check if bounding boxes overlap
 	return bbox1.MinX < bbox2.MaxX && bbox1.MaxX > bbox2.MinX &&
@@ -68,50 +68,7 @@ func (gm *GameMechanics) checkRectangularCollision(player1, player2 *Player) boo
 
 // BoundingBox represents a rectangular bounding box
 type BoundingBox struct {
-	MinX, MinY, MaxX, MaxY float32
-}
-
-// GetShipBoundingBox calculates the axis-aligned bounding box for a rotated ship
-func (gm *GameMechanics) GetShipBoundingBox(player *Player) BoundingBox {
-	// Calculate the four corners of the rotated ship rectangle
-	halfLength := player.ShipConfig.ShipLength / 2
-	halfWidth := player.ShipConfig.ShipWidth / 2
-
-	cos := float32(math.Cos(float64(player.Angle)))
-	sin := float32(math.Sin(float64(player.Angle)))
-
-	// Local corners (relative to ship center)
-	corners := []struct{ x, y float32 }{
-		{-halfLength, -halfWidth}, // Back-left
-		{halfLength, -halfWidth},  // Front-left
-		{halfLength, halfWidth},   // Front-right
-		{-halfLength, halfWidth},  // Back-right
-	}
-
-	// Transform corners to world coordinates and find bounding box
-	minX, minY := float32(math.Inf(1)), float32(math.Inf(1))
-	maxX, maxY := float32(math.Inf(-1)), float32(math.Inf(-1))
-
-	for _, corner := range corners {
-		// Rotate corner and translate to world position
-		worldX := player.X + (corner.x*cos - corner.y*sin)
-		worldY := player.Y + (corner.x*sin + corner.y*cos)
-
-		if worldX < minX {
-			minX = worldX
-		}
-		if worldX > maxX {
-			maxX = worldX
-		}
-		if worldY < minY {
-			minY = worldY
-		}
-		if worldY > maxY {
-			maxY = worldY
-		}
-	}
-
-	return BoundingBox{MinX: minX, MinY: minY, MaxX: maxX, MaxY: maxY}
+	MinX, MinY, MaxX, MaxY float64
 }
 
 // handlePlayerCollision handles what happens when two players collide
@@ -137,25 +94,25 @@ func (gm *GameMechanics) handlePlayerCollision(player1, player2 *Player) {
 
 // pushShipsApart pushes two colliding ships apart based on their bounding boxes
 func (gm *GameMechanics) pushShipsApart(p1, p2 *Player) {
-	bbox1 := gm.GetShipBoundingBox(p1)
-	bbox2 := gm.GetShipBoundingBox(p2)
+	bbox1 := p1.GetShipBoundingBox()
+	bbox2 := p2.GetShipBoundingBox()
 
 	// Calculate overlap in both axes
-	overlapX := float32(math.Min(float64(bbox1.MaxX), float64(bbox2.MaxX))) - float32(math.Max(float64(bbox1.MinX), float64(bbox2.MinX)))
-	overlapY := float32(math.Min(float64(bbox1.MaxY), float64(bbox2.MaxY))) - float32(math.Max(float64(bbox1.MinY), float64(bbox2.MinY)))
+	overlapX := float64(math.Min(float64(bbox1.MaxX), float64(bbox2.MaxX))) - float64(math.Max(float64(bbox1.MinX), float64(bbox2.MinX)))
+	overlapY := float64(math.Min(float64(bbox1.MaxY), float64(bbox2.MaxY))) - float64(math.Max(float64(bbox1.MinY), float64(bbox2.MinY)))
 
 	// Only push if there's actual overlap
 	if overlapX > 0 && overlapY > 0 {
 		// Calculate center-to-center distance for push direction
 		dx := p1.X - p2.X
 		dy := p1.Y - p2.Y
-		distance := float32(math.Sqrt(float64(dx*dx + dy*dy)))
+		distance := float64(math.Sqrt(float64(dx*dx + dy*dy)))
 
 		// Handle case where ships are at same position
 		if distance == 0 {
 			angle := rand.Float64() * 2 * math.Pi
-			dx = float32(math.Cos(angle))
-			dy = float32(math.Sin(angle))
+			dx = float64(math.Cos(angle))
+			dy = float64(math.Sin(angle))
 			distance = 1
 		}
 
@@ -176,7 +133,7 @@ func (gm *GameMechanics) pushShipsApart(p1, p2 *Player) {
 			}
 
 			// Apply velocity transfer
-			restitution := float32(0.5)
+			restitution := float64(0.5)
 			relVel := p1.VelX - p2.VelX
 			if (dx > 0 && relVel < 0) || (dx < 0 && relVel > 0) {
 				impulse := -relVel * (1 + restitution) / 2
@@ -195,7 +152,7 @@ func (gm *GameMechanics) pushShipsApart(p1, p2 *Player) {
 			}
 
 			// Apply velocity transfer
-			restitution := float32(0.5)
+			restitution := float64(0.5)
 			relVel := p1.VelY - p2.VelY
 			if (dy > 0 && relVel < 0) || (dy < 0 && relVel > 0) {
 				impulse := -relVel * (1 + restitution) / 2
@@ -211,7 +168,7 @@ func (gm *GameMechanics) pushShipsApart(p1, p2 *Player) {
 
 // applyCollisionDamage handles collision damage between two players
 func (gm *GameMechanics) applyCollisionDamage(player1, player2 *Player, now time.Time) {
-	cooldown := time.Duration(CollisionCooldown * float32(time.Second))
+	cooldown := time.Duration(CollisionCooldown * float64(time.Second))
 
 	// Check if enough time has passed since last collision damage for player1
 	if now.Sub(player1.LastCollisionDamage) >= cooldown {
@@ -243,8 +200,8 @@ func (gm *GameMechanics) SpawnFoodItems() {
 	}{
 		{ItemTypeGrayCircle, 10, 10, 30},   // Most common
 		{ItemTypeYellowCircle, 10, 10, 20}, // Common
-		{ItemTypeOrangeCircle, 30, 10, 20}, // Uncommon
-		{ItemTypeBlueDiamond, 50, 20, 10},  // Rare
+		{ItemTypeOrangeCircle, 20, 20, 20}, // Uncommon
+		{ItemTypeBlueDiamond, 30, 30, 10},  // Rare
 	}
 
 	// Calculate total weight
@@ -273,19 +230,12 @@ func (gm *GameMechanics) SpawnFoodItems() {
 
 		item := &GameItem{
 			ID:    itemID,
-			X:     float32(rand.Intn(int(WorldWidth-50)) + 25),
-			Y:     float32(rand.Intn(int(WorldHeight-50)) + 25),
+			X:     float64(rand.Intn(int(WorldWidth-50)) + 25),
+			Y:     float64(rand.Intn(int(WorldHeight-50)) + 25),
 			Type:  selectedType.name,
 			Coins: selectedType.coins,
 			XP:    selectedType.xp,
 		}
 		gm.world.items[item.ID] = item
 	}
-}
-
-// ApplyItemEffect applies the effect of a collected item to a player
-func (gm *GameMechanics) ApplyItemEffect(player *Player, item *GameItem) {
-	player.Score += item.XP
-	player.Coins += item.Coins
-	player.AddExperience(item.XP)
 }

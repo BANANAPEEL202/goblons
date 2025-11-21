@@ -37,7 +37,6 @@ func (gm *GameMechanics) ApplyDamage(target *Player, damage int, attacker *Playe
 func (gm *GameMechanics) handlePlayerDeath(victim *Player, killer *Player, cause KillCause, now time.Time) {
 	victim.Health = 0
 	victim.State = StateDead
-	victim.RespawnTime = now.Add(time.Duration(RespawnDelay) * time.Second)
 
 	// Track death information
 	victim.DeathTime = now
@@ -65,7 +64,7 @@ func (gm *GameMechanics) handlePlayerDeath(victim *Player, killer *Player, cause
 
 		if killer.ID != victim.ID && !killer.IsBot {
 			if client, exists := gm.world.GetClient(killer.ID); exists {
-				sendGameEvent(client, GameEventMsg{
+				client.sendGameEvent(GameEventMsg{
 					EventType:  "playerSunk",
 					KillerID:   killer.ID,
 					KillerName: killer.Name,
@@ -84,7 +83,8 @@ func (gm *GameMechanics) handlePlayerDeath(victim *Player, killer *Player, cause
 
 func (gm *GameMechanics) calculateKillOutcome(victim *Player) (xpReward int, coinReward int) {
 	xpReward = max(victim.Experience/2, 100)
-	coinReward = max(victim.Coins/2, 200)
+	// use score to not penalize players for killing players who have spent everything
+	coinReward = max(victim.Score/2, 200)
 	if coinReward > 2000 {
 		coinReward = 2000
 	}

@@ -1,12 +1,12 @@
 package game
 
 import (
-	"encoding/json"
+	"github.com/vmihailenco/msgpack/v5"
 	"log"
 )
 
 // sendAvailableUpgrades sends available upgrades to a specific client
-func sendAvailableUpgrades(client *Client) {
+func (client *Client) sendAvailableUpgrades() {
 	upgrades := make(map[string][]UpgradeInfo)
 
 	// Get available upgrades for each type and convert to simplified format
@@ -33,7 +33,7 @@ func sendAvailableUpgrades(client *Client) {
 		Upgrades: upgrades,
 	}
 
-	data, err := json.Marshal(upgradesMsg)
+	data, err := msgpack.Marshal(upgradesMsg)
 	if err != nil {
 		log.Printf("Error marshaling available upgrades message: %v", err)
 		return
@@ -47,10 +47,10 @@ func sendAvailableUpgrades(client *Client) {
 	}
 }
 
-func sendGameEvent(client *Client, event GameEventMsg) {
+func (client *Client) sendGameEvent(event GameEventMsg) {
 	event.Type = MsgTypeGameEvent
 
-	data, err := json.Marshal(event)
+	data, err := msgpack.Marshal(event)
 	if err != nil {
 		log.Printf("Error marshaling game event message: %v", err)
 		return
@@ -60,5 +60,44 @@ func sendGameEvent(client *Client, event GameEventMsg) {
 	case client.Send <- data:
 	default:
 		log.Printf("Could not send game event to client %d", client.ID)
+	}
+}
+
+func (client *Client) sendResetShipConfig() {
+	resetMsg := ResetShipConfigMsg{
+		Type:       MsgTypeResetShipConfig,
+		ShipConfig: client.Player.ShipConfig.ToMinimalShipConfig(),
+	}
+
+	data, err := msgpack.Marshal(resetMsg)
+	if err != nil {
+		log.Printf("Error marshaling reset ship config message: %v", err)
+		return
+	}
+
+	select {
+	case client.Send <- data:
+	default:
+		log.Printf("Could not send reset ship config to client %d", client.ID)
+	}
+}
+
+func (client *Client) sendWelcomeMessage() {
+	welcomeMsg := WelcomeMsg{
+		Type:     MsgTypeWelcome,
+		PlayerId: client.ID,
+	}
+
+	data, err := msgpack.Marshal(welcomeMsg)
+	if err != nil {
+		log.Printf("Error marshaling welcome message: %v", err)
+		return
+	}
+
+	select {
+	case client.Send <- data:
+	default:
+		// Channel full, skip
+		log.Printf("Could not send welcome message to client %d", client.ID)
 	}
 }

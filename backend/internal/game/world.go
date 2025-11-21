@@ -1,7 +1,6 @@
 package game
 
 import (
-	"encoding/json"
 	"log"
 	"math"
 	"time"
@@ -46,11 +45,10 @@ func (w *World) Start() {
 
 	log.Println("Game world started")
 	for w.running {
-		select {
-		case <-ticker.C:
-			w.update()
-		}
+		<-ticker.C
+		w.update()
 	}
+
 }
 
 // Stop stops the game world
@@ -85,10 +83,10 @@ func (w *World) AddClient(client *Client) bool {
 	client.Player.updateShipGeometry()
 
 	// Send welcome message to the new client with their player ID
-	w.sendWelcomeMessage(client)
+	client.sendWelcomeMessage()
 
 	// Send available upgrades
-	sendAvailableUpgrades(client)
+	client.sendAvailableUpgrades()
 
 	log.Printf("Player %d (%s) joined the lobby (%d/%d players)", client.ID, client.Player.Name, len(w.clients), MaxPlayers)
 	return true
@@ -131,9 +129,6 @@ func (w *World) update() {
 	// Update bot-controlled ships using AI inputs
 	w.updateBots()
 
-	// Handle respawning
-	w.handleRespawns()
-
 	// Update bullets
 	w.updateBullets()
 
@@ -147,11 +142,6 @@ func (w *World) update() {
 	w.tickCounter++
 	if w.tickCounter%1 == 0 {
 		w.broadcastSnapshot()
-	}
-
-	// Periodic cleanup every 10 seconds (300 ticks at 30 TPS)
-	if w.tickCounter%300 == 0 {
-		w.performCleanup()
 	}
 }
 
@@ -170,6 +160,8 @@ func (w *World) processPlayerActions(player *Player, input *InputMsg) {
 		if action.Sequence <= player.LastProcessedAction {
 			log.Printf("Player %d skipping already processed action seq %d (last: %d)",
 				player.ID, action.Sequence, player.LastProcessedAction)
+			// Update last processed to prevent reprocessing this sequence
+			player.LastProcessedAction = action.Sequence
 			continue
 		}
 
@@ -247,26 +239,13 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 		return
 	}
 
-	// Handle thrust (W/S keys) - this affects speed, not direction
-	var thrustForce float32 = 0
-	if input.Up {
-		thrustForce = ShipAcceleration
-	}
-	if input.Down {
-		thrustForce = -ShipAcceleration * 0.5 // Reverse is weaker
-	}
-
-	// Apply thrust in the direction the ship is facing
-	if thrustForce != 0 {
-		thrustX := float32(math.Cos(float64(player.Angle))) * thrustForce
-		thrustY := float32(math.Sin(float64(player.Angle))) * thrustForce
-		player.VelX += thrustX
-		player.VelY += thrustY
-	}
-
 	// Calculate max speed with move speed upgrade and hull strength reduction
 	maxSpeed := (BaseShipMaxSpeed * player.Modifiers.MoveSpeedMultiplier)
-	speed := min(float32(math.Sqrt(float64(player.VelX*player.VelX+player.VelY*player.VelY))), maxSpeed)
+	if input.Up {
+		player.VelX = float64(math.Cos(float64(player.Angle))) * maxSpeed
+		player.VelY = float64(math.Sin(float64(player.Angle))) * maxSpeed
+	}
+	speed := min(float64(math.Sqrt(float64(player.VelX*player.VelX+player.VelY*player.VelY))), maxSpeed)
 
 	// Scale turn speed based on current speed and ship length
 	// Example: turn faster at low speed, slower at high speed
@@ -275,7 +254,7 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 
 	// Calculate length factor - longer ships turn slower
 	// Base length for comparison (1 cannon = standard ship)
-	baseShipLength := float32(PlayerSize * 1.2)                   // 1 cannon ship has no length multiplier
+	baseShipLength := float64(PlayerSize * 1.2)                   // 1 cannon ship has no length multiplier
 	lengthFactor := baseShipLength / player.ShipConfig.ShipLength // Longer ships get smaller factor
 
 	// Apply turn speed upgrade
@@ -295,7 +274,7 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 	player.VelY *= ShipDeceleration
 
 	// Limit maximum speed
-	newSpeed := float32(math.Sqrt(float64(player.VelX*player.VelX + player.VelY*player.VelY)))
+	newSpeed := float64(math.Sqrt(float64(player.VelX*player.VelX + player.VelY*player.VelY)))
 	if newSpeed > maxSpeed {
 		speedRatio := maxSpeed / newSpeed
 		player.VelX *= speedRatio
@@ -316,48 +295,39 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 		player.AvailableUpgrades++
 	}
 
-	// Handle ship upgrades - use new modular system
-	if input.UpgradeCannons {
-		player.ShipConfig.SideUpgrade = NewBasicSideCannons(player.ShipConfig.SideUpgrade.Count + 1)
-		player.ShipConfig.CalculateShipDimensions()
-		player.ShipConfig.UpdateUpgradePositions()
-	}
-	if input.DowngradeCannons {
-		player.ShipConfig.SideUpgrade = NewBasicSideCannons(player.ShipConfig.SideUpgrade.Count - 1)
-		player.ShipConfig.CalculateShipDimensions()
-		player.ShipConfig.UpdateUpgradePositions()
-	}
-	if input.UpgradeScatter {
-		player.ShipConfig.SideUpgrade = NewScatterSideCannons(player.ShipConfig.SideUpgrade.Count + 1)
-		player.ShipConfig.CalculateShipDimensions()
-		player.ShipConfig.UpdateUpgradePositions()
-	}
-	if input.DowngradeScatter {
-		player.ShipConfig.SideUpgrade = NewScatterSideCannons(player.ShipConfig.SideUpgrade.Count - 1)
-		player.ShipConfig.CalculateShipDimensions()
-		player.ShipConfig.UpdateUpgradePositions()
-	}
-	if input.UpgradeTurrets {
-		player.ShipConfig.TopUpgrade = NewBasicTurrets(player.ShipConfig.TopUpgrade.Count + 1)
-		player.ShipConfig.CalculateShipDimensions()
-		player.ShipConfig.UpdateUpgradePositions()
-	}
-	if input.DowngradeTurrets {
-		player.ShipConfig.TopUpgrade = NewBasicTurrets(player.ShipConfig.TopUpgrade.Count - 1)
-		player.ShipConfig.CalculateShipDimensions()
-		player.ShipConfig.UpdateUpgradePositions()
-	}
+	if DEV {
+		if input.UpgradeCannons {
+			player.ShipConfig.SideUpgrade = NewBasicSideCannons(player.ShipConfig.SideUpgrade.Count + 1)
+			player.ShipConfig.CalculateShipDimensions()
+			player.ShipConfig.UpdateUpgradePositions()
+		}
+		if input.DowngradeCannons {
+			player.ShipConfig.SideUpgrade = NewBasicSideCannons(player.ShipConfig.SideUpgrade.Count - 1)
+			player.ShipConfig.CalculateShipDimensions()
+			player.ShipConfig.UpdateUpgradePositions()
+		}
+		if input.UpgradeTurrets {
+			player.ShipConfig.TopUpgrade = NewBasicTurrets(player.ShipConfig.TopUpgrade.Count + 1)
+			player.ShipConfig.CalculateShipDimensions()
+			player.ShipConfig.UpdateUpgradePositions()
+		}
+		if input.DowngradeTurrets {
+			player.ShipConfig.TopUpgrade = NewBasicTurrets(player.ShipConfig.TopUpgrade.Count - 1)
+			player.ShipConfig.CalculateShipDimensions()
+			player.ShipConfig.UpdateUpgradePositions()
+		}
 
-	// Handle leveling system
-	if input.DebugLevelUp {
-		player.DebugLevelUp()
-		// Send updated available upgrades to client
-		if client, exists := w.GetClient(player.ID); exists {
-			sendAvailableUpgrades(client)
+		// Handle leveling system
+		if input.DebugLevelUp {
+			player.DebugLevelUp()
+			// Send updated available upgrades to client
+			if client, exists := w.GetClient(player.ID); exists {
+				client.sendAvailableUpgrades()
+			}
 		}
 	}
 
-	// Handle upgrade selection (only one upgrade per level with cooldown protection)
+	// Handle module selection (only one module per level with cooldown protection)
 	if input.SelectUpgrade != "" && input.UpgradeChoice != "" && player.AvailableUpgrades > 0 {
 		// Get client for cooldown check
 		if client, exists := w.GetClient(player.ID); exists {
@@ -393,7 +363,7 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 					log.Printf("Player %d applied upgrade %s:%s, remaining upgrades: %d",
 						player.ID, upgradeType, input.UpgradeChoice, player.AvailableUpgrades)
 					// Send updated available upgrades to client
-					sendAvailableUpgrades(client)
+					client.sendAvailableUpgrades()
 				}
 			}
 		}
@@ -405,84 +375,17 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 
 	// Handle health regeneration from auto repairs upgrade
 	// Regenerate health based on time elapsed
-	elapsedSeconds := float32(now.Sub(player.LastRegenTime).Seconds())
-	if elapsedSeconds >= 0.2 {
-		healthToRegen := int(elapsedSeconds * player.Modifiers.HealthRegenPerSec)
-		if healthToRegen > 0 && player.Health < player.MaxHealth {
-			player.Health += healthToRegen
-			if player.Health > player.MaxHealth {
-				player.Health = player.MaxHealth
-			}
-			player.LastRegenTime = now
+	elapsedSeconds := float64(1 / TickRate)
+	healthToRegen := int(elapsedSeconds * player.Modifiers.HealthRegenPerSec)
+	if healthToRegen > 0 && player.Health < player.MaxHealth {
+		player.Health += healthToRegen
+		if player.Health > player.MaxHealth {
+			player.Health = player.MaxHealth
 		}
-
 	}
 
 	// Keep player within world boundaries
 	w.keepPlayerInBounds(player)
-}
-
-// performCleanup removes old entities and prevents memory leaks
-func (w *World) performCleanup() {
-	now := time.Now()
-
-	// Clean up old bullets (in case some weren't removed properly)
-	oldBullets := 0
-	for id, bullet := range w.bullets {
-		if now.Sub(bullet.CreatedAt).Seconds() > BulletLifetime+5 { // 5 second grace period
-			delete(w.bullets, id)
-			oldBullets++
-		}
-	}
-
-	// Limit total bullets to prevent memory issues
-	if len(w.bullets) > 1000 {
-		// Remove oldest bullets
-		type bulletAge struct {
-			id  uint32
-			age time.Duration
-		}
-		bulletAges := make([]bulletAge, 0, len(w.bullets))
-		for id, bullet := range w.bullets {
-			bulletAges = append(bulletAges, bulletAge{id, now.Sub(bullet.CreatedAt)})
-		}
-
-		// Sort by age (oldest first)
-		for i := 0; i < len(bulletAges)-1; i++ {
-			for j := i + 1; j < len(bulletAges); j++ {
-				if bulletAges[i].age < bulletAges[j].age {
-					bulletAges[i], bulletAges[j] = bulletAges[j], bulletAges[i]
-				}
-			}
-		}
-
-		// Remove oldest bullets to get under limit
-		toRemove := len(w.bullets) - 800 // Keep 800, remove excess
-		for i := 0; i < toRemove && i < len(bulletAges); i++ {
-			delete(w.bullets, bulletAges[i].id)
-		}
-		log.Printf("Cleaned up %d excess bullets", toRemove)
-	}
-
-	// Limit total items to prevent server overload
-	if len(w.items) > 500 {
-		// Remove oldest items
-		itemsToRemove := len(w.items) - 400 // Keep 400, remove excess
-		count := 0
-		for id := range w.items {
-			if count >= itemsToRemove {
-				break
-			}
-			delete(w.items, id)
-			count++
-		}
-		log.Printf("Cleaned up %d excess items", itemsToRemove)
-	}
-
-	if oldBullets > 0 {
-		log.Printf("Cleanup: removed %d old bullets, %d total bullets, %d total items",
-			oldBullets, len(w.bullets), len(w.items))
-	}
 }
 
 // checkCollisions handles player-item collisions (optimized)
@@ -532,28 +435,27 @@ func (w *World) collectItem(playerID, itemID uint32) {
 		return
 	}
 
-	// Use the mechanics system to apply item effects
-	w.mechanics.ApplyItemEffect(player, item)
+	player.Score += item.XP
+	player.Coins += item.Coins
+	player.AddExperience(item.XP)
 
 	delete(w.items, itemID)
 }
 
-// handleRespawns checks for dead players that need to respawn
-func (w *World) handleRespawns() {
+// handleBotRespawns checks for dead players that need to respawn
+func (w *World) handleBotRespawns() {
 	now := time.Now()
 	for _, player := range w.players {
-		if player.State == StateDead && now.After(player.RespawnTime) {
-			if player.IsBot {
+		if player.IsBot {
+			if player.State == StateDead && now.After(player.RespawnTime) {
 				if bot, exists := w.bots[player.ID]; exists {
 					w.respawnBot(bot, now)
 				}
 				continue
 			}
-
-			// For human players, don't auto-respawn - wait for their respawn request
-			// The respawn is handled in processInput when RequestRespawn is true
 		}
 	}
+
 }
 
 // spawnItems continuously spawns items in the world (with limits)
@@ -580,86 +482,6 @@ func (w *World) spawnItems() {
 			}
 			w.mu.Unlock()
 		}
-	}
-}
-
-// broadcastSnapshot sends the current game state to all clients (optimized)
-func (w *World) broadcastSnapshot() {
-	// Limit data to reduce bandwidth
-	maxItems := MaxItems * 2
-	maxBullets := 300
-
-	snapshot := Snapshot{
-		Type:    MsgTypeSnapshot,
-		Players: make([]Player, 0, len(w.players)),
-		Items:   make([]GameItem, 0, min(len(w.items), maxItems)),
-		Bullets: make([]Bullet, 0, min(len(w.bullets), maxBullets)),
-		Time:    time.Now().UnixMilli(),
-	}
-
-	// Add all players to snapshot
-	for _, player := range w.players {
-		// Calculate debug info for this player
-		player.DebugInfo = w.calculateDebugInfo(player)
-		snapshot.Players = append(snapshot.Players, *player)
-	}
-
-	// Add limited items to snapshot (prioritize closer items for performance)
-	itemCount := 0
-	for _, item := range w.items {
-		if itemCount >= maxItems {
-			break
-		}
-		snapshot.Items = append(snapshot.Items, *item)
-		itemCount++
-	}
-
-	// Add limited bullets to snapshot
-	bulletCount := 0
-	for _, bullet := range w.bullets {
-		if bulletCount >= maxBullets {
-			break
-		}
-		snapshot.Bullets = append(snapshot.Bullets, *bullet)
-		bulletCount++
-	}
-
-	data, err := json.Marshal(snapshot)
-	if err != nil {
-		log.Printf("Error marshaling snapshot: %v", err)
-		return
-	}
-
-	// Send to all clients concurrently (non-blocking)
-	for _, client := range w.clients {
-		go func(c *Client) {
-			select {
-			case c.Send <- data:
-			case <-time.After(10 * time.Millisecond):
-				// Skip slow clients to prevent blocking
-			}
-		}(client)
-	}
-}
-
-// sendWelcomeMessage sends a welcome message to a specific client with their player ID
-func (w *World) sendWelcomeMessage(client *Client) {
-	welcomeMsg := WelcomeMsg{
-		Type:     MsgTypeWelcome,
-		PlayerId: client.ID,
-	}
-
-	data, err := json.Marshal(welcomeMsg)
-	if err != nil {
-		log.Printf("Error marshaling welcome message: %v", err)
-		return
-	}
-
-	select {
-	case client.Send <- data:
-	default:
-		// Channel full, skip
-		log.Printf("Could not send welcome message to client %d", client.ID)
 	}
 }
 
@@ -696,8 +518,8 @@ func (w *World) HandleInput(clientID uint32, input InputMsg) {
 
 // keepPlayerInBounds ensures a player stays within the world boundaries
 func (w *World) keepPlayerInBounds(player *Player) {
-	player.X = float32(math.Max(float64(player.ShipConfig.Size/2), math.Min(float64(WorldWidth-player.ShipConfig.Size/2), float64(player.X))))
-	player.Y = float32(math.Max(float64(player.ShipConfig.Size/2), math.Min(float64(WorldHeight-player.ShipConfig.Size/2), float64(player.Y))))
+	player.X = float64(math.Max(0, math.Min(WorldWidth, player.X)))
+	player.Y = float64(math.Max(0, math.Min(WorldHeight, player.Y)))
 }
 
 // updateBullets handles bullet movement and cleanup (optimized)
@@ -720,14 +542,12 @@ func (w *World) updateBullets() {
 		bullet.X += bullet.VelX
 		bullet.Y += bullet.VelY
 
-		// Remove bullets that are out of bounds
+		// skip out of bounds bullets
 		if bullet.X < -100 || bullet.X > WorldWidth+100 || bullet.Y < -100 || bullet.Y > WorldHeight+100 {
-			bulletsToDelete = append(bulletsToDelete, id)
 			continue
 		}
 
 		// Check collision with players (only if bullet is in world bounds)
-		bulletHit := false
 		var attacker *Player
 		if shooter, exists := w.players[bullet.OwnerID]; exists {
 			attacker = shooter
@@ -748,20 +568,16 @@ func (w *World) updateBullets() {
 				// Apply damage through mechanics system (handles death + rewards)
 				damage := bullet.Damage * int(attacker.Modifiers.BulletDamageMultiplier)
 				if damage == 0 {
-					damage = BulletDamage // Fallback to default for legacy bullets
+					damage = BulletDamage
+					log.Printf("Bullet damage calculated as 0 for player %d, defaulting to %d", attacker.ID, BulletDamage)
 				}
 				w.mechanics.ApplyDamage(player, damage, attacker, KillCauseBullet, now)
 
 				// Mark bullet for deletion
 				bulletsToDelete = append(bulletsToDelete, id)
-				bulletHit = true
 
 				break // Bullet hit something, stop checking other players
 			}
-		}
-
-		if bulletHit {
-			break // Move to next bullet
 		}
 	}
 
@@ -773,30 +589,30 @@ func (w *World) updateBullets() {
 
 // checkBulletPlayerCollision checks if a bullet collides with a player using rectangular bounding boxes
 func (w *World) checkBulletPlayerCollision(bullet *Bullet, player *Player) bool {
-	// Get player's bounding box using the mechanics instance
-	playerBbox := w.mechanics.GetShipBoundingBox(player)
+	playerBbox := player.GetShipBoundingBox()
 
-	// Create bullet bounding box (treat bullet as a small rectangle)
-	bulletHalfSize := bullet.Size / 2
-	bulletBbox := BoundingBox{
-		MinX: bullet.X - bulletHalfSize,
-		MinY: bullet.Y - bulletHalfSize,
-		MaxX: bullet.X + bulletHalfSize,
-		MaxY: bullet.Y + bulletHalfSize,
-	}
+	// Bullet treated as a circle
+	cx, cy := bullet.X, bullet.Y
 
-	// Check if bounding boxes overlap
-	return bulletBbox.MinX < playerBbox.MaxX && bulletBbox.MaxX > playerBbox.MinX &&
-		bulletBbox.MinY < playerBbox.MaxY && bulletBbox.MaxY > playerBbox.MinY
+	// Find the closest point on the rectangle to the bullet center
+	closestX := math.Max(playerBbox.MinX, math.Min(cx, playerBbox.MaxX))
+	closestY := math.Max(playerBbox.MinY, math.Min(cy, playerBbox.MaxY))
+
+	// Compute distance from bullet center to that closest point
+	dx := cx - closestX
+	dy := cy - closestY
+	distSq := dx*dx + dy*dy
+
+	return distSq <= bullet.Radius*bullet.Radius
 }
 
 // checkPlayerItemCollision checks if a player collides with an item using rectangular bounding boxes
 func (w *World) checkPlayerItemCollision(player *Player, item *GameItem) bool {
 	// Get player's bounding box using the mechanics instance
-	playerBbox := w.mechanics.GetShipBoundingBox(player)
+	playerBbox := player.GetShipBoundingBox()
 
 	// Create item bounding box (treat item as a small rectangle)
-	itemHalfSize := float32(ItemPickupSize) / 2
+	itemHalfSize := float64(ItemPickupSize) / 2
 	itemBbox := BoundingBox{
 		MinX: item.X - itemHalfSize,
 		MinY: item.Y - itemHalfSize,
@@ -947,7 +763,7 @@ func (w *World) updateModularTurretAiming(player *Player, input *InputMsg) {
 
 // calculateDebugInfo computes debug values for client display
 func (w *World) calculateDebugInfo(player *Player) DebugInfo {
-	baseShipLength := float32(PlayerSize * 1.2)                   // 1 cannon ship has no length multiplier
+	baseShipLength := float64(PlayerSize * 1.2)                   // 1 cannon ship has no length multiplier
 	lengthFactor := baseShipLength / player.ShipConfig.ShipLength // Longer ships get smaller factor
 	debugInfo := DebugInfo{
 		Health:            player.MaxHealth,
@@ -969,31 +785,37 @@ func (w *World) calculateDebugInfo(player *Player) DebugInfo {
 	// Calculate DPS for each upgrade type
 	if player.ShipConfig.FrontUpgrade != nil {
 		for _, cannon := range player.ShipConfig.FrontUpgrade.Cannons {
-			damage := float32(cannon.Stats.BulletDamageMod * BulletDamage)
+			damage := float64(cannon.Stats.BulletDamageMod * BulletDamage)
 			reloadRate := cannon.Stats.ReloadTime
 			effectiveDamage := damage * (cannonDamageMod)
 			effectiveReloadRate := reloadRate * (reloadSpeedMod)
-			debugInfo.FrontDPS += effectiveDamage * 1 / effectiveReloadRate
+			if effectiveReloadRate > 0 {
+				debugInfo.FrontDPS += effectiveDamage * 1 / effectiveReloadRate
+			}
 		}
 	}
 
 	if player.ShipConfig.SideUpgrade != nil {
 		for _, cannon := range player.ShipConfig.SideUpgrade.Cannons {
-			damage := float32(cannon.Stats.BulletDamageMod * BulletDamage)
+			damage := float64(cannon.Stats.BulletDamageMod * BulletDamage)
 			reloadRate := cannon.Stats.ReloadTime
 			effectiveDamage := damage * (cannonDamageMod)
 			effectiveReloadRate := reloadRate * (reloadSpeedMod)
-			debugInfo.SideDPS += effectiveDamage * 1 / effectiveReloadRate
+			if effectiveReloadRate > 0 {
+				debugInfo.SideDPS += effectiveDamage * 1 / effectiveReloadRate
+			}
 		}
 	}
 
 	if player.ShipConfig.RearUpgrade != nil {
 		for _, cannon := range player.ShipConfig.RearUpgrade.Cannons {
-			damage := float32(cannon.Stats.BulletDamageMod * BulletDamage)
+			damage := float64(cannon.Stats.BulletDamageMod * BulletDamage)
 			reloadRate := cannon.Stats.ReloadTime
 			effectiveDamage := damage * (cannonDamageMod)
 			effectiveReloadRate := reloadRate * (reloadSpeedMod)
-			debugInfo.RearDPS += effectiveDamage * 1 / effectiveReloadRate
+			if effectiveReloadRate > 0 {
+				debugInfo.RearDPS += effectiveDamage * 1 / effectiveReloadRate
+			}
 		}
 	}
 
@@ -1003,15 +825,16 @@ func (w *World) calculateDebugInfo(player *Player) DebugInfo {
 			// machine gun dual cannon shares reload
 			turretCannon := turret.Cannons[0]
 
-			damage := float32(turretCannon.Stats.BulletDamageMod * BulletDamage)
+			damage := float64(turretCannon.Stats.BulletDamageMod * BulletDamage)
 			reloadRate := turretCannon.Stats.ReloadTime
 			effectiveDamage := damage * (cannonDamageMod)
 			effectiveReloadRate := reloadRate * (reloadSpeedMod)
-			debugInfo.TopDPS += effectiveDamage * 1 / effectiveReloadRate
+			if effectiveReloadRate > 0 {
+				debugInfo.TopDPS += effectiveDamage * 1 / effectiveReloadRate
+			}
 		}
 	}
 
-	// Calculate total DPS
 	debugInfo.TotalDPS = debugInfo.FrontDPS + debugInfo.SideDPS + debugInfo.RearDPS + debugInfo.TopDPS
 
 	return debugInfo
