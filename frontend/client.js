@@ -162,8 +162,18 @@ class GameClient {
     this.ctx.scale(dpr, dpr);
 
     // Store screen dimensions for rendering calculations
-    this.screenWidth = displayWidth;
-    this.screenHeight = displayHeight;
+    // Use base viewport size if available (to prevent zoom from revealing more map)
+    // Otherwise use current viewport size
+    if (window.gameBaseViewportWidth && window.gameBaseViewportHeight) {
+      this.screenWidth = window.gameBaseViewportWidth;
+      this.screenHeight = window.gameBaseViewportHeight;
+    } else {
+      // First time - store as base
+      this.screenWidth = displayWidth;
+      this.screenHeight = displayHeight;
+      window.gameBaseViewportWidth = displayWidth;
+      window.gameBaseViewportHeight = displayHeight;
+    }
   }
 
   setupEventListeners() {
@@ -1342,10 +1352,14 @@ class GameClient {
       const prevCameraY = this.camera.y;
 
       // Use server position for camera to avoid jitter
+      // Use base viewport size for camera calculations to prevent zoom from revealing more map
+      const viewportWidth = window.gameBaseViewportWidth || this.screenWidth;
+      const viewportHeight = window.gameBaseViewportHeight || this.screenHeight;
+      
       // this.camera.targetX = this.predictedPlayerPos.x - this.screenWidth / 2;
       // this.camera.targetY = this.predictedPlayerPos.y - this.screenHeight / 2;
-      this.camera.targetX = this.gameState.myPlayer.x - this.screenWidth / 2;
-      this.camera.targetY = this.gameState.myPlayer.y - this.screenHeight / 2;
+      this.camera.targetX = this.gameState.myPlayer.x - viewportWidth / 2;
+      this.camera.targetY = this.gameState.myPlayer.y - viewportHeight / 2;
 
       // Smooth camera movement
       const cameraLerpFactor = 1;
@@ -1383,15 +1397,36 @@ class GameClient {
   }
 
   render() {
-    // Clear canvas
+    // Get base viewport size for game logic (prevents zoom from revealing more map)
+    const baseWidth = window.gameBaseViewportWidth || this.screenWidth;
+    const baseHeight = window.gameBaseViewportHeight || this.screenHeight;
+    const actualWidth = window.innerWidth;
+    const actualHeight = window.innerHeight;
+    
+    // Save context state
+    this.ctx.save();
+    
+    // Clip to base viewport size to prevent zoom from showing more of the map
+    // Center the clip region if actual viewport is larger
+    const clipX = Math.max(0, (actualWidth - baseWidth) / 2);
+    const clipY = Math.max(0, (actualHeight - baseHeight) / 2);
+    this.ctx.beginPath();
+    this.ctx.rect(clipX, clipY, baseWidth, baseHeight);
+    this.ctx.clip();
+    
+    // Translate to clip region for rendering
+    this.ctx.translate(clipX, clipY);
+    
+    // Clear canvas (using base viewport size)
     this.ctx.fillStyle = '#95c1f7ff';
-    this.ctx.fillRect(0, 0, this.screenWidth, this.screenHeight);
+    this.ctx.fillRect(0, 0, baseWidth, baseHeight);
 
     if (!this.isConnected) {
       this.ctx.fillStyle = '#ff6b6b';
       this.ctx.font = '24px Arial';
       this.ctx.textAlign = 'center';
-      this.ctx.fillText('Connecting...', this.screenWidth / 2, this.screenHeight / 2);
+      this.ctx.fillText('Connecting...', baseWidth / 2, baseHeight / 2);
+      this.ctx.restore();
       return;
     }
 
@@ -1428,6 +1463,9 @@ class GameClient {
 
     // Draw death screen on top of everything
     this.drawDeathScreen();
+    
+    // Restore context state (remove clipping)
+    this.ctx.restore();
   }
 
   drawGrid() {

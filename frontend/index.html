@@ -500,6 +500,48 @@
     document.addEventListener('gestureend', (e) => {
       e.preventDefault();
     });
+
+    // Fix for issue #26: Prevent browser UI zoom from revealing more of the map
+    // Store the base viewport size at 100% zoom
+    let baseViewportWidth = window.innerWidth;
+    let baseViewportHeight = window.innerHeight;
+    let baseZoomRatio = window.outerWidth / window.innerWidth;
+    
+    // Function to detect and compensate for browser zoom
+    function handleBrowserZoom() {
+      const currentZoomRatio = window.outerWidth / window.innerWidth;
+      const zoomLevel = currentZoomRatio / baseZoomRatio;
+      
+      // If zoom changed significantly (more than 1% difference)
+      if (Math.abs(zoomLevel - 1) > 0.01) {
+        // Store the zoom level in a way the game client can access it
+        // We'll use a CSS custom property and also store it on window
+        window.gameZoomLevel = 1 / zoomLevel; // Inverse zoom to compensate
+        document.documentElement.style.setProperty('--game-zoom', window.gameZoomLevel);
+        
+        // Also store the base viewport size so the game can use it
+        window.gameBaseViewportWidth = baseViewportWidth;
+        window.gameBaseViewportHeight = baseViewportHeight;
+      } else {
+        // Reset if back to normal
+        window.gameZoomLevel = 1;
+        document.documentElement.style.setProperty('--game-zoom', '1');
+        // Update base values in case of actual window resize
+        baseViewportWidth = window.innerWidth;
+        baseViewportHeight = window.innerHeight;
+        baseZoomRatio = currentZoomRatio;
+      }
+    }
+    
+    // Check for zoom changes periodically and on resize
+    setInterval(handleBrowserZoom, 100);
+    window.addEventListener('resize', () => {
+      // Small delay to distinguish between zoom and resize
+      setTimeout(handleBrowserZoom, 50);
+    });
+    
+    // Initial setup
+    handleBrowserZoom();
   </script>
 </body>
 
