@@ -331,7 +331,7 @@ func (player *Player) updateModifiers() {
 	}
 
 	healthLevel := player.Upgrades[StatUpgradeHullStrength].Level
-	player.MaxHealth = 100.0 + float32(healthLevel * HealthIncrease)
+	player.MaxHealth = 100.0 + float64(healthLevel * HealthIncrease)
 
 	hullLevel := player.Upgrades[StatUpgradeHullStrength].Level
 	moveLevel := player.Upgrades[StatUpgradeMoveSpeed].Level

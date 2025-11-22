@@ -15,14 +15,14 @@ const (
 )
 
 // ApplyDamage subtracts health from the target and handles death side-effects.
-func (gm *GameMechanics) ApplyDamage(target *Player, damage float32, attacker *Player, cause KillCause, now time.Time) bool {
+func (gm *GameMechanics) ApplyDamage(target *Player, damage float64, attacker *Player, cause KillCause, now time.Time) bool {
 	if target == nil || target.State != StateAlive || damage <= 0 {
 		return false
 	}
 
 	if damage == 0 {
 		log.Printf("Warning: Attempted to apply zero damage to Player %d", target.ID)
-		damage = 1.0 // Ensure at least 1 damage is applied
+		damage = 1.0 // Ensure at least 1.0 damage is applied
 	}
 
 	target.Health -= damage
