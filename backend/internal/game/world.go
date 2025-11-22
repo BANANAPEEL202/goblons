@@ -375,8 +375,8 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 
 	// Handle health regeneration from auto repairs upgrade
 	// Regenerate health based on time elapsed
-	elapsedSeconds := float64(1 / TickRate)
-	healthToRegen := int(elapsedSeconds * player.Modifiers.HealthRegenPerSec)
+	elapsedSeconds := float32(1.0 / float64(TickRate))
+	healthToRegen := elapsedSeconds * float32(player.Modifiers.HealthRegenPerSec)
 	if healthToRegen > 0 && player.Health < player.MaxHealth {
 		player.Health += healthToRegen
 		if player.Health > player.MaxHealth {
@@ -566,9 +566,9 @@ func (w *World) updateBullets() {
 			// Only do expensive collision check if close enough (player size + some margin)
 			if distSq < 10000 && w.checkBulletPlayerCollision(bullet, player) { // 100^2 = 10000
 				// Apply damage through mechanics system (handles death + rewards)
-				damage := bullet.Damage * int(attacker.Modifiers.BulletDamageMultiplier)
+				damage := bullet.Damage * float32(attacker.Modifiers.BulletDamageMultiplier)
 				if damage == 0 {
-					damage = BulletDamage
+					damage = float32(BulletDamage)
 					log.Printf("Bullet damage calculated as 0 for player %d, defaulting to %d", attacker.ID, BulletDamage)
 				}
 				w.mechanics.ApplyDamage(player, damage, attacker, KillCauseBullet, now)

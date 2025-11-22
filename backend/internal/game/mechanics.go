@@ -83,11 +83,11 @@ func (gm *GameMechanics) handlePlayerCollision(player1, player2 *Player) {
 
 	// Frontal ram logic
 	if gm.isFrontalRam(player1, player2) && player1.ShipConfig.FrontUpgrade != nil && player1.ShipConfig.FrontUpgrade.Name == "Ram" {
-		ramDamage := 15 // Base ram damage, can be made configurable/stat-based
+		ramDamage := float32(15.0) // Base ram damage, can be made configurable/stat-based
 		gm.ApplyDamage(player2, ramDamage, player1, KillCauseRam, now)
 	}
 	if gm.isFrontalRam(player2, player1) && player2.ShipConfig.FrontUpgrade != nil && player2.ShipConfig.FrontUpgrade.Name == "Ram" {
-		ramDamage := 1
+		ramDamage := float32(1.0)
 		gm.ApplyDamage(player1, ramDamage, player2, KillCauseRam, now)
 	}
 }
@@ -173,7 +173,7 @@ func (gm *GameMechanics) applyCollisionDamage(player1, player2 *Player, now time
 	// Check if enough time has passed since last collision damage for player1
 	if now.Sub(player1.LastCollisionDamage) >= cooldown {
 		// Calculate damage from player1 to player2
-		damageToPlayer2 := BaseCollisionDamage + int(player1.Modifiers.BodyDamageBonus)
+		damageToPlayer2 := float32(BaseCollisionDamage + player1.Modifiers.BodyDamageBonus)
 		gm.ApplyDamage(player2, damageToPlayer2, player1, KillCauseCollision, now)
 
 		player1.LastCollisionDamage = now
@@ -182,7 +182,7 @@ func (gm *GameMechanics) applyCollisionDamage(player1, player2 *Player, now time
 	// Check if enough time has passed since last collision damage for player2
 	if now.Sub(player2.LastCollisionDamage) >= cooldown {
 		// Calculate damage from player2 to player1
-		damageToPlayer1 := BaseCollisionDamage + int(player2.Modifiers.BodyDamageBonus)
+		damageToPlayer1 := float32(BaseCollisionDamage + player2.Modifiers.BodyDamageBonus)
 		gm.ApplyDamage(player1, damageToPlayer1, player2, KillCauseCollision, now)
 
 		player2.LastCollisionDamage = now
