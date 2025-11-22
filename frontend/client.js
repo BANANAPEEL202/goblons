@@ -467,12 +467,6 @@ class GameClient {
         break;
 
       case 'deltaSnapshot':
-        // Remove players that disconnected
-        if (data.playersRemoved && data.playersRemoved.length > 0) {
-          const removedIds = new Set(data.playersRemoved);
-          this.gameState.players = this.gameState.players.filter(p => !removedIds.has(p.id));
-        }
-
         // Apply player deltas to existing players
         if (data.players) {
           for (const deltaPlayer of data.players) {

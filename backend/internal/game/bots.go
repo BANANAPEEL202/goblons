@@ -35,46 +35,6 @@ const (
 
 var botColors = []string{"#5B73FF", "#FF6F61", "#48C9B0"}
 
-const (
-	minSpawnDistanceFromPlayers = 300.0 // Minimum distance bots should spawn from players
-	maxSpawnAttempts            = 50    // Maximum attempts to find a safe spawn position
-)
-
-// findSafeSpawnPosition finds a spawn position that's away from other players
-func (w *World) findSafeSpawnPosition() (Position, bool) {
-	for attempt := 0; attempt < maxSpawnAttempts; attempt++ {
-		spawnPos := Position{
-			X: float64(rand.Intn(int(WorldWidth-200)) + 100),
-			Y: float64(rand.Intn(int(WorldHeight-200)) + 100),
-		}
-
-		// Check distance from all existing players
-		tooClose := false
-		for _, player := range w.players {
-			if player == nil || player.IsBot {
-				continue
-			}
-			dx := spawnPos.X - player.X
-			dy := spawnPos.Y - player.Y
-			distance := math.Sqrt(dx*dx + dy*dy)
-			if distance < minSpawnDistanceFromPlayers {
-				tooClose = true
-				break
-			}
-		}
-
-		if !tooClose {
-			return spawnPos, true
-		}
-	}
-
-	// If we couldn't find a safe position after max attempts, return a random one anyway
-	return Position{
-		X: float64(rand.Intn(int(WorldWidth-200)) + 100),
-		Y: float64(rand.Intn(int(WorldHeight-200)) + 100),
-	}, false
-}
-
 func (w *World) spawnInitialBots() {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -95,8 +55,11 @@ func (w *World) spawnInitialBots() {
 		player.Level = 25
 		player.AvailableUpgrades = 0
 
-		// Find a safe spawn position away from players
-		spawnPos, _ := w.findSafeSpawnPosition()
+		// Random spawn position with some padding from edges
+		spawnPos := Position{
+			X: float64(rand.Intn(int(WorldWidth-200)) + 100),
+			Y: float64(rand.Intn(int(WorldHeight-200)) + 100),
+		}
 
 		player.X = spawnPos.X
 		player.Y = spawnPos.Y
@@ -328,8 +291,11 @@ func (w *World) respawnBot(bot *Bot, now time.Time) {
 
 	w.applyBotLoadout(player)
 
-	// Find a safe respawn position away from players
-	spawnPos, _ := w.findSafeSpawnPosition()
+	// Random respawn position with some padding from edges
+	spawnPos := Position{
+		X: float64(rand.Intn(int(WorldWidth-200)) + 100),
+		Y: float64(rand.Intn(int(WorldHeight-200)) + 100),
+	}
 
 	player.State = StateAlive
 	player.X = spawnPos.X

@@ -35,6 +35,8 @@
       position: relative;
       width: 100vw;
       height: 100vh;
+      /* Lock viewport to prevent zoom from revealing more map */
+      overflow: hidden;
     }
 
     canvas {
@@ -42,6 +44,11 @@
       display: block;
       width: 100vw;
       height: 100vh;
+      /* Prevent browser zoom from affecting canvas size */
+      min-width: 100vw;
+      max-width: 100vw;
+      min-height: 100vh;
+      max-height: 100vh;
     }
 
     #hud {
@@ -500,6 +507,35 @@
     document.addEventListener('gestureend', (e) => {
       e.preventDefault();
     });
+
+    // Detect and compensate for browser UI zoom to prevent seeing more of the map
+    // Use outerWidth/innerWidth ratio to detect zoom (this ratio changes with zoom but not window resize)
+    let baseZoomRatio = window.outerWidth / window.innerWidth;
+    
+    function compensateBrowserZoom() {
+      const currentZoomRatio = window.outerWidth / window.innerWidth;
+      const zoomLevel = currentZoomRatio / baseZoomRatio;
+      
+      // If zoom level is not 1, user has zoomed - compensate with CSS zoom
+      if (Math.abs(zoomLevel - 1) > 0.01) {
+        // Apply inverse zoom to maintain same visible area
+        // If browser zoomed out (zoomLevel < 1), we zoom in to compensate
+        // If browser zoomed in (zoomLevel > 1), we zoom out to compensate
+        document.documentElement.style.zoom = 1 / zoomLevel;
+      } else {
+        // Reset if back to normal zoom
+        document.documentElement.style.zoom = 1;
+        // Update base ratio in case it drifted slightly
+        baseZoomRatio = currentZoomRatio;
+      }
+    }
+    
+    // Check for zoom changes periodically and on resize
+    setInterval(compensateBrowserZoom, 100);
+    window.addEventListener('resize', compensateBrowserZoom);
+    
+    // Initial check
+    compensateBrowserZoom();
   </script>
 </body>
 
