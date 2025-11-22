@@ -52,8 +52,8 @@ func (player *Player) respawn() {
 	player.Level = 1
 	player.AvailableUpgrades = 0
 	player.Score = respawnScore
-	player.Health = 100
-	player.MaxHealth = 100
+	player.Health = 100.0
+	player.MaxHealth = 100.0
 	player.State = StateAlive
 	player.LastCollisionDamage = now
 
@@ -331,7 +331,7 @@ func (player *Player) updateModifiers() {
 	}
 
 	healthLevel := player.Upgrades[StatUpgradeHullStrength].Level
-	player.MaxHealth = 100 + (healthLevel * HealthIncrease)
+	player.MaxHealth = 100.0 + float64(healthLevel * HealthIncrease)
 
 	hullLevel := player.Upgrades[StatUpgradeHullStrength].Level
 	moveLevel := player.Upgrades[StatUpgradeMoveSpeed].Level
@@ -341,7 +341,7 @@ func (player *Player) updateModifiers() {
 	player.Modifiers.MoveSpeedMultiplier += moduleSpeedModifier
 
 	repairLevel := player.Upgrades[StatUpgradeAutoRepairs].Level
-	player.Modifiers.HealthRegenPerSec = float64(repairLevel) * 0.6
+	player.Modifiers.HealthRegenPerSec = 1.0 + (float64(repairLevel) * 0.6)
 
 	rangeLevel := player.Upgrades[StatUpgradeCannonRange].Level
 	player.Modifiers.BulletSpeedMultiplier = 1.0 + (float64(rangeLevel) * 0.05)

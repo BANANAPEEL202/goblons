@@ -84,7 +84,7 @@ type Position struct {
 
 // DebugInfo contains calculated debug values for client display
 type DebugInfo struct {
-	Health            int     `msgpack:"health"`
+	Health            float64 `msgpack:"health"`
 	MoveSpeedModifier float64 `msgpack:"moveSpeedModifier"`
 	TurnSpeedModifier float64 `msgpack:"turnSpeedModifier"`
 	RegenRate         float64 `msgpack:"regenRate"`
@@ -109,8 +109,8 @@ type Player struct {
 	Name        string    `msgpack:"name"`
 	Color       string    `msgpack:"color"`
 	IsBot       bool      `msgpack:"isBot"`
-	Health      int       `msgpack:"health"`
-	MaxHealth   int       `msgpack:"maxHealth"`
+	Health      float64   `msgpack:"health"`
+	MaxHealth   float64   `msgpack:"maxHealth"`
 	RespawnTime time.Time `msgpack:"-"` // When the player can respawn (used only for bots)
 
 	Client *Client `msgpack:"-"` // Back-reference to owning client (not serialized)
@@ -179,7 +179,7 @@ type Bullet struct {
 	OwnerID   uint32    `msgpack:"-"`
 	CreatedAt time.Time `msgpack:"-"` // Not serialized
 	Radius    float64   `msgpack:"radius"`
-	Damage    int       `msgpack:"-"`
+	Damage    float64   `msgpack:"-"`
 }
 
 // Snapshot represents the current game state sent to clients
@@ -213,8 +213,8 @@ type PlayerDelta struct {
 	State             *int                     `msgpack:"state,omitempty"`             // Alive/dead state
 	Name              *string                  `msgpack:"name,omitempty"`              // Changes rarely
 	Color             *string                  `msgpack:"color,omitempty"`             // Changes rarely
-	Health            *int                     `msgpack:"health,omitempty"`            // Changes frequently
-	MaxHealth         *int                     `msgpack:"maxHealth,omitempty"`         // Changes with upgrades
+	Health            *float64                  `msgpack:"health,omitempty"`            // Changes frequently
+	MaxHealth         *float64                  `msgpack:"maxHealth,omitempty"`         // Changes with upgrades
 	Level             *int                     `msgpack:"level,omitempty"`             // Changes occasionally
 	Experience        *int                     `msgpack:"experience,omitempty"`        // Changes frequently
 	AvailableUpgrades *int                     `msgpack:"availableUpgrades,omitempty"` // Changes occasionally
@@ -372,8 +372,8 @@ func NewPlayer(id uint32) *Player {
 		X:                   WorldWidth / 2,
 		Y:                   WorldHeight / 2,
 		State:               StateAlive,
-		Health:              100,
-		MaxHealth:           100,
+		Health:              100.0,
+		MaxHealth:           100.0,
 		Modifiers:           mods,
 		Color:               generateRandomColor(),
 		Name:                generateRandomName(),

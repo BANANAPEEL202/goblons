@@ -40,7 +40,7 @@ const (
 
 // Combat constants
 const (
-	BaseCollisionDamage = 5   // Base damage dealt per collision
+	BaseCollisionDamage = 5.0   // Base damage dealt per collision
 	CollisionCooldown   = 0.2 // Seconds between collision damage ticks
 )
 
