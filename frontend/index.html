@@ -51,6 +51,8 @@
       display: flex;
       gap: 12px;
       z-index: 1500;
+      transform: scale(var(--game-scale, 1));
+      transform-origin: top right;
     }
 
     .status-badge {
@@ -104,6 +106,7 @@
       background: rgba(29, 29, 29, 0.7);
       text-align: center;
       border: 1px solid rgba(96, 139, 193, 0.35);
+      transform: scale(var(--game-scale, 1));
     }
 
     .launch-logo {
@@ -313,6 +316,7 @@
       background: rgba(29, 29, 29, 0.7);
       text-align: center;
       border: 1px solid rgba(96, 139, 193, 0.4);
+      transform: scale(var(--game-scale, 1));
     }
 
     .death-title {

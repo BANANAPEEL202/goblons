@@ -76,6 +76,7 @@ class GameClient {
     this.isConnected = false;
     this.screenWidth = window.innerWidth;
     this.screenHeight = window.innerHeight;
+    this.gameScale = 1;
 
     // Input sending interval
     this.inputSendInterval = null;
@@ -146,6 +147,13 @@ class GameClient {
     const displayWidth = window.innerWidth;
     const displayHeight = window.innerHeight;
 
+    // Define target visible height in game units to maintain consistent FOV
+    const TARGET_HEIGHT = 900;
+    this.gameScale = displayHeight / TARGET_HEIGHT;
+
+    // Update CSS variable for UI scaling
+    document.documentElement.style.setProperty('--game-scale', this.gameScale);
+
     // Store the current transform matrix
     this.ctx.save();
 
@@ -158,12 +166,12 @@ class GameClient {
     this.canvas.style.width = displayWidth + 'px';
     this.canvas.style.height = displayHeight + 'px';
 
-    // Scale the context for high DPI displays
-    this.ctx.scale(dpr, dpr);
+    // Scale the context for high DPI displays AND game scaling
+    this.ctx.scale(dpr * this.gameScale, dpr * this.gameScale);
 
-    // Store screen dimensions for rendering calculations
-    this.screenWidth = displayWidth;
-    this.screenHeight = displayHeight;
+    // Store screen dimensions for rendering calculations (in game units)
+    this.screenWidth = displayWidth / this.gameScale;
+    this.screenHeight = displayHeight / this.gameScale;
   }
 
   setupEventListeners() {
@@ -183,8 +191,8 @@ class GameClient {
       }
 
       const rect = this.canvas.getBoundingClientRect();
-      const screenX = e.clientX - rect.left;
-      const screenY = e.clientY - rect.top;
+      const screenX = (e.clientX - rect.left) / this.gameScale;
+      const screenY = (e.clientY - rect.top) / this.gameScale;
 
       // Store screen coordinates for camera movement updates
       this.lastMouseScreen.x = screenX;
@@ -201,8 +209,8 @@ class GameClient {
     // Mouse click handling for upgrade UI and manual firing
     this.canvas.addEventListener('click', (e) => {
       const rect = this.canvas.getBoundingClientRect();
-      const screenX = e.clientX - rect.left;
-      const screenY = e.clientY - rect.top;
+      const screenX = (e.clientX - rect.left) / this.gameScale;
+      const screenY = (e.clientY - rect.top) / this.gameScale;
 
       if (this.controlsLocked) {
         console.log('Controls are locked; ignoring click.');
@@ -1946,7 +1954,7 @@ class GameClient {
     // Health bar borderw
     ctx.strokeStyle = '#444444';
     ctx.lineWidth = 2;
-    this.drawRoundedRect(screenX - barWidth / 2, screenY + barOffsetY, barWidth, barHeight, borderRadius);
+    ctx.strokeRect(screenX - barWidth / 2, screenY + barOffsetY, barWidth, barHeight, borderRadius);
     ctx.stroke();
 
     ctx.restore();
@@ -2607,7 +2615,7 @@ class GameClient {
     const optionHeight = 30;
     const optionWidth = Math.max(buttonWidth, 125); // At least as wide as button
     const spacing = 10;
-    const totalHeight = (optionHeight * options.length) + (spacing * (options.length - 1));
+    const totalHeight = (optionHeight * options.length) + (optionSpacing * (options.length - 1));
 
     // Position options directly above the button, centered on it
     const optionsX = buttonX + (buttonWidth - optionWidth) / 2;
@@ -2619,7 +2627,7 @@ class GameClient {
 
     for (let i = 0; i < options.length; i++) {
       const option = options[i];
-      const y = optionsStartY + (optionHeight + spacing) * i;
+      const y = optionsStartY + (optionHeight + optionSpacing) * i;
 
       // Store position for click detection
       this.upgradeUI.optionPositions[upgradeType].push({
