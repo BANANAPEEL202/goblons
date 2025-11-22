@@ -172,11 +172,13 @@ func (w *World) broadcastSnapshot() {
 				// Calculate player deltas based on client's last snapshot
 				var playerDeltas []PlayerDelta
 				lastPlayerMap := make(map[uint32]*Player)
+				currentPlayerMap := make(map[uint32]bool)
 				for i := range c.lastSnapshot.Players {
 					lastPlayerMap[c.lastSnapshot.Players[i].ID] = &c.lastSnapshot.Players[i]
 				}
 
 				for _, currentPlayer := range clientSnapshot.Players {
+					currentPlayerMap[currentPlayer.ID] = true
 					if lastPlayer, exists := lastPlayerMap[currentPlayer.ID]; exists {
 						delta := calculatePlayerDeltas(lastPlayer, &currentPlayer)
 						// Only include deltas that have changes (at least one field changed)
@@ -214,10 +216,19 @@ func (w *World) broadcastSnapshot() {
 					}
 				}
 
+				// Find players that were removed (in last snapshot but not in current)
+				var playersRemoved []uint32
+				for id := range lastPlayerMap {
+					if !currentPlayerMap[id] {
+						playersRemoved = append(playersRemoved, id)
+					}
+				}
+
 				// Create delta snapshot
 				deltaSnapshot := DeltaSnapshot{
 					Type:           MsgTypeDeltaSnapshot,
 					Players:        playerDeltas,
+					PlayersRemoved: playersRemoved,
 					ItemsAdded:     itemsAdded,
 					ItemsRemoved:   itemsRemoved,
 					BulletsAdded:   bulletsAdded,

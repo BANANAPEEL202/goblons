@@ -195,6 +195,7 @@ type Snapshot struct {
 type DeltaSnapshot struct {
 	Type           string        `msgpack:"type"`
 	Players        []PlayerDelta `msgpack:"players,omitempty"`        // Delta player updates
+	PlayersRemoved []uint32      `msgpack:"playersRemoved,omitempty"` // IDs of players that were removed
 	ItemsAdded     []GameItem    `msgpack:"itemsAdded,omitempty"`     // Items that were added
 	ItemsRemoved   []uint32      `msgpack:"itemsRemoved,omitempty"`   // IDs of items that were removed
 	BulletsAdded   []Bullet      `msgpack:"bulletsAdded,omitempty"`   // Bullets that were added
