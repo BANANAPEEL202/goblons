@@ -74,8 +74,18 @@ class GameClient {
 
     this.camera = { x: 0, y: 0, targetX: 0, targetY: 0 };
     this.isConnected = false;
-    this.screenWidth = window.innerWidth;
-    this.screenHeight = window.innerHeight;
+    
+    // FIXED viewport size - NEVER changes, prevents zoom exploits
+    // Use window.innerWidth/innerHeight at initial load (before any zoom can affect it)
+    // This is the most reliable way to get the true viewport size
+    this.fixedViewportWidth = window.innerWidth;
+    this.fixedViewportHeight = window.innerHeight;
+    
+    // Log initial viewport for debugging
+    console.log('Fixed viewport locked:', this.fixedViewportWidth, 'x', this.fixedViewportHeight);
+    
+    this.screenWidth = this.fixedViewportWidth;
+    this.screenHeight = this.fixedViewportHeight;
 
     // Input sending interval
     this.inputSendInterval = null;
@@ -142,28 +152,45 @@ class GameClient {
   }
 
   resizeCanvas() {
+    // --- 1. Get current viewport info (for canvas CSS sizing only) ---
+    const currentCssWidth = window.innerWidth;
+    const currentCssHeight = window.innerHeight;
     const dpr = window.devicePixelRatio || 1;
-    const displayWidth = window.innerWidth;
-    const displayHeight = window.innerHeight;
+    const zoom = window.visualViewport?.scale || 1;
 
-    // Store the current transform matrix
-    this.ctx.save();
+    // --- 2. ALWAYS use fixed viewport size for game logic (NEVER changes) ---
+    // This is locked at initialization and prevents ALL zoom exploits
+    const logicalWidth = this.fixedViewportWidth;
+    const logicalHeight = this.fixedViewportHeight;
 
-    // Reset the current transform
+    // Debug logging
+    if (Math.abs(zoom - 1.0) > 0.01) {
+      console.log('Zoom detected:', zoom, '| Fixed viewport:', logicalWidth, 'x', logicalHeight, '| Current CSS:', currentCssWidth, 'x', currentCssHeight);
+    }
+
+    // --- 3. Set canvas internal resolution for high-DPI rendering ---
+    this.canvas.width  = logicalWidth  * dpr;
+    this.canvas.height = logicalHeight * dpr;
+
+    // --- 4. Set canvas CSS size to fill current viewport (may be zoomed) ---
+    // This is just for display - doesn't affect game logic
+    this.canvas.style.width  = currentCssWidth  + "px";
+    this.canvas.style.height = currentCssHeight + "px";
+
+    // --- 5. Reset transform and apply DPR scaling ---
     this.ctx.setTransform(1, 0, 0, 1, 0, 0);
-
-    this.canvas.width = displayWidth * dpr;
-    this.canvas.height = displayHeight * dpr;
-
-    this.canvas.style.width = displayWidth + 'px';
-    this.canvas.style.height = displayHeight + 'px';
-
-    // Scale the context for high DPI displays
     this.ctx.scale(dpr, dpr);
 
-    // Store screen dimensions for rendering calculations
-    this.screenWidth = displayWidth;
-    this.screenHeight = displayHeight;
+    // --- 6. Store fixed logical viewport size for all game calculations ---
+    // Camera, rendering, and game logic ALWAYS use this fixed size
+    // This NEVER changes, preventing zoom exploits
+    this.screenWidth  = logicalWidth;
+    this.screenHeight = logicalHeight;
+    
+    // Verify screenWidth never changes
+    if (this.screenWidth !== this.fixedViewportWidth) {
+      console.error('ERROR: screenWidth changed!', this.screenWidth, '!=', this.fixedViewportWidth);
+    }
   }
 
   setupEventListeners() {
@@ -227,6 +254,13 @@ class GameClient {
     window.addEventListener('resize', () => {
       this.resizeCanvas();
     });
+
+    // Handle browser zoom (diep.io method - catches zoom changes instantly)
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", () => {
+        this.resizeCanvas();
+      });
+    }
 
     // Handle fullscreen toggle
     document.addEventListener('keydown', (e) => {
@@ -1383,7 +1417,7 @@ class GameClient {
   }
 
   render() {
-    // Clear canvas
+    // Clear canvas - use CSS pixel dimensions (transform handles conversion to buffer)
     this.ctx.fillStyle = '#95c1f7ff';
     this.ctx.fillRect(0, 0, this.screenWidth, this.screenHeight);
 
@@ -1391,6 +1425,7 @@ class GameClient {
       this.ctx.fillStyle = '#ff6b6b';
       this.ctx.font = '24px Arial';
       this.ctx.textAlign = 'center';
+      // Use CSS pixel dimensions (transform handles conversion)
       this.ctx.fillText('Connecting...', this.screenWidth / 2, this.screenHeight / 2);
       return;
     }
@@ -1439,6 +1474,7 @@ class GameClient {
     const startY = Math.floor(this.camera.y / gridSize) * gridSize;
 
     // Draw fewer grid lines by using larger steps
+    // All coordinates are in CSS pixel space (transform handles conversion to buffer)
     this.ctx.beginPath();
     for (let x = startX; x < this.camera.x + this.screenWidth + gridSize; x += gridSize) {
       this.ctx.moveTo(x - this.camera.x, 0);
@@ -1453,13 +1489,14 @@ class GameClient {
   }
 
   drawMapBorder() {
-    // Convert world coordinates to screen coordinates
+    // Convert world coordinates to screen coordinates (CSS pixel space)
     const borderLeft = 0 - this.camera.x;
     const borderTop = 0 - this.camera.y;
     const borderRight = WorldWidth - this.camera.x;
     const borderBottom = WorldHeight - this.camera.y;
 
     // Only draw border segments that are visible on screen
+    // All coordinates are in CSS pixel space (transform handles conversion to buffer)
     this.ctx.strokeStyle = '#404040';
     this.ctx.lineWidth = 6;
 

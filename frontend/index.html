@@ -470,36 +470,47 @@
 
   <script type="module" src="/client.js"></script>
   <script>
-    // Prevent browser zoom from affecting the game viewport
-    document.addEventListener('wheel', (e) => {
+    // --- Prevent wheel zoom (Ctrl + scroll) ---
+    document.addEventListener("wheel", (e) => {
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault();
       }
     }, { passive: false });
 
-    document.addEventListener('touchstart', (e) => {
+    // --- Prevent keyboard zoom shortcuts ---
+    document.addEventListener("keydown", (e) => {
+      const zoomKeys = ["=", "+", "-", "_", "0"];
+
+      // Ctrl/Cmd + (+, -, =, _, 0)
+      if ((e.ctrlKey || e.metaKey) && zoomKeys.includes(e.key)) {
+        e.preventDefault();
+        return;
+      }
+
+      // Ctrl/Cmd + Shift + (+)
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "+" || e.key === "=")) {
+        e.preventDefault();
+        return;
+      }
+    });
+
+    // --- Prevent pinch zoom on touch devices ---
+    document.addEventListener("touchstart", (e) => {
       if (e.touches.length > 1) {
         e.preventDefault();
       }
     }, { passive: false });
 
-    document.addEventListener('touchmove', (e) => {
+    document.addEventListener("touchmove", (e) => {
       if (e.touches.length > 1) {
         e.preventDefault();
       }
     }, { passive: false });
 
-    document.addEventListener('gesturestart', (e) => {
-      e.preventDefault();
-    });
-
-    document.addEventListener('gesturechange', (e) => {
-      e.preventDefault();
-    });
-
-    document.addEventListener('gestureend', (e) => {
-      e.preventDefault();
-    });
+    // --- Safari iOS / Mac gesture events ---
+    document.addEventListener("gesturestart", (e) => e.preventDefault());
+    document.addEventListener("gesturechange", (e) => e.preventDefault());
+    document.addEventListener("gestureend", (e) => e.preventDefault());
   </script>
 </body>
 
