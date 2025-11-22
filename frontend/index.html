@@ -470,138 +470,117 @@
 
   <script type="module" src="/client.js"></script>
   <script>
-    // Prevent browser zoom from affecting the game viewport
+    // --- Zoom/Resize Prevention ---
+
+    // Prevent default browser zoom gestures
     document.addEventListener('wheel', (e) => {
-      if (e.ctrlKey || e.metaKey) {
-        e.preventDefault();
-      }
+      if (e.ctrlKey || e.metaKey) e.preventDefault();
     }, { passive: false });
 
     document.addEventListener('touchstart', (e) => {
-      if (e.touches.length > 1) {
-        e.preventDefault();
-      }
+      if (e.touches.length > 1) e.preventDefault();
     }, { passive: false });
 
     document.addEventListener('touchmove', (e) => {
-      if (e.touches.length > 1) {
-        e.preventDefault();
-      }
+      if (e.touches.length > 1) e.preventDefault();
     }, { passive: false });
 
-    document.addEventListener('gesturestart', (e) => {
-      e.preventDefault();
-    });
+    // Prevent pinch-to-zoom on Safari/iOS
+    document.addEventListener('gesturestart', (e) => e.preventDefault());
+    document.addEventListener('gesturechange', (e) => e.preventDefault());
+    document.addEventListener('gestureend', (e) => e.preventDefault());
 
-    document.addEventListener('gesturechange', (e) => {
-      e.preventDefault();
-    });
+    // --- Zoom & Viewport Compensation Logic ---
+    // Fix for issue #26: Prevent browser zoom from revealing more of the map.
+    // This logic locks the game's viewport to the initial effective resolution.
 
-    document.addEventListener('gestureend', (e) => {
-      e.preventDefault();
-    });
-
-    // Fix for issue #26: Prevent browser UI zoom from revealing more of the map
-    // Store the base viewport size and DPR at initial load (whatever zoom level that is)
+    // Store the base viewport and environment values at load time.
     let baseViewportWidth = window.innerWidth;
     let baseViewportHeight = window.innerHeight;
-    let baseZoomRatio = window.outerWidth / window.innerWidth;
     let baseDPR = window.devicePixelRatio || 1;
-    let lastKnownWidth = window.innerWidth;
-    let lastKnownHeight = window.innerHeight;
+    let baseOuterWidth = window.outerWidth;
+    let baseOuterHeight = window.outerHeight;
+
+    // Track last known values to detect changes.
     let lastKnownDPR = baseDPR;
     let resizeTimeout = null;
-    
-    // Function to detect and compensate for browser zoom
-    function handleBrowserZoom() {
+
+    function handleViewportChange() {
       const currentWidth = window.innerWidth;
       const currentHeight = window.innerHeight;
       const currentDPR = window.devicePixelRatio || 1;
-      const currentZoomRatio = window.outerWidth / window.innerWidth;
-      
-      // Check if DPR changed (user moved to different monitor)
-      const dprChanged = Math.abs(currentDPR - lastKnownDPR) > 0.1;
-      
-      // Check if this looks like a window resize (both dimensions changed proportionally)
-      // vs a zoom (ratio changed but dimensions might not change proportionally)
-      const widthChange = currentWidth / lastKnownWidth;
-      const heightChange = currentHeight / lastKnownHeight;
-      const aspectRatioChange = Math.abs(widthChange - heightChange);
-      const isLikelyResize = aspectRatioChange < 0.05 && Math.abs(currentZoomRatio - baseZoomRatio) < 0.01;
-      
-      // If DPR changed significantly, update base values (user moved monitors)
-      if (dprChanged) {
+      const currentOuterWidth = window.outerWidth;
+      const currentOuterHeight = window.outerHeight;
+
+      const dprChanged = Math.abs(currentDPR - lastKnownDPR) > 0.05;
+      const outerWidthChanged = Math.abs(currentOuterWidth - baseOuterWidth) > 5;
+      const outerHeightChanged = Math.abs(currentOuterHeight - baseOuterHeight) > 5;
+      // Monitor change: DPR changed AND at least one outer dimension changed significantly
+      const outerDimensionsChanged = outerWidthChanged || outerHeightChanged;
+
+      // Heuristic: A change in DPR without a significant change in the outer window
+      // dimensions is treated as a page zoom.
+      const isPageZoom = dprChanged && !outerDimensionsChanged;
+
+      // Heuristic: A simple resize or opening dev tools. DPR is stable.
+      const isResize = !dprChanged;
+
+      // Heuristic: Moving to a new monitor or fullscreen toggle.
+      // Both DPR and outer window dimensions change.
+      const isMonitorChange = dprChanged && outerDimensionsChanged;
+
+      if (isMonitorChange) {
+        // This is a new environment; recalibrate everything to a new baseline.
         baseViewportWidth = currentWidth;
         baseViewportHeight = currentHeight;
-        baseZoomRatio = currentZoomRatio;
         baseDPR = currentDPR;
-        lastKnownDPR = currentDPR;
-        // Reset zoom compensation
+        baseOuterWidth = currentOuterWidth;
+        baseOuterHeight = currentOuterHeight;
+
         window.gameZoomLevel = 1;
-        document.documentElement.style.setProperty('--game-zoom', '1');
         window.gameBaseViewportWidth = baseViewportWidth;
         window.gameBaseViewportHeight = baseViewportHeight;
-      }
-      // If it's a real window resize (not zoom), update base values
-      else if (isLikelyResize && (Math.abs(widthChange - 1) > 0.01 || Math.abs(heightChange - 1) > 0.01)) {
+
+      } else if (isPageZoom) {
+        // This is a zoom event. We must compensate to keep the viewport locked.
+        const zoomFactor = currentDPR / baseDPR;
+        window.gameZoomLevel = 1 / zoomFactor; // Inverse zoom to compensate
+
+        // The game should render based on the original base viewport dimensions
+        // to maintain a consistent field of view, while the zoom factor compensates for scaling.
+        window.gameBaseViewportWidth = baseViewportWidth;
+        window.gameBaseViewportHeight = baseViewportHeight;
+
+      } else if (isResize) {
+        // This is a simple resize. The viewport changes, so we update the base.
+        // We update both dimensions independently to preserve the new aspect ratio.
         baseViewportWidth = currentWidth;
         baseViewportHeight = currentHeight;
-        baseZoomRatio = currentZoomRatio;
-        // Reset zoom compensation
+        baseOuterWidth = currentOuterWidth; // Update in case of minor drift
+        baseOuterHeight = currentOuterHeight; // Update in case of minor drift
+
         window.gameZoomLevel = 1;
-        document.documentElement.style.setProperty('--game-zoom', '1');
         window.gameBaseViewportWidth = baseViewportWidth;
         window.gameBaseViewportHeight = baseViewportHeight;
       }
-      // Otherwise, check if zoom changed
-      else {
-        const zoomLevel = currentZoomRatio / baseZoomRatio;
-        
-        // If zoom changed significantly (more than 1% difference)
-        if (Math.abs(zoomLevel - 1) > 0.01) {
-          // Store the zoom level in a way the game client can access it
-          window.gameZoomLevel = 1 / zoomLevel; // Inverse zoom to compensate
-          document.documentElement.style.setProperty('--game-zoom', window.gameZoomLevel);
-          
-          // Store the base viewport size so the game can use it
-          window.gameBaseViewportWidth = baseViewportWidth;
-          window.gameBaseViewportHeight = baseViewportHeight;
-        } else {
-          // Reset if back to base zoom level
-          window.gameZoomLevel = 1;
-          document.documentElement.style.setProperty('--game-zoom', '1');
-          window.gameBaseViewportWidth = baseViewportWidth;
-          window.gameBaseViewportHeight = baseViewportHeight;
-        }
-      }
       
-      // Update last known values
-      lastKnownWidth = currentWidth;
-      lastKnownHeight = currentHeight;
+      // Update CSS variable for potential use in scaling UI elements or canvas.
+      document.documentElement.style.setProperty('--game-zoom', window.gameZoomLevel);
+      
+      // Update the last known DPR for the next event.
+      lastKnownDPR = currentDPR;
     }
-    
-    // Check for zoom changes periodically
-    setInterval(handleBrowserZoom, 100);
-    
-    // Handle resize events with debouncing to distinguish zoom from resize
+
+    // Handle all viewport changes through the debounced resize event.
+    // The 'resize' event reliably fires for window resizing, page zoom, and moving tabs.
     window.addEventListener('resize', () => {
       clearTimeout(resizeTimeout);
-      resizeTimeout = setTimeout(() => {
-        handleBrowserZoom();
-      }, 150); // Longer delay to catch actual resizes vs zoom
+      resizeTimeout = setTimeout(handleViewportChange, 50); // Debounce to avoid excessive calls
     });
-    
-    // Listen for DPR changes (user moved to different monitor)
-    if (window.matchMedia) {
-      const mediaQuery = window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`);
-      mediaQuery.addEventListener('change', () => {
-        handleBrowserZoom();
-      });
-    }
-    
-    // Initial setup - store whatever the initial state is as "base"
-    // This handles users who start at non-100% zoom - we just lock to their starting zoom
-    handleBrowserZoom();
+
+    // Initial setup on page load.
+    // This defines the "correct" 100% view, whatever the user's zoom is on arrival.
+    handleViewportChange();
   </script>
 </body>
 
