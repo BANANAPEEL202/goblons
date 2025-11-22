@@ -241,10 +241,9 @@ func (w *World) updatePlayer(player *Player, input *InputMsg) {
 
 	// Calculate max speed with move speed upgrade and hull strength reduction
 	maxSpeed := (BaseShipMaxSpeed * player.Modifiers.MoveSpeedMultiplier)
-	if input.Up {
-		player.VelX = float64(math.Cos(float64(player.Angle))) * maxSpeed
-		player.VelY = float64(math.Sin(float64(player.Angle))) * maxSpeed
-	}
+	// Ships always move forward automatically - players can only turn (A/D keys)
+	player.VelX = float64(math.Cos(float64(player.Angle))) * maxSpeed
+	player.VelY = float64(math.Sin(float64(player.Angle))) * maxSpeed
 	speed := min(float64(math.Sqrt(float64(player.VelX*player.VelX+player.VelY*player.VelY))), maxSpeed)
 
 	// Scale turn speed based on current speed and ship length
